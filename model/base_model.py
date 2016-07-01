@@ -7,7 +7,7 @@ from collections import defaultdict
 import numpy as np
 import tensorflow as tf
 
-from attention.read_data import DataSet
+from model.read_data import DataSet, NUM
 from my.tensorflow import average_gradients
 from my.utils import get_pbar
 
@@ -136,7 +136,7 @@ class BaseRunner(object):
     def _eval_batches(self, batches, eval_tensor_names=(), **eval_kwargs):
         sess = self.sess
         tensors = self.tensors
-        num_examples = sum(len(batch[0]) for batch in batches)
+        num_examples = sum(batch[NUM] for batch in batches)
         feed_dict = self._get_feed_dict(batches, 'eval', **eval_kwargs)
         ops = [tensors[name] for name in ['correct', 'loss', 'summary', 'global_step']]
         correct, loss, summary, global_step = sess.run(ops, feed_dict=feed_dict)
@@ -166,7 +166,7 @@ class BaseRunner(object):
 
         epoch_op = self.tensors['epoch']
         epoch = sess.run(epoch_op)
-        print("training %d epochs ... " % num_epochs)
+        logging.info("training %d epochs ... " % num_epochs)
         logging.info("num iters per epoch: %d" % num_iters_per_epoch)
         logging.info("starting from epoch %d." % (epoch+1))
         while epoch < num_epochs:
@@ -227,7 +227,7 @@ class BaseRunner(object):
             (cur_num_corrects, cur_avg_loss, _, global_step), eval_value_batches = \
                 self._eval_batches(batches, eval_tensor_names=eval_tensor_names, **eval_args)
             num_corrects += cur_num_corrects
-            cur_num = sum(len(batch[0]) for batch in batches)
+            cur_num = sum(batch[NUM] for batch in batches)
             total += cur_num
             for eval_value_batch in eval_value_batches:
                 eval_values.append([x.tolist() for x in eval_value_batch])  # numpy.array.toList
@@ -240,8 +240,8 @@ class BaseRunner(object):
         data_set.reset()
 
         acc = float(num_corrects) / total
-        print("%s at epoch %d: acc = %.2f%% = %d / %d, loss = %.4f" %
-              (data_set.name, epoch, 100 * acc, num_corrects, total, loss))
+        logging.info("%s at epoch %d: acc = %.2f%% = %d / %d, loss = %.4f" %
+                     (data_set.name, epoch, 100 * acc, num_corrects, total, loss))
 
         # For outputting eval json files
         if len(eval_tensor_names) > 0:
@@ -284,7 +284,7 @@ class BaseRunner(object):
         save_dir = params.save_dir
         name = params.model_name
         global_step = self.tensors['global_step']
-        logging.info("saving attention ...")
+        logging.info("saving model ...")
         save_path = os.path.join(save_dir, name)
         self.saver.save(sess, save_path, global_step)
         logging.info("saving done.")
@@ -295,7 +295,7 @@ class BaseRunner(object):
         sess = self.sess
         params = self.params
         save_dir = params.save_dir
-        logging.info("loading attention ...")
+        logging.info("loading model ...")
         checkpoint = tf.train.get_checkpoint_state(save_dir)
         assert checkpoint is not None, "Cannot load checkpoint at %s" % save_dir
         self.saver.restore(sess, checkpoint.model_checkpoint_path)

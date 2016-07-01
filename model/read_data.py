@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 
+NUM = "NUM"
 
 class DataSet(object):
     def __init__(self, name, batch_size, data, idxs, idx2id=None):
@@ -34,7 +35,10 @@ class DataSet(object):
 
     def get_next_labeled_batch(self, partial=False):
         cur_idxs = self.get_batch_idxs(partial=partial)
-        batch = [[each[i] for i in cur_idxs] for each in self.data]
+        batch = {key: [each[i] for i in cur_idxs] for key, each in self.data.items()}
+        assert NUM not in batch, "Variable name '{}' is reserved.".format(NUM)
+        batch[NUM] = len(cur_idxs)
+
         self.idx_in_epoch += len(cur_idxs)
         return batch
 

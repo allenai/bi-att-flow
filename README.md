@@ -1,2 +1,1 @@
-# textbook-qa
-Texbook QA
+# Textbook QA
