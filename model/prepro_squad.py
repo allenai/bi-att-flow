@@ -51,8 +51,9 @@ def _prepro(args):
     # TODO : put something here; Fake data shown
     version = args.version
     template = "{}-v{}.json"
-    shared = {'X': [], 'V': []}  # X stores parass, V stores word embeddings
+    shared = {'X': []}  # X stores parass
     batched = {'R': [], 'Q': [], 'Y': [], 'ids': []}
+    params = {'emb_mat': []}
     mode2idxs_dict = {'train': [], 'dev': []}
 
     train_path = os.path.join(source_dir, template.format("train", version))
@@ -61,10 +62,10 @@ def _prepro(args):
     _insert_raw_data(dev_path, shared, batched, mode2idxs_dict, 'dev')
 
     word2vec_dict = _get_word2vec_dict(glove_path, shared, batched, total=total)
-    word2idx_dict = {word: idx for idx, word in enumerate(word2vec_dict.keys())}
-    shared['V'] = list(word2vec_dict.values())
+    word2idx_dict = {word: idx for idx, word in enumerate(word2vec_dict.keys())}  # Must be an ordered dict!
+    params['emb_mat'] = list(word2vec_dict.values())
     _apply(word2idx_dict, shared, batched)
-    _save(target_dir, shared, batched, mode2idxs_dict, word2idx_dict)
+    _save(target_dir, shared, batched, params, mode2idxs_dict, word2idx_dict)
 
 
 def _tokenize(raw):
@@ -135,6 +136,7 @@ def _insert_raw_data(file_path, raw_shared, raw_batched, mode2idxs_dict, mode):
                         idxs.append(batched_idx)
                         batched_idx += 1
                         continue  # considering only one answer for now
+            # break  # for debugging
         if counter > 0:
             logging.warning("# answer mismatches: {}".format(counter))
         logging.info("# articles: {}, # paragraphs: {}".format(len(X), sum(len(x) for x in X)))
@@ -179,7 +181,7 @@ def _apply(word2idx_dict, shared, batched):
     batched['Q'] = Q
 
 
-def _save(target_dir, shared, batched, mode2idxs_dict, word2idx_dict):
+def _save(target_dir, shared, batched, params, mode2idxs_dict, word2idx_dict):
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
     mode2idxs_path = os.path.join(target_dir, "mode2idxs.json")
@@ -187,15 +189,17 @@ def _save(target_dir, shared, batched, mode2idxs_dict, word2idx_dict):
     shared_path = os.path.join(target_dir, "shared.json")
     batched_path =os.path.join(target_dir, "batched.json")
     word2idx_path = os.path.join(target_dir, "word2idx.json")
+    param_path = os.path.join(target_dir, "param.json")
 
-    X, V = (shared[key] for key in ('X', 'V'))
+    X = shared['X']
+    emb_mat = params['emb_mat']
     R, Q, Y = (batched[key] for key in ('R', 'Q', 'Y'))
 
     metadata = {'max_sent_size': max(len(sent) for sents in X for sent in sents),
                 'max_num_sents': max(len(sents) for sents in X),
-                'vocab_size': len(V),
+                'vocab_size': len(emb_mat),
                 'max_ques_size': max(len(ques) for ques in Q),
-                "word_vec_size": len(V[0]),
+                "word_vec_size": len(emb_mat[0]),
                 }
 
     logging.info("saving ...")
@@ -209,6 +213,8 @@ def _save(target_dir, shared, batched, mode2idxs_dict, word2idx_dict):
         json.dump(batched, fh)
     with open(word2idx_path, 'w') as fh:
         json.dump(word2idx_dict, fh)
+    with open(param_path, 'w') as fh:
+        json.dump(params, fh)
 
 
 def main():
