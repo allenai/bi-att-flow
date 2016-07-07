@@ -101,10 +101,12 @@ class Tower(BaseTower):
             for j, sent in enumerate(sents):
                 for k, word in enumerate(sent):
                     x[i, j, k] = word
+                    x_mask[i, j, k] = True
 
         for i, ques in enumerate(Q):
             for j, word in enumerate(ques):
                 q[i, j] = word
+                q_mask[i, j] = True
 
         for i, idxs in enumerate(Y):
             for j, idx in enumerate(idxs):

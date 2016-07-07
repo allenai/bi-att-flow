@@ -102,7 +102,8 @@ def _insert_raw_data(file_path, raw_shared, raw_batched, mode2idxs_dict, mode):
         for article_idx, article in enumerate(tqdm(d['data'])):
             X_i = []
             X.append(X_i)
-            for para_idx, para in enumerate(article['paragraphs']):
+            for para in article['paragraphs']:
+                para_idx = len(X_i)
                 ref_idx = (article_idx + X_offset, para_idx)
                 context = para['context']
                 sents = _tokenize(context)
