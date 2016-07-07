@@ -106,6 +106,10 @@ def _insert_raw_data(file_path, raw_shared, raw_batched, mode2idxs_dict, mode):
                 ref_idx = (article_idx + X_offset, para_idx)
                 context = para['context']
                 sents = _tokenize(context)
+                max_sent_size = max(len(sent) for sent in sents)
+                if max_sent_size > 200:
+                    logging.warning("Skipping para with sent size = {}".format(max_sent_size))
+                    continue
                 X_i.append(sents)
                 assert context.find(START) < 0 and context.find(STOP) < 0, "Choose other start, stop words"
                 for qa in para['qas']:
@@ -197,7 +201,7 @@ def _save(target_dir, shared, batched, params, mode2idxs_dict, word2idx_dict):
     R, Q, Y = (batched[key] for key in ('R', 'Q', 'Y'))
 
     metadata = {'max_sent_size': max(len(sent) for paras in X for sents in paras for sent in sents),
-                'max_num_sents': max(len(sents) for sents in X),
+                'max_num_sents': max(len(sents) for paras in X for sents in paras),
                 'vocab_size': len(emb_mat),
                 'max_ques_size': max(len(ques) for ques in Q),
                 "word_vec_size": len(emb_mat[0]),

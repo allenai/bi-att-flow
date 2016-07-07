@@ -21,7 +21,7 @@ flags.DEFINE_string("data_dir", "data/model/squad", "Data directory [data/model/
 
 # Training parameters
 # These affect result performance
-flags.DEFINE_integer("batch_size", 32, "Batch size for each tower. [128]")
+flags.DEFINE_integer("batch_size", 128, "Batch size for each tower. [128]")
 flags.DEFINE_float("init_mean", 0, "Initial weight mean [0]")
 flags.DEFINE_float("init_std", 1.0, "Initial weight std [1.0]")
 flags.DEFINE_float("init_lr", 0.5, "Initial learning rate [0.5]")
