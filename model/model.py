@@ -1,4 +1,7 @@
 import tensorflow as tf
+from tensorflow.python.ops.rnn import dynamic_rnn
+from tensorflow.python.ops.rnn_cell import BasicLSTMCell
+
 from model.base_model import BaseTower
 import numpy as np
 
@@ -11,28 +14,49 @@ class Tower(BaseTower):
         ph = self.placeholders
         tensors = self.tensors
         N = params.batch_size
+        M = params.max_num_sents
+        J = params.max_sent_size
+        K = params.max_ques_size
+        d = params.word_vec_size
 
         is_train = tf.placeholder('bool', shape=[], name='is_train')
         # TODO : define placeholders and put them in ph
-        num_classes = params.num_classes
-        x = tf.placeholder("float", shape=[N, 1], name='x')
-        y = tf.placeholder("int32", shape=[N], name='y')
+        x = tf.placeholder("int32", shape=[N, M, J], name='x')
+        q = tf.placeholder("int32", shape=[N, K], name='q')
+        y = tf.placeholder("int32", shape=[N, 2], name='y')
+        x_mask = tf.placeholder("bool", shape=[N, M, J], name='x_mask')
+        q_mask = tf.placeholder("bool", shape=[N, K], name='q_mask')
         ph['x'] = x
+        ph['q'] = q
         ph['y'] = y
+        ph['x_mask'] = x_mask
+        ph['q_mask'] = q_mask
         ph['is_train'] = is_train
 
         # TODO : put your codes here
-        with tf.variable_scope("main"):
-            logits = linear([x], num_classes, True, scope='logits')
+        with tf.variable_scope("main") as vs:
+            emb_mat = tf.constant(params.emb_mat, name='emb_mat')
+            Ax = tf.nn.embedding_lookup(emb_mat, x, name='Ax')  # [N, M, J, d]
+            Aq = tf.nn.embedding_lookup(emb_mat, q, name='Aq')  # [N, K, d]
 
-        with tf.name_scope("eval"):
-            yp = tf.cast(tf.argmax(logits, 1), 'int32')
-            correct = tf.equal(yp, y)
-            # TODO : this must be properly defined
-            tensors['correct'] = correct
+            q_length = tf.reduce_sum(tf.cast(q_mask, 'int32'), 1)  # [N]
+
+            cell = BasicLSTMCell(d, state_is_tuple=True)
+            Ax_flat = tf.reshape(Ax, [N*M, J, d])
+            x_flat_length = tf.reduce_sum(tf.cast(tf.reshape(x_mask, [N*M, J]), 'int32'), 1)  # [N*M]
+            Ax_flat_out, _ = dynamic_rnn(cell, Ax_flat, x_flat_length, dtype='float')  # [N*M, J, d]
+            Ax_flat_out = tf.reshape(Ax_flat_out, [N, M*J, d])
+            vs.reuse_variables()
+            _, (_, Aq_final) = dynamic_rnn(cell, Aq, q_length, dtype='float')  # [N, d]
+            Aq_final_aug = tf.expand_dims(Aq_final, 1)  # [N, 1,  d]
+            logits_flat = tf.reduce_sum(Ax_flat_out * Aq_final_aug, 2)  # [N, M*J]
 
         with tf.name_scope("loss"):
-            ce = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, y, name='ce')
+            y_flat = tf.reduce_sum(y * tf.constant([J, 1]), 1)  # [N]
+            x_mask_flat = tf.reshape(x_mask, [N, M*J])
+            VERY_BIG_NUMBER = 1e9
+            logits_flat += -VERY_BIG_NUMBER * tf.cast(tf.logical_not(x_mask_flat), 'float')
+            ce = tf.nn.sparse_softmax_cross_entropy_with_logits(logits_flat, y_flat, name='ce')
             avg_ce = tf.reduce_mean(ce, name='avg_ce')
             tf.add_to_collection('losses', avg_ce)
 
@@ -41,28 +65,49 @@ class Tower(BaseTower):
             # TODO : this must be properly defined
             tensors['loss'] = loss
 
+        with tf.name_scope("eval"):
+            yp_flat = tf.cast(tf.argmax(logits_flat, 1), 'int32')
+            correct = tf.equal(yp_flat, y_flat)
+            # TODO : this must be properly defined
+            tensors['correct'] = correct
+
+
     def _get_feed_dict(self, batch, mode, **kwargs):
         params = self.params
         ph = self.placeholders
         N = params.batch_size
+        M = params.max_num_sents
+        J = params.max_sent_size
+        K = params.max_ques_size
         # TODO : put more parameters
 
         # TODO : define your inputs to _initialize here
-        x = np.zeros([N, 1], dtype='float')
-        y = np.zeros([N], dtype='int32')
-        feed_dict = {ph['x']: x, ph['y']: y,
+        x = np.zeros([N, M, J], dtype='int32')
+        q = np.zeros([N, K], dtype='int32')
+        y = np.zeros([N, 2], dtype='int32')
+        x_mask = np.zeros([N, M, J], dtype='bool')
+        q_mask = np.zeros([N, K], dtype='bool')
+
+        feed_dict = {ph['x']: x, ph['q']: q, ph['y']: y,
+                     ph['x_mask']: x_mask, ph['q_mask']: q_mask,
                      ph['is_train']: mode == 'train'}
 
         # Batch can be empty in multi GPU parallelization
         if batch is None:
             return feed_dict
 
-        # TODO : retrieve data and store it in the numpy arrays; example shown below
-        X, Y = batch['X'], batch['Y']
+        X, Q, Y = batch['X'], batch['Q'], batch['Y']
+        for i, sents in enumerate(X):
+            for j, sent in enumerate(sents):
+                for k, word in enumerate(sent):
+                    x[i, j, k] = word
 
-        for i, xx in enumerate(X):
-            x[i, 0] = xx
-        for i, yy in enumerate(Y):
-            y[i] = yy
+        for i, ques in enumerate(Q):
+            for j, word in enumerate(ques):
+                q[i, j] = word
+
+        for i, idxs in enumerate(Y):
+            for j, idx in enumerate(idxs):
+                y[i, j] = idx
 
         return feed_dict

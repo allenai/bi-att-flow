@@ -6,21 +6,22 @@ import sys
 from pprint import pformat
 
 import tensorflow as tf
+import numpy as np
+
 from model.base_model import BaseRunner
 from model.model import Tower
-
 from config.get_config import get_config_from_file, get_config
-from model.read_data import read_data
+from model.read_squad_data import read_data
 
 flags = tf.app.flags
 
 # File directories
 flags.DEFINE_string("model_name", "model", "Model name. This will be used for save, log, and eval names. [model]")
-flags.DEFINE_string("data_dir", "data/model", "Data directory [data/model]")
+flags.DEFINE_string("data_dir", "data/model/squad", "Data directory [data/model/squad]")
 
 # Training parameters
 # These affect result performance
-flags.DEFINE_integer("batch_size", 32, "Batch size for each tower. [32]")
+flags.DEFINE_integer("batch_size", 32, "Batch size for each tower. [128]")
 flags.DEFINE_float("init_mean", 0, "Initial weight mean [0]")
 flags.DEFINE_float("init_std", 1.0, "Initial weight std [1.0]")
 flags.DEFINE_float("init_lr", 0.5, "Initial learning rate [0.5]")
@@ -106,10 +107,19 @@ def _makedirs(config, trial_idx):
 def _load_metadata(config):
     data_dir = config.data_dir
     metadata_path = os.path.join(data_dir, "metadata.json")
+    param_path = os.path.join(data_dir, "param.json")
     metadata = json.load(open(metadata_path, "r"))
+    params = json.load(open(param_path, 'r'))
+
+    emb_mat = np.array(params['emb_mat'], dtype='float32')
 
     # TODO: set other parameters, e.g.
-    config.num_classes = metadata['num_classes']
+    config.max_sent_size = metadata['max_sent_size']
+    config.max_num_sents = metadata['max_num_sents']
+    config.vocab_size = metadata['vocab_size']
+    config.max_ques_size = metadata['max_ques_size']
+    config.word_vec_size = metadata['word_vec_size']
+    config.emb_mat = emb_mat
 
 
 def _main(config, num_trials):

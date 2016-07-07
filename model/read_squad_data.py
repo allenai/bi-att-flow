@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 import numpy as np
@@ -19,7 +20,7 @@ class SharedDataSet(DataSet):
         return batch
 
 
-def read_squad_data(params, mode):
+def read_data(params, mode):
     batch_size = params.batch_size
     data_dir = params.data_dir
 
@@ -29,7 +30,11 @@ def read_squad_data(params, mode):
     mode2idxs_dict = json.load(open(mode2idxs_path, 'r'))
     data = json.load(open(data_path, 'r'))
     shared = json.load(open(shared_path, 'r'))
-    idxs = mode2idxs_dict[mode]
+    if mode not in mode2idxs_dict and mode == 'test':
+        logging.warning("test data not found: using dev data instead.")
+        idxs = mode2idxs_dict['dev']
+    else:
+        idxs = mode2idxs_dict[mode]
     data_set = SharedDataSet(mode, batch_size, data, shared, idxs)
     return data_set
 
@@ -40,7 +45,7 @@ def main():
     config = Config()
     config.batch_size = 2
     config.data_dir = "data/model/squad"
-    data_set = read_squad_data(config, "train")
+    data_set = read_data(config, "train")
     print(data_set.num_examples)
     print(data_set.get_next_labeled_batch())
 

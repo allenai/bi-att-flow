@@ -77,10 +77,10 @@ def _tokenize(raw):
 
 def _index(l, w, d):
     if d == 1:
-        return l.index(w)
-    for ll in l:
+        return [l.index(w)]
+    for i, ll in enumerate(l):
         try:
-            return _index(ll, w, d-1)
+            return [i] + _index(ll, w, d-1)
         except ValueError:
             continue
     raise ValueError("{} is not in list".format(w))
@@ -126,7 +126,8 @@ def _insert_raw_data(file_path, raw_shared, raw_batched, mode2idxs_dict, mode):
                                                                context[answer_stop:])
                         temp_sents = _tokenize(temp_context)
                         start_idx = _index(temp_sents, START, 2)
-                        stop_idx = _index(temp_sents, STOP, 2) - 1
+                        temp_idx = _index(temp_sents, STOP, 2)
+                        stop_idx = temp_idx[0], temp_idx[1] - 1
 
                         # Store stuff
                         R.append(ref_idx)
@@ -195,7 +196,7 @@ def _save(target_dir, shared, batched, params, mode2idxs_dict, word2idx_dict):
     emb_mat = params['emb_mat']
     R, Q, Y = (batched[key] for key in ('R', 'Q', 'Y'))
 
-    metadata = {'max_sent_size': max(len(sent) for sents in X for sent in sents),
+    metadata = {'max_sent_size': max(len(sent) for paras in X for sents in paras for sent in sents),
                 'max_num_sents': max(len(sents) for sents in X),
                 'vocab_size': len(emb_mat),
                 'max_ques_size': max(len(ques) for ques in Q),
