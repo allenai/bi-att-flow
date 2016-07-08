@@ -7,7 +7,7 @@ import numpy as np
 NUM = "NUM"
 
 class DataSet(object):
-    def __init__(self, name, batch_size, data, idxs, idx2id=None):
+    def __init__(self, name, batch_size, data, idxs, idx2id=None, shuffle=True):
         self.name = name
         self.num_epochs_completed = 0
         self.idx_in_epoch = 0
@@ -20,6 +20,7 @@ class DataSet(object):
         self.num_examples = len(idxs)
         self.num_full_batches = int(self.num_examples / self.batch_size)
         self.num_all_batches = self.num_full_batches + int(self.num_examples % self.batch_size > 0)
+        self.shuffle = shuffle
         self.reset()
 
     def get_num_batches(self, partial=False):
@@ -53,7 +54,9 @@ class DataSet(object):
 
     def reset(self):
         self.idx_in_epoch = 0
-        np.random.shuffle(self.idxs)
+        # For debugging purpose, shuffle can be turned off
+        if self.shuffle:
+            np.random.shuffle(self.idxs)
 
 
 def read_data(params, mode):

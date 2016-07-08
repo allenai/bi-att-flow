@@ -1,11 +1,20 @@
 import tensorflow as tf
 from tensorflow.python.ops.rnn import dynamic_rnn
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell
+from my.tensorflow.rnn_cell import DropoutWrapper
 
 from model.base_model import BaseTower
 import numpy as np
 
 from my.tensorflow.nn import linear
+
+
+def reverse_dynamic_rnn(cell, x, length, **kwargs):
+    length = tf.cast(length, 'int64')
+    x_r = tf.reverse_sequence(x, length, 1)
+    out_r, state = dynamic_rnn(cell, x, length, **kwargs)
+    out = tf.reverse_sequence(out_r, length, 1)
+    return out, state
 
 
 class Tower(BaseTower):
@@ -18,6 +27,7 @@ class Tower(BaseTower):
         J = params.max_sent_size
         K = params.max_ques_size
         d = params.word_vec_size
+        keep_prob = params.keep_prob
 
         is_train = tf.placeholder('bool', shape=[], name='is_train')
         # TODO : define placeholders and put them in ph
@@ -42,12 +52,18 @@ class Tower(BaseTower):
             q_length = tf.reduce_sum(tf.cast(q_mask, 'int32'), 1)  # [N]
 
             cell = BasicLSTMCell(d, state_is_tuple=True)
+            cell = DropoutWrapper(cell, input_keep_prob=keep_prob, is_train=is_train)
             Ax_flat = tf.reshape(Ax, [N*M, J, d])
-            x_flat_length = tf.reduce_sum(tf.cast(tf.reshape(x_mask, [N*M, J]), 'int32'), 1)  # [N*M]
-            Ax_flat_out, _ = dynamic_rnn(cell, Ax_flat, x_flat_length, dtype='float')  # [N*M, J, d]
-            Ax_flat_out = tf.reshape(Ax_flat_out, [N, M*J, d])
+            x_sent_length = tf.reduce_sum(tf.cast(tf.reshape(x_mask, [N*M, J]), 'int32'), 1)  # [N*M]
+            Ax_flat_out_fw, _ = dynamic_rnn(cell, Ax_flat, x_sent_length, dtype='float', scope='fw')  # [N*M, J, d]
+            Ax_flat_out_bw, _ = reverse_dynamic_rnn(cell, Ax_flat, x_sent_length, dtype='float', scope='bw')
+            Ax_flat_out_fw = tf.reshape(Ax_flat_out_fw, [N, M*J, d])
+            Ax_flat_out_bw = tf.reshape(Ax_flat_out_bw, [N, M*J, d])
             vs.reuse_variables()
-            _, (_, Aq_final) = dynamic_rnn(cell, Aq, q_length, dtype='float')  # [N, d]
+            _, (_, Aq_final_fw) = dynamic_rnn(cell, Aq, q_length, dtype='float', scope='fw')  # [N, d]
+            _, (_, Aq_final_bw) = reverse_dynamic_rnn(cell, Aq, q_length, dtype='float', scope='bw')  # [N, d]
+            Ax_flat_out = Ax_flat_out_fw + Ax_flat_out_bw
+            Aq_final = Aq_final_fw + Aq_final_bw
             Aq_final_aug = tf.expand_dims(Aq_final, 1)  # [N, 1,  d]
             logits_flat = tf.reduce_sum(Ax_flat_out * Aq_final_aug, 2)  # [N, M*J]
 

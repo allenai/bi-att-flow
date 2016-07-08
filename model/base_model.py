@@ -26,6 +26,7 @@ class BaseRunner(object):
         self.writer = None
         self.initialized = False
         self.train_ops = {}
+        self.maintain_averages_op = None
         self.write_log = params.write_log
 
     def initialize(self):
@@ -85,6 +86,7 @@ class BaseRunner(object):
 
         self.tensors['loss'] = loss_tensor
         self.tensors['correct'] = correct_tensor
+
         summaries.append(tf.scalar_summary(loss_tensor.op.name, loss_tensor))
 
         for key, grads_pair in grads_pair_dict.items():
@@ -100,6 +102,13 @@ class BaseRunner(object):
 
         self.train_ops = {key: tf.group(apply_grads_op)
                           for key, apply_grads_op in apply_grads_op_dict.items()}
+
+        ema = tf.train.ExponentialMovingAverage(decay=0.9999)
+        assert 'ma' not in self.train_ops
+        self.train_ops['ma'] = ema.apply([loss_tensor])
+        ema_loss_tensor = ema.average(loss_tensor)
+        self.tensors['ema_loss'] = ema_loss_tensor
+        # summaries.append(tf.scalar_summary(ema_loss_tensor.op.name, ema_loss_tensor))
 
         saver = tf.train.Saver(tf.all_variables())
         self.saver = saver
@@ -129,6 +138,7 @@ class BaseRunner(object):
         tensors = self.tensors
         feed_dict = self._get_feed_dict(batches, 'train', **kwargs)
         train_op = self._get_train_op(**kwargs)
+        # op = tf.tuple([tensors['summary'], tensors['global_step']], control_inputs=[train_op])
         ops = [train_op, tensors['summary'], tensors['global_step']]
         train, summary, global_step = sess.run(ops, feed_dict=feed_dict)
         return train, summary, global_step
@@ -254,7 +264,11 @@ class BaseRunner(object):
         return loss, acc
 
     def _get_train_op(self, **kwargs):
-        return self.train_ops['all']
+        all_op = self.train_ops['all']
+        ma_op = self.train_ops['ma']
+        with tf.control_dependencies([all_op]):
+            train_op = tf.group(ma_op)
+        return all_op
 
     def _get_train_args(self, epoch_idx):
         params = self.params

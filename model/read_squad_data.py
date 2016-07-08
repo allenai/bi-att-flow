@@ -8,8 +8,8 @@ from model.read_data import DataSet
 
 
 class SharedDataSet(DataSet):
-    def __init__(self, name, batch_size, data, shared, idxs, idx2id=None):
-        super(SharedDataSet, self).__init__(name, batch_size, data, idxs, idx2id=idx2id)
+    def __init__(self, name, batch_size, data, shared, idxs, idx2id=None, shuffle=True):
+        super(SharedDataSet, self).__init__(name, batch_size, data, idxs, idx2id=idx2id, shuffle=shuffle)
         self.shared = shared
 
     def get_next_labeled_batch(self, partial=False):
@@ -23,6 +23,7 @@ class SharedDataSet(DataSet):
 def read_data(params, mode):
     batch_size = params.batch_size
     data_dir = params.data_dir
+    shuffle = params.shuffle
 
     mode2idxs_path = os.path.join(data_dir, "mode2idxs.json")
     data_path = os.path.join(data_dir, "batched.json")
@@ -35,7 +36,7 @@ def read_data(params, mode):
         idxs = mode2idxs_dict['dev']
     else:
         idxs = mode2idxs_dict[mode]
-    data_set = SharedDataSet(mode, batch_size, data, shared, idxs)
+    data_set = SharedDataSet(mode, batch_size, data, shared, idxs, shuffle=shuffle)
     return data_set
 
 

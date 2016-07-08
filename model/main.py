@@ -32,6 +32,7 @@ flags.DEFINE_string("opt", 'adagrad', 'Optimizer: basic | adagrad | adam [basic]
 flags.DEFINE_float("wd", 0.001, "Weight decay [0.001]")
 flags.DEFINE_integer("max_grad_norm", 0, "Max grad norm. 0 for no clipping [0]")
 flags.DEFINE_float("max_val_loss", 0.0, "Max val loss [0.0]")
+flags.DEFINE_bool("shuffle", True, "Shuffle batches? (don't disable unless debugging) [True]")
 
 # Training and testing options
 # These do not directly affect result performance (they affect duration though)
@@ -59,6 +60,7 @@ flags.DEFINE_boolean("draft", False, "Draft? (quick initialize) [False]")
 
 # App-specific options
 # TODO : Any other options
+flags.DEFINE_float("keep_prob", 0.5, "Keep prob [0.5]")
 
 FLAGS = flags.FLAGS
 
