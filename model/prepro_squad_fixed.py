@@ -56,16 +56,35 @@ def _prepro(args):
     params = {'emb_mat': []}
     mode2idxs_dict = {'train': [], 'dev': []}
 
+
     train_path = os.path.join(source_dir, template.format("train", version))
     dev_path = os.path.join(source_dir, template.format("dev", version))
+
     _insert_raw_data(train_path, shared, batched, mode2idxs_dict, 'train')
     _insert_raw_data(dev_path, shared, batched, mode2idxs_dict, 'dev')
+
 
     word2vec_dict = _get_word2vec_dict(glove_path, shared, batched, total=total)
     word2idx_dict = {word: idx for idx, word in enumerate(word2vec_dict.keys())}  # Must be an ordered dict!
     params['emb_mat'] = list(word2vec_dict.values())
     _apply(word2idx_dict, shared, batched)
     _save(target_dir, shared, batched, params, mode2idxs_dict, word2idx_dict)
+
+
+def _print_stats(train_path, dev_path):
+    train_shared = {'X': []}  # X stores parass
+    train_batched = {'R': [], 'Q': [], 'Y': [], 'ids': []}
+    dev_shared = {'X': []}  # X stores parass
+    dev_batched = {'R': [], 'Q': [], 'Y': [], 'ids': []}
+    mode2idxs_dict = {'train': [], 'dev': []}
+    _insert_raw_data(train_path, train_shared, train_batched, mode2idxs_dict, 'train')
+    _insert_raw_data(dev_path, dev_shared, dev_batched, mode2idxs_dict, 'dev')
+    train_word_counter = Counter([word for paras in train_shared['X'] for sents in paras for sent in sents for word in sent] +
+                           [word for ques in train_batched['Q'] for word in ques])
+    dev_word_counter = Counter([word for paras in dev_shared['X'] for sents in paras for sent in sents for word in sent] +
+                           [word for ques in dev_batched['Q'] for word in ques])
+    print("train words: {}, dev words: {}".format(sum(train_word_counter.values()), sum(dev_word_counter.values())))
+    print("dev words not observed in train: {}".format(sum(dev_word_counter[word] for word in dev_word_counter if word not in train_word_counter)))
 
 
 def _tokenize(raw):

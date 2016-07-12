@@ -61,6 +61,7 @@ flags.DEFINE_boolean("draft", False, "Draft? (quick initialize) [False]")
 # App-specific options
 # TODO : Any other options
 flags.DEFINE_float("keep_prob", 0.5, "Keep prob [0.5]")
+flags.DEFINE_bool("finetune", True, "Fine-tune? [True]")
 
 FLAGS = flags.FLAGS
 

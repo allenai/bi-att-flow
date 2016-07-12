@@ -45,6 +45,7 @@ def main():
         pass
     config = Config()
     config.batch_size = 2
+    config.shuffle = True
     config.data_dir = "data/model/squad"
     data_set = read_data(config, "train")
     print(data_set.num_examples)

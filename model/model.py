@@ -1,6 +1,8 @@
 import tensorflow as tf
 from tensorflow.python.ops.rnn import dynamic_rnn
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell
+
+from my.tensorflow import get_initializer
 from my.tensorflow.rnn_cell import DropoutWrapper
 
 from model.base_model import BaseTower
@@ -27,7 +29,9 @@ class Tower(BaseTower):
         J = params.max_sent_size
         K = params.max_ques_size
         d = params.word_vec_size
+        V = params.vocab_size
         keep_prob = params.keep_prob
+        finetune = params.finetune
 
         is_train = tf.placeholder('bool', shape=[], name='is_train')
         # TODO : define placeholders and put them in ph
@@ -45,7 +49,11 @@ class Tower(BaseTower):
 
         # TODO : put your codes here
         with tf.variable_scope("main") as vs:
-            emb_mat = tf.constant(params.emb_mat, name='emb_mat')
+            init_emb_mat = tf.constant(params.emb_mat, name='emb_mat')
+            if finetune:
+                emb_mat = tf.get_variable("emb_mat", shape=[V, d], dtype='float', initializer=get_initializer(init_emb_mat))
+            else:
+                emb_mat = init_emb_mat
             Ax = tf.nn.embedding_lookup(emb_mat, x, name='Ax')  # [N, M, J, d]
             Aq = tf.nn.embedding_lookup(emb_mat, q, name='Aq')  # [N, K, d]
 
@@ -62,10 +70,12 @@ class Tower(BaseTower):
             vs.reuse_variables()
             _, (_, Aq_final_fw) = dynamic_rnn(cell, Aq, q_length, dtype='float', scope='fw')  # [N, d]
             _, (_, Aq_final_bw) = reverse_dynamic_rnn(cell, Aq, q_length, dtype='float', scope='bw')  # [N, d]
-            Ax_flat_out = Ax_flat_out_fw + Ax_flat_out_bw
-            Aq_final = Aq_final_fw + Aq_final_bw
+            Ax_flat_out = tf.concat(2, [Ax_flat_out_fw, Ax_flat_out_bw])
+            Aq_final = tf.concat(1, [Aq_final_fw, Aq_final_bw])
             Aq_final_aug = tf.expand_dims(Aq_final, 1)  # [N, 1,  d]
-            logits_flat = tf.reduce_sum(Ax_flat_out * Aq_final_aug, 2)  # [N, M*J]
+
+        with tf.variable_scope("logit"):
+            logits_flat = linear(Ax_flat_out * Aq_final_aug, 1, True, squeeze=True)  # [N, M*J]
 
         with tf.name_scope("loss"):
             y_flat = tf.reduce_sum(y * tf.constant([J, 1]), 1)  # [N]

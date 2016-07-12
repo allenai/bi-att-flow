@@ -8,6 +8,11 @@ VERY_POSITIVE_NUMBER = VERY_BIG_NUMBER
 VERY_NEGATIVE_NUMBER = -VERY_BIG_NUMBER
 
 
+def get_initializer(matrix):
+    def _initializer(shape, dtype=None): return matrix
+    return _initializer
+
+
 def variable_on_cpu(name, shape, initializer):
     """Helper to create a Variable stored on CPU memory.
 
