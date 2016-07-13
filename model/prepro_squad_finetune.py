@@ -74,21 +74,24 @@ def _prepro(args):
     dev_path = os.path.join(source_dir, template.format("dev", version))
 
     _insert_raw_data(train_path, train_shared, train_batched, sent_size_th=sent_size_th)
-    _insert_raw_data(dev_path, dev_shared, dev_batched, X_offset=len(train_shared), sent_size_th=sent_size_th)
+    _insert_raw_data(dev_path, dev_shared, dev_batched, X_offset=len(train_shared['X']), sent_size_th=sent_size_th)
 
     word2vec_dict = _get_word2vec_dict(glove_path, train_shared, train_batched, total=total, count_th=count_th)
     word2idx_dict = {word: idx for idx, word in enumerate(word2vec_dict.keys())}  # Must be an ordered dict!
     params['emb_mat'] = list(word2vec_dict.values())
     _apply(word2idx_dict, train_shared, train_batched)
     _apply(word2idx_dict, dev_shared, dev_batched)
-    shared, _ = _concat(train=train_shared, dev=dev_shared)
-    batched, mode2idxs_dict = _concat(train=train_batched, dev=dev_batched)
+    shared, _ = _concat(train=train_shared, dev=dev_shared, order=('train', 'dev'))
+    batched, mode2idxs_dict = _concat(train=train_batched, dev=dev_batched, order=('train', 'dev'))
 
     _save(target_dir, shared, batched, params, mode2idxs_dict, word2idx_dict)
 
 
-def _concat(**dict_dict):
-    dicts = list(dict_dict.values())
+def _concat(order=None, **dict_dict):
+    if order is not None:
+        dicts = [dict_dict[key] for key in order]
+    else:
+        dicts = list(dict_dict.values())
     data = {key: list(itertools.chain(*[dict_[key] for dict_ in dicts])) for key in dicts[0]}
     mode2idxs_dict = {}
     count = 0
