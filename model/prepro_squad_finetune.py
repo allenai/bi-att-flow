@@ -1,5 +1,6 @@
 import argparse
 import json
+import logging
 import os
 
 import itertools
@@ -7,7 +8,6 @@ import numpy as np
 import nltk
 from collections import OrderedDict, Counter
 from tqdm import tqdm
-import logging
 
 import re
 
@@ -64,22 +64,27 @@ def _prepro(args):
     # TODO : put something here; Fake data shown
     version = args.version
     template = "{}-v{}.json"
-    prior = {'emb_mat': []}
+    train_shared = {'X': []}  # X stores parass
+    train_batched = {'R': [], 'Q': [], 'Y': [], 'ids': []}
+    dev_shared = {'X': []}  # X stores parass
+    dev_batched = {'R': [], 'Q': [], 'Y': [], 'ids': []}
+    params = {'emb_mat': []}
 
     train_path = os.path.join(source_dir, template.format("train", version))
     dev_path = os.path.join(source_dir, template.format("dev", version))
 
-    train_shared, train_data = _get_raw_data(train_path, sent_size_th=sent_size_th)
-    dev_shared, dev_data = _get_raw_data(dev_path, sent_size_th=sent_size_th)
+    _insert_raw_data(train_path, train_shared, train_batched, sent_size_th=sent_size_th)
+    _insert_raw_data(dev_path, dev_shared, dev_batched, X_offset=len(train_shared['X']), sent_size_th=sent_size_th)
 
-    word2vec_dict = _get_word2vec_dict(glove_path, train_shared, train_data, total=total, count_th=count_th)
+    word2vec_dict = _get_word2vec_dict(glove_path, train_shared, train_batched, total=total, count_th=count_th)
     word2idx_dict = {word: idx for idx, word in enumerate(word2vec_dict.keys())}  # Must be an ordered dict!
-    prior['emb_mat'] = list(word2vec_dict.values())
-    _apply(word2idx_dict, train_shared, train_data)
-    _apply(word2idx_dict, dev_shared, dev_data)
+    params['emb_mat'] = list(word2vec_dict.values())
+    _apply(word2idx_dict, train_shared, train_batched)
+    _apply(word2idx_dict, dev_shared, dev_batched)
+    shared, _ = _concat(train=train_shared, dev=dev_shared, order=('train', 'dev'))
+    batched, mode2idxs_dict = _concat(train=train_batched, dev=dev_batched, order=('train', 'dev'))
 
-    _save('train', target_dir, train_shared, train_data, prior, word2idx_dict)
-    _save('dev', target_dir, dev_shared, dev_data, prior)
+    _save(target_dir, shared, batched, params, mode2idxs_dict, word2idx_dict)
 
 
 def _concat(order=None, **dict_dict):
@@ -99,11 +104,11 @@ def _concat(order=None, **dict_dict):
 
 def _print_stats(train_path, dev_path, min_count):
     train_shared = {'X': []}  # X stores parass
-    train_batched = {'*X': [], 'Q': [], 'Y': [], 'ids': []}
+    train_batched = {'R': [], 'Q': [], 'Y': [], 'ids': []}
     dev_shared = {'X': []}  # X stores parass
-    dev_batched = {'*X': [], 'Q': [], 'Y': [], 'ids': []}
-    _get_raw_data(train_path)
-    _get_raw_data(dev_path)
+    dev_batched = {'R': [], 'Q': [], 'Y': [], 'ids': []}
+    _insert_raw_data(train_path, train_shared, train_batched)
+    _insert_raw_data(dev_path, dev_shared, dev_batched)
 
     for min_count in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
         print("-" * 80)
@@ -137,16 +142,14 @@ def _index(l, w, d):
     raise ValueError("{} is not in list".format(w))
 
 
-def _get_raw_data(file_path, sent_size_th=200):
+def _insert_raw_data(file_path, raw_shared, raw_batched, X_offset=0, sent_size_th=200):
     START = "sstartt"
     STOP = "sstopp"
-    raw_shared = {'X': []}
-    raw_batched = {'*X': [], 'Q': [], 'Y': [], 'ids': []}
     X = raw_shared['X']
-    RX, Q, Y, ids = raw_batched['*X'], raw_batched['Q'], raw_batched['Y'], raw_batched['ids']
+    R, Q, Y, ids = raw_batched['R'], raw_batched['Q'], raw_batched['Y'], raw_batched['ids']
     batched_idx = len(ids)  # = len(R) = len(Q) = len(Y)
 
-    print("reading {} ...".format(file_path))
+    logging.info("reading {} ...".format(file_path))
     skip_count = 0
     with open(file_path, 'r') as fh:
         d = json.load(fh)
@@ -156,7 +159,7 @@ def _get_raw_data(file_path, sent_size_th=200):
             X.append(X_i)
             for para in article['paragraphs']:
                 para_idx = len(X_i)
-                ref_idx = ('X', article_idx, para_idx)
+                ref_idx = (article_idx + X_offset, para_idx)
                 context = para['context']
                 sents = _tokenize(context)
                 max_sent_size = max(len(sent) for sent in sents)
@@ -188,7 +191,7 @@ def _get_raw_data(file_path, sent_size_th=200):
                         stop_idx = temp_idx[0], temp_idx[1] - 1
 
                         # Store stuff
-                        RX.append(ref_idx)
+                        R.append(ref_idx)
                         Q.append(question_words)
                         Y.append(start_idx)
                         ids.append(id_)
@@ -197,10 +200,9 @@ def _get_raw_data(file_path, sent_size_th=200):
                 # break  # for debugging
         if counter > 0:
             logging.warning("# answer mismatches: {}".format(counter))
-        print("# skipped paragraphs: {}".format(skip_count))
-        print("# articles: {}, # paragraphs: {}".format(len(X), sum(len(x) for x in X)))
-        print("# questions: {}".format(len(Q)))
-        return raw_shared, raw_batched
+        logging.info("# skipped paragraphs: {}".format(skip_count))
+        logging.info("# articles: {}, # paragraphs: {}".format(len(X), sum(len(x) for x in X)))
+        logging.info("# questions: {}".format(len(Q)))
 
 
 def _get_word2vec_dict(glove_path, shared, batched, total=None, count_th=0):
@@ -208,7 +210,7 @@ def _get_word2vec_dict(glove_path, shared, batched, total=None, count_th=0):
                            [word for ques in batched['Q'] for word in ques])
     word2vec_dict = OrderedDict()
 
-    print("reading %s ... " % glove_path)
+    logging.info("reading %s ... " % glove_path)
     word_vec_size = None
     with open(glove_path, 'r') as fp:
         for line in tqdm(fp, total=total):
@@ -224,9 +226,9 @@ def _get_word2vec_dict(glove_path, shared, batched, total=None, count_th=0):
     top_unk_words = [word for word, _ in sorted(unk_word_counter.items(), key=lambda pair: -pair[1])][:10]
     total_count = sum(word_counter.values())
     unk_count = sum(unk_word_counter.values())
-    print("# known words: {}, # unk words: {}".format(total_count, unk_count))
-    print("# distinct known words: {}, # distinct unk words: {}".format(len(word2vec_dict), len(word_counter)-len(word2vec_dict)))
-    print("Top unk words: {}".format(", ".join(top_unk_words)))
+    logging.info("# known words: {}, # unk words: {}".format(total_count, unk_count))
+    logging.info("# distinct known words: {}, # distinct unk words: {}".format(len(word2vec_dict), len(word_counter)-len(word2vec_dict)))
+    logging.info("Top unk words: {}".format(", ".join(top_unk_words)))
     word2vec_dict[UNK] = [0.0] * word_vec_size
     return word2vec_dict
 
@@ -236,25 +238,26 @@ def _apply(word2idx_dict, shared, batched):
         if word not in word2idx_dict:
             word = UNK
         return word2idx_dict[word]
-    print("applying word2idx_dict to data ...")
+    logging.info("applying word2idx_dict to data ...")
     X = [[[[_get(word) for word in sent] for sent in sents] for sents in paras]for paras in tqdm(shared['X'])]
     Q = [[_get(word) for word in ques] for ques in tqdm(batched['Q'])]
     shared['X'] = X
     batched['Q'] = Q
 
 
-def _save(mode, target_dir, shared, data, priors, word2idx_dict=None):
+def _save(target_dir, shared, batched, params, mode2idxs_dict, word2idx_dict):
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
-    metadata_path = os.path.join(target_dir, "{}_metadata.json".format(mode))
-    shared_path = os.path.join(target_dir, "{}_shared.json".format(mode))
-    batched_path =os.path.join(target_dir, "{}_data.json".format(mode))
+    mode2idxs_path = os.path.join(target_dir, "mode2idxs.json")
+    metadata_path = os.path.join(target_dir, "metadata.json")
+    shared_path = os.path.join(target_dir, "shared.json")
+    batched_path =os.path.join(target_dir, "batched.json")
     word2idx_path = os.path.join(target_dir, "word2idx.json")
-    prior_path = os.path.join(target_dir, "prior.json")
+    param_path = os.path.join(target_dir, "param.json")
 
     X = shared['X']
-    emb_mat = priors['emb_mat']
-    RX, Q, Y = (data[key] for key in ('*X', 'Q', 'Y'))
+    emb_mat = params['emb_mat']
+    R, Q, Y = (batched[key] for key in ('R', 'Q', 'Y'))
 
     metadata = {'max_sent_size': max(len(sent) for paras in X for sents in paras for sent in sents),
                 'max_num_sents': max(len(sents) for paras in X for sents in paras),
@@ -263,21 +266,23 @@ def _save(mode, target_dir, shared, data, priors, word2idx_dict=None):
                 "word_vec_size": len(emb_mat[0]),
                 }
 
-    print("saving ...")
+    logging.info("saving ...")
+    with open(mode2idxs_path, 'w') as fh:
+        json.dump(mode2idxs_dict, fh)
     with open(metadata_path, 'w') as fh:
         json.dump(metadata, fh)
     with open(shared_path, 'w') as fh:
         json.dump(shared, fh)
     with open(batched_path, 'w') as fh:
-        json.dump(data, fh)
-    if mode == 'train':
-        with open(word2idx_path, 'w') as fh:
-            json.dump(word2idx_dict, fh)
-        with open(prior_path, 'w') as fh:
-            json.dump(priors, fh)
+        json.dump(batched, fh)
+    with open(word2idx_path, 'w') as fh:
+        json.dump(word2idx_dict, fh)
+    with open(param_path, 'w') as fh:
+        json.dump(params, fh)
 
 
 def main():
+    logging.getLogger().setLevel(logging.INFO)
     args = _get_args()
     _prepro(args)
 

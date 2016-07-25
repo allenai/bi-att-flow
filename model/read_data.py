@@ -4,29 +4,24 @@ import os
 
 import numpy as np
 
-from my.utils import _index
-
 NUM = "NUM"
 
-
 class DataSet(object):
-    def __init__(self, data, batch_size, shared=None, name='default', idxs=None, idx2id=None):
+    def __init__(self, name, batch_size, data, idxs, idx2id=None, shuffle=True):
         self.name = name
         self.num_epochs_completed = 0
         self.idx_in_epoch = 0
         self.batch_size = batch_size
         self.data = data
-        self.num_examples = len(next(iter(data.values())))
-        if idxs is None:
-            idxs = list(range(self.num_examples))
-        self.init_idxs = idxs
         self.idxs = idxs
         if idx2id is None:
             idx2id = {idx: idx for idx in idxs}
         self.idx2id = idx2id
+        self.num_examples = len(idxs)
         self.num_full_batches = int(self.num_examples / self.batch_size)
         self.num_all_batches = self.num_full_batches + int(self.num_examples % self.batch_size > 0)
-        self.shared = shared
+        self.shuffle = shuffle
+        self.reset()
 
     def get_num_batches(self, partial=False):
         return self.num_all_batches if partial else self.num_full_batches
@@ -39,23 +34,13 @@ class DataSet(object):
         cur_idxs = self.idxs[from_:to]
         return cur_idxs
 
-    def get_next_batch(self, partial=False):
+    def get_next_labeled_batch(self, partial=False):
         cur_idxs = self.get_batch_idxs(partial=partial)
         batch = {key: [each[i] for i in cur_idxs] for key, each in self.data.items()}
         assert NUM not in batch, "Variable name '{}' is reserved.".format(NUM)
         batch[NUM] = len(cur_idxs)
 
         self.idx_in_epoch += len(cur_idxs)
-
-        # handle shared data
-        new_ = {}
-        for key, data in batch.items():
-            if key.startswith("*"):
-                new_key = key[1:]
-                new_[new_key] = [_index(self.shared, ref) for ref in data]
-        for key, data in new_.items():
-            batch[key] = data
-
         return batch
 
     def has_next_batch(self, partial=False):
@@ -63,16 +48,15 @@ class DataSet(object):
             return self.idx_in_epoch < self.num_examples
         return self.idx_in_epoch + self.batch_size <= self.num_examples
 
-    def complete_epoch(self, shuffle=True):
-        self.reset(shuffle=shuffle)
+    def complete_epoch(self):
+        self.reset()
         self.num_epochs_completed += 1
 
-    def reset(self, shuffle=True):
+    def reset(self):
         self.idx_in_epoch = 0
-        if shuffle:
+        # For debugging purpose, shuffle can be turned off
+        if self.shuffle:
             np.random.shuffle(self.idxs)
-        else:
-            self.idxs = self.init_idxs
 
 
 def read_data(params, mode):
@@ -80,9 +64,10 @@ def read_data(params, mode):
     batch_size = params.batch_size
     data_dir = params.data_dir
 
-    data_path = os.path.join(data_dir, "{}_data.json".format(mode))
+    mode2idxs_path = os.path.join(data_dir, "mode2idxs.json")
+    data_path = os.path.join(data_dir, "data.json")
+    mode2idxs_dict = json.load(open(mode2idxs_path, 'r'))
     data = json.load(open(data_path, 'r'))
-    shared_path = os.path.join(data_dir, "{}_shared.json".format(mode))
-    shared = json.load(open(shared_path, 'r'))
-    data_set = DataSet(data, batch_size, shared=shared, name=mode)
+    idxs = mode2idxs_dict[mode]
+    data_set = DataSet(mode, batch_size, data, idxs)
     return data_set

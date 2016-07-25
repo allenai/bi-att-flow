@@ -20,7 +20,7 @@ def reverse_dynamic_rnn(cell, x, length, **kwargs):
 
 
 class Tower(BaseTower):
-    def _initialize_forward(self):
+    def _initialize(self):
         params = self.params
         ph = self.placeholders
         tensors = self.tensors
@@ -37,10 +37,12 @@ class Tower(BaseTower):
         # TODO : define placeholders and put them in ph
         x = tf.placeholder("int32", shape=[N, M, J], name='x')
         q = tf.placeholder("int32", shape=[N, K], name='q')
+        y = tf.placeholder("int32", shape=[N, 2], name='y')
         x_mask = tf.placeholder("bool", shape=[N, M, J], name='x_mask')
         q_mask = tf.placeholder("bool", shape=[N, K], name='q_mask')
         ph['x'] = x
         ph['q'] = q
+        ph['y'] = y
         ph['x_mask'] = x_mask
         ph['q_mask'] = q_mask
         ph['is_train'] = is_train
@@ -74,29 +76,10 @@ class Tower(BaseTower):
 
         with tf.variable_scope("logit"):
             logits_flat = linear(Ax_flat_out * Aq_final_aug, 1, True, squeeze=True)  # [N, M*J]
-            yp_flat = tf.cast(tf.argmax(logits_flat, 1), 'int32')
-            tensors['logits_flat'] = logits_flat
-            tensors['yp_flat'] = yp_flat
-
-    def _initialize_supervision(self):
-        params = self.params
-        ph = self.placeholders
-        tensors = self.tensors
-        N = params.batch_size
-        M = params.max_num_sents
-        J = params.max_sent_size
-        y = tf.placeholder("int32", shape=[N, 2], name='y')
-        ph['y'] = y
-
-        logits = tensors['logits_flat']
-        yp_flat = tensors['yp_flat']
-        x_mask = ph['x_mask']
-        logits_flat = tf.reshape(logits, [N, M*J])
 
         with tf.name_scope("loss"):
             y_flat = tf.reduce_sum(y * tf.constant([J, 1]), 1)  # [N]
             x_mask_flat = tf.reshape(x_mask, [N, M*J])
-            y_mask_flat = tf.reduce_any(x_mask_flat, 1)  # [N]
             VERY_BIG_NUMBER = 1e9
             logits_flat += -VERY_BIG_NUMBER * tf.cast(tf.logical_not(x_mask_flat), 'float')
             ce = tf.nn.sparse_softmax_cross_entropy_with_logits(logits_flat, y_flat, name='ce')
@@ -109,11 +92,11 @@ class Tower(BaseTower):
             tensors['loss'] = loss
 
         with tf.name_scope("eval"):
-            correct = tf.equal(yp_flat, y_flat) & y_mask_flat
-            wrong = tf.not_equal(yp_flat, y_flat) & y_mask_flat
+            yp_flat = tf.cast(tf.argmax(logits_flat, 1), 'int32')
+            correct = tf.equal(yp_flat, y_flat)
             # TODO : this must be properly defined
             tensors['correct'] = correct
-            tensors['wrong'] = wrong
+
 
     def _get_feed_dict(self, batch, mode, **kwargs):
         params = self.params
@@ -127,16 +110,13 @@ class Tower(BaseTower):
         # TODO : define your inputs to _initialize here
         x = np.zeros([N, M, J], dtype='int32')
         q = np.zeros([N, K], dtype='int32')
+        y = np.zeros([N, 2], dtype='int32')
         x_mask = np.zeros([N, M, J], dtype='bool')
         q_mask = np.zeros([N, K], dtype='bool')
 
-        feed_dict = {ph['x']: x, ph['q']: q,
+        feed_dict = {ph['x']: x, ph['q']: q, ph['y']: y,
                      ph['x_mask']: x_mask, ph['q_mask']: q_mask,
                      ph['is_train']: mode == 'train'}
-
-        if params.supervise:
-            y = np.zeros([N, 2], dtype='int32')
-            feed_dict[ph['y']] = y
 
         # Batch can be empty in multi GPU parallelization
         if batch is None:
@@ -154,9 +134,8 @@ class Tower(BaseTower):
                 q[i, j] = word
                 q_mask[i, j] = True
 
-        if params.supervise:
-            for i, idxs in enumerate(Y):
-                for j, idx in enumerate(idxs):
-                    y[i, j] = idx
+        for i, idxs in enumerate(Y):
+            for j, idx in enumerate(idxs):
+                y[i, j] = idx
 
         return feed_dict
