@@ -28,6 +28,7 @@ class Tower(BaseTower):
         M = params.max_num_sents
         J = params.max_sent_size
         K = params.max_ques_size
+        char_vec_size = params.char_vec_size
         d = params.hidden_size
         V = params.vocab_size
         W = params.max_word_size
@@ -70,15 +71,15 @@ class Tower(BaseTower):
             Ax = tf.nn.embedding_lookup(emb_mat, x, name='Ax')  # [N, M, J, w]
             Aq = tf.nn.embedding_lookup(emb_mat, q, name='Aq')  # [N, K, w]
 
-            char_emb_mat = tf.get_variable("char_emb_mat", shape=[C, d], dtype='float')
-            Acx = tf.nn.embedding_lookup(char_emb_mat, cx, name='Acx')  # [N, M, J, C, d]
-            Aqx = tf.nn.embedding_lookup(char_emb_mat, cq, name='Acq')  # [N, K, C, d]
-            Acx_adj = tf.reshape(Acx, [N*M*J, W, 1, d])
-            Aqx_adj = tf.reshape(Aqx, [N*K, W, 1, d])
-            filter = tf.get_variable("filter", shape=[filter_height, 1, d, d], dtype='float')
+            char_emb_mat = tf.get_variable("char_emb_mat", shape=[C, char_vec_size], dtype='float')
+            Acx = tf.nn.embedding_lookup(char_emb_mat, cx, name='Acx')  # [N, M, J, C, cd]
+            Aqx = tf.nn.embedding_lookup(char_emb_mat, cq, name='Acq')  # [N, K, C, cd]
+            Acx_adj = tf.reshape(Acx, [N*M*J, W, 1, char_vec_size])
+            Aqx_adj = tf.reshape(Aqx, [N*K, W, 1, char_vec_size])
+            filter = tf.get_variable("filter", shape=[filter_height, 1, char_vec_size, d], dtype='float')
             strides = [1, filter_stride, 1, 1]
-            Acx_conv = tf.nn.conv2d(Acx_adj, filter, strides, "VALID")  # [N*M*J, C/filter_stride, 1, d]
-            Aqx_conv = tf.nn.conv2d(Aqx_adj, filter, strides, "VALID")  # [N*K, C/filter_stride, 1, d]
+            Acx_conv = tf.nn.conv2d(Acx_adj, filter, strides, "SAME")  # [N*M*J, C/filter_stride, 1, d]
+            Aqx_conv = tf.nn.conv2d(Aqx_adj, filter, strides, "SAME")  # [N*K, C/filter_stride, 1, d]
             Ax_c = tf.reshape(tf.reduce_max(tf.nn.relu(Acx_conv), 1), [N, M, J, d])
             Aq_c = tf.reshape(tf.reduce_max(tf.nn.relu(Aqx_conv), 1), [N, K, d])
 
@@ -111,7 +112,7 @@ class Tower(BaseTower):
             y_flat = tf.reduce_sum(y * tf.constant([J, 1]), 1)  # [N]
             x_mask_flat = tf.reshape(x_mask, [N, M*J])
             VERY_BIG_NUMBER = 1e9
-            logits_flat += -VERY_BIG_NUMBER * tf.cast(tf.logical_not(x_mask_flat), 'float')
+            # logits_flat += -VERY_BIG_NUMBER * tf.cast(tf.logical_not(x_mask_flat), 'float')
             ce = tf.nn.sparse_softmax_cross_entropy_with_logits(logits_flat, y_flat, name='ce')
             avg_ce = tf.reduce_mean(ce, name='avg_ce')
             tf.add_to_collection('losses', avg_ce)

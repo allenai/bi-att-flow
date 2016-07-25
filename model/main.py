@@ -21,7 +21,7 @@ flags.DEFINE_string("data_dir", "data/model/squad", "Data directory [data/model/
 
 # Training parameters
 # These affect result performance
-flags.DEFINE_integer("batch_size", 128, "Batch size for each tower. [128]")
+flags.DEFINE_integer("batch_size", 64, "Batch size for each tower. [64]")
 flags.DEFINE_float("init_mean", 0, "Initial weight mean [0]")
 flags.DEFINE_float("init_std", 1.0, "Initial weight std [1.0]")
 flags.DEFINE_float("init_lr", 0.5, "Initial learning rate [0.5]")
@@ -60,11 +60,12 @@ flags.DEFINE_boolean("draft", False, "Draft? (quick initialize) [False]")
 
 # App-specific options
 # TODO : Any other options
-flags.DEFINE_integer("hidden_size", 50, "Hidden size [50]")
+flags.DEFINE_integer("hidden_size", 32, "Hidden size [32]")
 flags.DEFINE_float("keep_prob", 0.5, "Keep prob [0.5]")
 flags.DEFINE_bool("finetune", True, "Fine-tune? [True]")
 flags.DEFINE_integer("filter_height", 5, "Filter height [5]")
 flags.DEFINE_integer("filter_stride", 1, "Filter stride [1]")
+flags.DEFINE_integer("char_vec_size", 8, "char vec size [8]")
 
 
 
@@ -174,7 +175,7 @@ def _main(config, num_trials):
         sess = tf.Session(graph=graph, config=tf.ConfigProto(allow_soft_placement=True))
         # TODO : initialize BaseRunner-subclassed object
         runner = BaseRunner(config, sess, towers)
-        with graph.as_default(), tf.device("/cpu:0"):
+        with graph.as_default(), tf.device("/gpu:0"):
             runner.initialize()
             if config.train:
                 if config.load:

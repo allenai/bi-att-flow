@@ -13,6 +13,7 @@ from tqdm import tqdm
 import re
 
 UNK = "<UNK>"
+NULL = "<NULL>"
 
 def _bool(str):
     if str == 'True':
@@ -34,7 +35,7 @@ def _get_args():
     # TODO : put more args here
     parser.add_argument("--glove_dir", default=glove_dir)
     parser.add_argument("--glove_corpus", default="6B")
-    parser.add_argument("--glove_word_size", default=100)
+    parser.add_argument("--glove_word_size", default=50)
     parser.add_argument("--version", default="1.0")
     parser.add_argument("--count_th", default=100, type=int)
     parser.add_argument("--para_size_th", default=8, type=int)
@@ -94,9 +95,9 @@ def _prepro(args):
 
 
 def _get_char2idx_dict(train_shared, train_batched):
-    chars = set(char for paras in train_shared['X'] for sents in paras for sent in sents for word in sent for char in word) | \
-        set(char for ques in train_batched['Q'] for word in ques for char in word)
-    chars.add(UNK)
+    chars = [NULL, UNK]
+    chars += (set(char for paras in train_shared['X'] for sents in paras for sent in sents for word in sent for char in word) |
+        set(char for ques in train_batched['Q'] for word in ques for char in word))
     char2idx_dict = dict(map(reversed, enumerate(chars)))
     return char2idx_dict
 
@@ -212,6 +213,9 @@ def _insert_raw_data(file_path, raw_shared, raw_batched, X_offset=0, para_size_t
                                                                context[answer_stop:])
                         temp_sents = _tokenize(temp_context)
                         start_idx = _index(temp_sents, START, 2)
+                        if len(sents) <= start_idx[0] or len(sents[start_idx[0]]) <= start_idx[1]:
+                            logging.warning("Skipping qa id {}: invalid answer annotation".format(id_))
+                            continue
                         temp_idx = _index(temp_sents, STOP, 2)
                         stop_idx = temp_idx[0], temp_idx[1] - 1
 
@@ -222,7 +226,7 @@ def _insert_raw_data(file_path, raw_shared, raw_batched, X_offset=0, para_size_t
                         ids.append(id_)
                         batched_idx += 1
                         continue  # considering only one answer for now
-                break  # for debugging
+                # break  # for debugging
         if counter > 0:
             logging.warning("# answer mismatches: {}".format(counter))
         logging.info("# skipped questions: {}".format(skip_count))
