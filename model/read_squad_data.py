@@ -15,8 +15,11 @@ class SharedDataSet(DataSet):
     def get_next_labeled_batch(self, partial=False):
         batch = super(SharedDataSet, self).get_next_labeled_batch(partial=partial)
         X = self.shared['X']
-        refs = batch['R']
+        refs = batch['*X']
         batch['X'] = [X[i][j] for i, j in refs]
+        CX = self.shared['CX']
+        refs = batch['*CX']
+        batch['CX'] = [CX[i][j] for i, j in refs]
         return batch
 
 

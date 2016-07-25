@@ -60,8 +60,13 @@ flags.DEFINE_boolean("draft", False, "Draft? (quick initialize) [False]")
 
 # App-specific options
 # TODO : Any other options
+flags.DEFINE_integer("hidden_size", 50, "Hidden size [50]")
 flags.DEFINE_float("keep_prob", 0.5, "Keep prob [0.5]")
 flags.DEFINE_bool("finetune", True, "Fine-tune? [True]")
+flags.DEFINE_integer("filter_height", 5, "Filter height [5]")
+flags.DEFINE_integer("filter_stride", 1, "Filter stride [1]")
+
+
 
 FLAGS = flags.FLAGS
 
@@ -122,6 +127,9 @@ def _load_metadata(config):
     config.vocab_size = metadata['vocab_size']
     config.max_ques_size = metadata['max_ques_size']
     config.word_vec_size = metadata['word_vec_size']
+    config.max_word_size = metadata['max_word_size']
+    config.char_vocab_size = metadata['char_vocab_size']
+
     config.emb_mat = emb_mat
 
 

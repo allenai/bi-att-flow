@@ -8,7 +8,7 @@ import numpy as np
 import nltk
 from collections import OrderedDict, Counter
 from tqdm import tqdm
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 import re
 
@@ -222,7 +222,7 @@ def _insert_raw_data(file_path, raw_shared, raw_batched, X_offset=0, para_size_t
                         ids.append(id_)
                         batched_idx += 1
                         continue  # considering only one answer for now
-                # break  # for debugging
+                break  # for debugging
         if counter > 0:
             logging.warning("# answer mismatches: {}".format(counter))
         logging.info("# skipped questions: {}".format(skip_count))
@@ -230,6 +230,7 @@ def _insert_raw_data(file_path, raw_shared, raw_batched, X_offset=0, para_size_t
         logging.info("# questions: {}".format(len(Q)))
 
         # Stats
+        """
         X_num_words_counter = Counter(len(sent) for paras in X for sents in paras for sent in sents)
         X_num_sents_counter = Counter(len(sents) for paras in X for sents in paras)
         Q_num_words_counter = Counter(len(ques) for ques in Q)
@@ -245,6 +246,7 @@ def _insert_raw_data(file_path, raw_shared, raw_batched, X_offset=0, para_size_t
         plt.show()
         plt.plot(list(Q_num_chars_counter.keys()), list(Q_num_chars_counter.values()))
         plt.show()
+        """
 
 
 def _get_word2vec_dict(glove_path, shared, batched, total=None, count_th=0):
@@ -321,6 +323,7 @@ def _save(target_dir, shared, batched, params, mode2idxs_dict, word2idx_dict, ch
     metadata = {'max_sent_size': max(len(sent) for paras in X for sents in paras for sent in sents),
                 'max_num_sents': max(len(sents) for paras in X for sents in paras),
                 'vocab_size': len(emb_mat),
+                'char_vocab_size': len(char2idx_dict),
                 'max_ques_size': max(len(ques) for ques in Q),
                 'max_word_size': max_word_size,
                 "word_vec_size": len(emb_mat[0]),

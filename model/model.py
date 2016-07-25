@@ -14,7 +14,7 @@ from my.tensorflow.nn import linear
 def reverse_dynamic_rnn(cell, x, length, **kwargs):
     length = tf.cast(length, 'int64')
     x_r = tf.reverse_sequence(x, length, 1)
-    out_r, state = dynamic_rnn(cell, x, length, **kwargs)
+    out_r, state = dynamic_rnn(cell, x_r, length, **kwargs)
     out = tf.reverse_sequence(out_r, length, 1)
     return out, state
 
@@ -28,45 +28,75 @@ class Tower(BaseTower):
         M = params.max_num_sents
         J = params.max_sent_size
         K = params.max_ques_size
-        d = params.word_vec_size
+        d = params.hidden_size
         V = params.vocab_size
+        W = params.max_word_size
+        C = params.char_vocab_size
+        word_vec_size = params.word_vec_size
+        filter_height = params.filter_height
+        filter_stride = params.filter_stride
         keep_prob = params.keep_prob
         finetune = params.finetune
 
         is_train = tf.placeholder('bool', shape=[], name='is_train')
         # TODO : define placeholders and put them in ph
         x = tf.placeholder("int32", shape=[N, M, J], name='x')
+        cx = tf.placeholder("int32", shape=[N, M, J, W], name='cx')
         q = tf.placeholder("int32", shape=[N, K], name='q')
+        cq = tf.placeholder("int32", shape=[N, K, W], name='cq')
         y = tf.placeholder("int32", shape=[N, 2], name='y')
         x_mask = tf.placeholder("bool", shape=[N, M, J], name='x_mask')
         q_mask = tf.placeholder("bool", shape=[N, K], name='q_mask')
+        cx_mask = tf.placeholder("bool", shape=[N, M, J, W], name='cx_mask')
+        cq_mask = tf.placeholder("bool", shape=[N, K, W], name='cq_mask')
         ph['x'] = x
+        ph['cx'] = cx
         ph['q'] = q
+        ph['cq'] = cq
         ph['y'] = y
         ph['x_mask'] = x_mask
+        ph['cx_mask'] = cx_mask
         ph['q_mask'] = q_mask
+        ph['cq_mask'] = cq_mask
         ph['is_train'] = is_train
 
         # TODO : put your codes here
         with tf.variable_scope("main") as vs:
             init_emb_mat = tf.constant(params.emb_mat, name='emb_mat')
             if finetune:
-                emb_mat = tf.get_variable("emb_mat", shape=[V, d], dtype='float', initializer=get_initializer(init_emb_mat))
+                emb_mat = tf.get_variable("emb_mat", shape=[V, word_vec_size], dtype='float', initializer=get_initializer(init_emb_mat))
             else:
                 emb_mat = init_emb_mat
-            Ax = tf.nn.embedding_lookup(emb_mat, x, name='Ax')  # [N, M, J, d]
-            Aq = tf.nn.embedding_lookup(emb_mat, q, name='Aq')  # [N, K, d]
+            Ax = tf.nn.embedding_lookup(emb_mat, x, name='Ax')  # [N, M, J, w]
+            Aq = tf.nn.embedding_lookup(emb_mat, q, name='Aq')  # [N, K, w]
+
+            char_emb_mat = tf.get_variable("char_emb_mat", shape=[C, d], dtype='float')
+            Acx = tf.nn.embedding_lookup(char_emb_mat, cx, name='Acx')  # [N, M, J, C, d]
+            Aqx = tf.nn.embedding_lookup(char_emb_mat, cq, name='Acq')  # [N, K, C, d]
+            Acx_adj = tf.reshape(Acx, [N*M*J, W, 1, d])
+            Aqx_adj = tf.reshape(Aqx, [N*K, W, 1, d])
+            filter = tf.get_variable("filter", shape=[filter_height, 1, d, d], dtype='float')
+            strides = [1, filter_stride, 1, 1]
+            Acx_conv = tf.nn.conv2d(Acx_adj, filter, strides, "VALID")  # [N*M*J, C/filter_stride, 1, d]
+            Aqx_conv = tf.nn.conv2d(Aqx_adj, filter, strides, "VALID")  # [N*K, C/filter_stride, 1, d]
+            Ax_c = tf.reshape(tf.reduce_max(tf.nn.relu(Acx_conv), 1), [N, M, J, d])
+            Aq_c = tf.reshape(tf.reduce_max(tf.nn.relu(Aqx_conv), 1), [N, K, d])
+
+            Ax = tf.concat(3, [Ax, Ax_c])  # [N, M, J, w+d]
+            Aq = tf.concat(2, [Aq, Aq_c])  # [N, K, w+d]
+
+
 
             q_length = tf.reduce_sum(tf.cast(q_mask, 'int32'), 1)  # [N]
-
-            cell = BasicLSTMCell(d, state_is_tuple=True)
+            D = word_vec_size + d
+            cell = BasicLSTMCell(D, state_is_tuple=True)
             cell = DropoutWrapper(cell, input_keep_prob=keep_prob, is_train=is_train)
-            Ax_flat = tf.reshape(Ax, [N*M, J, d])
+            Ax_flat = tf.reshape(Ax, [N*M, J, D])
             x_sent_length = tf.reduce_sum(tf.cast(tf.reshape(x_mask, [N*M, J]), 'int32'), 1)  # [N*M]
             Ax_flat_out_fw, _ = dynamic_rnn(cell, Ax_flat, x_sent_length, dtype='float', scope='fw')  # [N*M, J, d]
             Ax_flat_out_bw, _ = reverse_dynamic_rnn(cell, Ax_flat, x_sent_length, dtype='float', scope='bw')
-            Ax_flat_out_fw = tf.reshape(Ax_flat_out_fw, [N, M*J, d])
-            Ax_flat_out_bw = tf.reshape(Ax_flat_out_bw, [N, M*J, d])
+            Ax_flat_out_fw = tf.reshape(Ax_flat_out_fw, [N, M*J, D])
+            Ax_flat_out_bw = tf.reshape(Ax_flat_out_bw, [N, M*J, D])
             vs.reuse_variables()
             _, (_, Aq_final_fw) = dynamic_rnn(cell, Aq, q_length, dtype='float', scope='fw')  # [N, d]
             _, (_, Aq_final_bw) = reverse_dynamic_rnn(cell, Aq, q_length, dtype='float', scope='bw')  # [N, d]
@@ -105,17 +135,24 @@ class Tower(BaseTower):
         M = params.max_num_sents
         J = params.max_sent_size
         K = params.max_ques_size
+        W = params.max_word_size
+
         # TODO : put more parameters
 
         # TODO : define your inputs to _initialize here
         x = np.zeros([N, M, J], dtype='int32')
+        cx = np.zeros([N, M, J, W], dtype='int32')
         q = np.zeros([N, K], dtype='int32')
+        cq = np.zeros([N, K, W], dtype='int32')
         y = np.zeros([N, 2], dtype='int32')
         x_mask = np.zeros([N, M, J], dtype='bool')
+        cx_mask = np.zeros([N, M, J, W], dtype='bool')
         q_mask = np.zeros([N, K], dtype='bool')
+        cq_mask = np.zeros([N, K, W], dtype='bool')
 
         feed_dict = {ph['x']: x, ph['q']: q, ph['y']: y,
                      ph['x_mask']: x_mask, ph['q_mask']: q_mask,
+                     ph['cx']: cx, ph['cq']: cq, ph['cx_mask']: cx_mask, ph['cq_mask']: cq_mask,
                      ph['is_train']: mode == 'train'}
 
         # Batch can be empty in multi GPU parallelization
@@ -123,6 +160,7 @@ class Tower(BaseTower):
             return feed_dict
 
         X, Q, Y = batch['X'], batch['Q'], batch['Y']
+        CX, CQ = batch['CX'], batch['CQ']
         for i, sents in enumerate(X):
             for j, sent in enumerate(sents):
                 for k, word in enumerate(sent):
@@ -137,5 +175,18 @@ class Tower(BaseTower):
         for i, idxs in enumerate(Y):
             for j, idx in enumerate(idxs):
                 y[i, j] = idx
+
+        for i, sents in enumerate(CX):
+            for j, sent in enumerate(sents):
+                for k, word in enumerate(sent):
+                    for l, char in enumerate(word):
+                        cx[i, j, k, l] = char
+                        cx_mask[i, j, k, l] = True
+
+        for i, ques in enumerate(CQ):
+            for j, word in enumerate(ques):
+                for k, char in enumerate(word):
+                    cq[i, j, k] = char
+                    cq_mask[i, j, k] = True
 
         return feed_dict
