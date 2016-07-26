@@ -1,23 +1,22 @@
 import json
+import logging
 import os
 import shutil
-import logging
-import sys
 from pprint import pformat
 
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 
 from cnn.base_model import BaseRunner
-from cnn.model import Tower
-from config.get_config import get_config_from_file, get_config
 from cnn.read_squad_data import read_data
+from config.get_config import get_config_from_file, get_config
+from cnn.model import Tower
 
 flags = tf.app.flags
 
 # File directories
-flags.DEFINE_string("model_name", "model", "Model name. This will be used for save, log, and eval names. [model]")
-flags.DEFINE_string("data_dir", "data/model/squad", "Data directory [data/model/squad]")
+flags.DEFINE_string("model_name", "cnn", "Model name. This will be used for save, log, and eval names. [cnn]")
+flags.DEFINE_string("data_dir", "data/cnn/squad", "Data directory [data/cnn/squad]")
 
 # Training parameters
 # These affect result performance
@@ -66,6 +65,7 @@ flags.DEFINE_bool("finetune", True, "Fine-tune? [True]")
 flags.DEFINE_integer("filter_height", 5, "Filter height [5]")
 flags.DEFINE_integer("filter_stride", 1, "Filter stride [1]")
 flags.DEFINE_integer("char_vec_size", 16, "char vec size [16]")
+flags.DEFINE_integer("num_layers", 2, "num layers [2]")
 
 
 
@@ -123,8 +123,7 @@ def _load_metadata(config):
     emb_mat = np.array(params['emb_mat'], dtype='float32')
 
     # TODO: set other parameters, e.g.
-    config.max_sent_size = metadata['max_sent_size']
-    config.max_num_sents = metadata['max_num_sents']
+    config.max_num_words = metadata['max_num_words']
     config.vocab_size = metadata['vocab_size']
     config.max_ques_size = metadata['max_ques_size']
     config.word_vec_size = metadata['word_vec_size']
@@ -151,6 +150,9 @@ def _main(config, num_trials):
         config.num_epochs = 2
         config.val_period = 1
         config.save_period = 1
+        config.hidden_size = 2
+        config.char_vec_size = 2
+        config.batch_size = 2
         # TODO : Add any other parameter that induces a lot of computations
 
     logging.info(pformat(config.__dict__, indent=2))

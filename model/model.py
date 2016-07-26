@@ -79,13 +79,15 @@ class Tower(BaseTower):
             filter = tf.get_variable("filter", shape=[filter_height, 1, char_vec_size, d], dtype='float')
             bias = tf.get_variable("bias", shape=[d], dtype='float')
             strides = [1, filter_stride, 1, 1]
-            Acx_conv = tf.nn.conv2d(Acx_adj, filter, strides, "SAME") + bias  # [N*M*J, C/filter_stride, 1, d]
-            Aqx_conv = tf.nn.conv2d(Aqx_adj, filter, strides, "SAME") + bias  # [N*K, C/filter_stride, 1, d]
+            Acx_conv = tf.nn.conv2d(Acx_adj, filter, strides, "VALID") + bias  # [N*M*J, C/filter_stride, 1, d]
+            Aqx_conv = tf.nn.conv2d(Aqx_adj, filter, strides, "VALID") + bias  # [N*K, C/filter_stride, 1, d]
             Ax_c = tf.reshape(tf.reduce_max(tf.nn.relu(Acx_conv), 1), [N, M, J, d])
             Aq_c = tf.reshape(tf.reduce_max(tf.nn.relu(Aqx_conv), 1), [N, K, d])
 
             Ax = tf.concat(3, [Ax, Ax_c])  # [N, M, J, w+d]
             Aq = tf.concat(2, [Aq, Aq_c])  # [N, K, w+d]
+
+
 
             q_length = tf.reduce_sum(tf.cast(q_mask, 'int32'), 1)  # [N]
             D = word_vec_size + d

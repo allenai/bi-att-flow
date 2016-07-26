@@ -291,9 +291,9 @@ def _apply(word2idx_dict, char2idx_dict, shared, batched, word_size_th=16):
         return [(char2idx_dict[char] if char in char2idx_dict else char2idx_dict[UNK]) for char in word]
 
     logging.info("applying word2idx_dict to data ...")
-    X = [[[[_get(word) for word in sent] for sent in sents] for sents in paras]for paras in tqdm(shared['X'])]
+    X = [[[_get(word) for word in para] for para in paras]for paras in tqdm(shared['X'])]
     Q = [[_get(word) for word in ques] for ques in tqdm(batched['Q'])]
-    CX = [[[[_get_chars(word) for word in sent] for sent in sents] for sents in paras]for paras in tqdm(shared['X'])]
+    CX = [[[_get_chars(word) for word in para] for para in paras] for paras in tqdm(shared['X'])]
     CQ = [[_get_chars(word) for word in ques] for ques in tqdm(batched['Q'])]
     shared['X'] = X
     batched['Q'] = Q
@@ -316,7 +316,7 @@ def _save(target_dir, shared, batched, params, mode2idxs_dict, word2idx_dict, ch
     emb_mat = params['emb_mat']
     RX, RCX, Q, CQ, Y = (batched[key] for key in ('*X', '*CX', 'Q', 'CQ', 'Y'))
 
-    max_word_size = max(max(len(word) for paras in CX for sents in paras for sent in sents for word in sent),
+    max_word_size = max(max(len(word) for paras in CX for para in paras for word in para),
                         max(len(word) for ques in CQ for word in ques))
 
     metadata = {'max_num_words': max(len(para) for paras in X for para in paras),

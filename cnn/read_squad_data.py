@@ -4,7 +4,7 @@ import os
 
 import numpy as np
 
-from model.read_data import DataSet
+from cnn.read_data import DataSet
 
 
 class SharedDataSet(DataSet):

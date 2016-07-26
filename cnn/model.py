@@ -19,14 +19,22 @@ def reverse_dynamic_rnn(cell, x, length, **kwargs):
     return out, state
 
 
+def conv1d(x, fh, ic, oc, scope=None):
+    with tf.variable_scope(scope or "conv1d"):
+        f = tf.get_variable("filter", shape=[fh, 1, ic, oc], dtype='float')
+        b = tf.get_variable("bias", shape=[oc], dtype='float')
+        strides = [1, 1, 1, 1]
+        out = tf.nn.relu(tf.nn.bias_add(tf.nn.conv2d(x, f, strides, "SAME"), b))
+        return out
+
+
 class Tower(BaseTower):
     def _initialize(self):
         params = self.params
         ph = self.placeholders
         tensors = self.tensors
         N = params.batch_size
-        M = params.max_num_sents
-        J = params.max_sent_size
+        M = params.max_num_words
         K = params.max_ques_size
         char_vec_size = params.char_vec_size
         d = params.hidden_size
@@ -36,19 +44,19 @@ class Tower(BaseTower):
         word_vec_size = params.word_vec_size
         filter_height = params.filter_height
         filter_stride = params.filter_stride
-        keep_prob = params.keep_prob
+        num_layers = params.num_layers
         finetune = params.finetune
 
         is_train = tf.placeholder('bool', shape=[], name='is_train')
         # TODO : define placeholders and put them in ph
-        x = tf.placeholder("int32", shape=[N, M, J], name='x')
-        cx = tf.placeholder("int32", shape=[N, M, J, W], name='cx')
+        x = tf.placeholder("int32", shape=[N, M], name='x')
+        cx = tf.placeholder("int32", shape=[N, M, W], name='cx')
         q = tf.placeholder("int32", shape=[N, K], name='q')
         cq = tf.placeholder("int32", shape=[N, K, W], name='cq')
-        y = tf.placeholder("int32", shape=[N, 2], name='y')
-        x_mask = tf.placeholder("bool", shape=[N, M, J], name='x_mask')
+        y = tf.placeholder("int32", shape=[N], name='y')
+        x_mask = tf.placeholder("bool", shape=[N, M], name='x_mask')
         q_mask = tf.placeholder("bool", shape=[N, K], name='q_mask')
-        cx_mask = tf.placeholder("bool", shape=[N, M, J, W], name='cx_mask')
+        cx_mask = tf.placeholder("bool", shape=[N, M, W], name='cx_mask')
         cq_mask = tf.placeholder("bool", shape=[N, K, W], name='cq_mask')
         ph['x'] = x
         ph['cx'] = cx
@@ -68,53 +76,37 @@ class Tower(BaseTower):
                 emb_mat = tf.get_variable("emb_mat", shape=[V, word_vec_size], dtype='float', initializer=get_initializer(init_emb_mat))
             else:
                 emb_mat = init_emb_mat
-            Ax = tf.nn.embedding_lookup(emb_mat, x, name='Ax')  # [N, M, J, w]
-            Aq = tf.nn.embedding_lookup(emb_mat, q, name='Aq')  # [N, K, w]
-
             char_emb_mat = tf.get_variable("char_emb_mat", shape=[C, char_vec_size], dtype='float')
-            Acx = tf.nn.embedding_lookup(char_emb_mat, cx, name='Acx')  # [N, M, J, C, cd]
+
+            Ax = tf.nn.embedding_lookup(emb_mat, x, name='Ax')  # [N, M, w]
+            Aq = tf.nn.embedding_lookup(emb_mat, q, name='Aq')  # [N, K, w]
+            Acx = tf.nn.embedding_lookup(char_emb_mat, cx, name='Acx')  # [N, M, C, cd]
             Aqx = tf.nn.embedding_lookup(char_emb_mat, cq, name='Acq')  # [N, K, C, cd]
-            Acx_adj = tf.reshape(Acx, [N*M*J, W, 1, char_vec_size])
+            Acx_adj = tf.reshape(Acx, [N*M, W, 1, char_vec_size])
             Aqx_adj = tf.reshape(Aqx, [N*K, W, 1, char_vec_size])
-            filter = tf.get_variable("filter", shape=[filter_height, 1, char_vec_size, d], dtype='float')
-            bias = tf.get_variable("bias", shape=[d], dtype='float')
-            strides = [1, filter_stride, 1, 1]
-            Acx_conv = tf.nn.conv2d(Acx_adj, filter, strides, "VALID") + bias  # [N*M*J, C/filter_stride, 1, d]
-            Aqx_conv = tf.nn.conv2d(Aqx_adj, filter, strides, "VALID") + bias  # [N*K, C/filter_stride, 1, d]
-            Ax_c = tf.reshape(tf.reduce_max(tf.nn.relu(Acx_conv), 1), [N, M, J, d])
-            Aq_c = tf.reshape(tf.reduce_max(tf.nn.relu(Aqx_conv), 1), [N, K, d])
-
-            Ax = tf.concat(3, [Ax, Ax_c])  # [N, M, J, w+d]
-            Aq = tf.concat(2, [Aq, Aq_c])  # [N, K, w+d]
-
-
-
-            q_length = tf.reduce_sum(tf.cast(q_mask, 'int32'), 1)  # [N]
+            with tf.variable_scope("char_emb"):
+                Ax_c = tf.reshape(tf.reduce_max(conv1d(Acx_adj, filter_height, char_vec_size, d), 1), [N, M, d])
+                tf.get_variable_scope().reuse_variables()
+                Aq_c = tf.reshape(tf.reduce_max(conv1d(Aqx_adj, filter_height, char_vec_size, d), 1), [N, K, d])
+            Ax = tf.concat(2, [Ax, Ax_c])
+            Aq = tf.concat(2, [Aq, Aq_c])
             D = word_vec_size + d
-            cell = BasicLSTMCell(D, state_is_tuple=True)
-            cell = DropoutWrapper(cell, input_keep_prob=keep_prob, is_train=is_train)
-            Ax_flat = tf.reshape(Ax, [N*M, J, D])
-            x_sent_length = tf.reduce_sum(tf.cast(tf.reshape(x_mask, [N*M, J]), 'int32'), 1)  # [N*M]
-            Ax_flat_out_fw, _ = dynamic_rnn(cell, Ax_flat, x_sent_length, dtype='float', scope='fw')  # [N*M, J, d]
-            Ax_flat_out_bw, _ = reverse_dynamic_rnn(cell, Ax_flat, x_sent_length, dtype='float', scope='bw')
-            Ax_flat_out_fw = tf.reshape(Ax_flat_out_fw, [N, M*J, D])
-            Ax_flat_out_bw = tf.reshape(Ax_flat_out_bw, [N, M*J, D])
-            vs.reuse_variables()
-            _, (_, Aq_final_fw) = dynamic_rnn(cell, Aq, q_length, dtype='float', scope='fw')  # [N, d]
-            _, (_, Aq_final_bw) = reverse_dynamic_rnn(cell, Aq, q_length, dtype='float', scope='bw')  # [N, d]
-            Ax_flat_out = tf.concat(2, [Ax_flat_out_fw, Ax_flat_out_bw])
-            Aq_final = tf.concat(1, [Aq_final_fw, Aq_final_bw])
-            Aq_final_aug = tf.expand_dims(Aq_final, 1)  # [N, 1,  d]
+            Ax_adj = tf.reshape(Ax, [N, M, 1, D])
+            Aq_adj = tf.reshape(Aq, [N, K, 1, D])
 
-        with tf.variable_scope("logit"):
-            logits_flat = linear(Ax_flat_out * Aq_final_aug, 1, True, squeeze=True)  # [N, M*J]
+            for layer_idx in range(num_layers):
+                with tf.variable_scope("layer_{}".format(layer_idx)):
+                    Ax_adj = conv1d(Ax_adj, filter_height, D, D, scope='Ax')
+                    Aq_adj = conv1d(Aq_adj, filter_height, D, D, scope='Aq')
+
+            Ax = tf.reshape(Ax_adj, [N, M, D])
+            Aq_red = tf.reduce_mean(Aq_adj, 1)  # [N, 1, D]
+            logits = linear(Ax * Aq_red, 1, True, squeeze=True)  # [N, M]
+            VERY_BIG_NUMBER = 1e9
+            logits += -VERY_BIG_NUMBER * tf.cast(tf.logical_not(x_mask), 'float')
 
         with tf.name_scope("loss"):
-            y_flat = tf.reduce_sum(y * tf.constant([J, 1]), 1)  # [N]
-            x_mask_flat = tf.reshape(x_mask, [N, M*J])
-            VERY_BIG_NUMBER = 1e9
-            # logits_flat += -VERY_BIG_NUMBER * tf.cast(tf.logical_not(x_mask_flat), 'float')
-            ce = tf.nn.sparse_softmax_cross_entropy_with_logits(logits_flat, y_flat, name='ce')
+            ce = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, y, name='ce')
             avg_ce = tf.reduce_mean(ce, name='avg_ce')
             tf.add_to_collection('losses', avg_ce)
 
@@ -124,31 +116,29 @@ class Tower(BaseTower):
             tensors['loss'] = loss
 
         with tf.name_scope("eval"):
-            yp_flat = tf.cast(tf.argmax(logits_flat, 1), 'int32')
-            correct = tf.equal(yp_flat, y_flat)
+            yp = tf.cast(tf.argmax(logits, 1), 'int32')
+            correct = tf.equal(yp, y)
             # TODO : this must be properly defined
             tensors['correct'] = correct
-
 
     def _get_feed_dict(self, batch, mode, **kwargs):
         params = self.params
         ph = self.placeholders
         N = params.batch_size
-        M = params.max_num_sents
-        J = params.max_sent_size
+        M = params.max_num_words
         K = params.max_ques_size
         W = params.max_word_size
 
         # TODO : put more parameters
 
         # TODO : define your inputs to _initialize here
-        x = np.zeros([N, M, J], dtype='int32')
-        cx = np.zeros([N, M, J, W], dtype='int32')
+        x = np.zeros([N, M], dtype='int32')
+        cx = np.zeros([N, M, W], dtype='int32')
         q = np.zeros([N, K], dtype='int32')
         cq = np.zeros([N, K, W], dtype='int32')
-        y = np.zeros([N, 2], dtype='int32')
-        x_mask = np.zeros([N, M, J], dtype='bool')
-        cx_mask = np.zeros([N, M, J, W], dtype='bool')
+        y = np.zeros([N], dtype='int32')
+        x_mask = np.zeros([N, M], dtype='bool')
+        cx_mask = np.zeros([N, M, W], dtype='bool')
         q_mask = np.zeros([N, K], dtype='bool')
         cq_mask = np.zeros([N, K, W], dtype='bool')
 
@@ -164,26 +154,23 @@ class Tower(BaseTower):
         X, Q, Y = batch['X'], batch['Q'], batch['Y']
         CX, CQ = batch['CX'], batch['CQ']
         for i, sents in enumerate(X):
-            for j, sent in enumerate(sents):
-                for k, word in enumerate(sent):
-                    x[i, j, k] = word
-                    x_mask[i, j, k] = True
+            for k, word in enumerate(sents):
+                x[i, k] = word
+                x_mask[i, k] = True
 
         for i, ques in enumerate(Q):
             for j, word in enumerate(ques):
                 q[i, j] = word
                 q_mask[i, j] = True
 
-        for i, idxs in enumerate(Y):
-            for j, idx in enumerate(idxs):
-                y[i, j] = idx
+        for i, idx in enumerate(Y):
+            y[i] = idx
 
         for i, sents in enumerate(CX):
-            for j, sent in enumerate(sents):
-                for k, word in enumerate(sent):
-                    for l, char in enumerate(word):
-                        cx[i, j, k, l] = char
-                        cx_mask[i, j, k, l] = True
+            for k, word in enumerate(sents):
+                for l, char in enumerate(word):
+                    cx[i, k, l] = char
+                    cx_mask[i, k, l] = True
 
         for i, ques in enumerate(CQ):
             for j, word in enumerate(ques):

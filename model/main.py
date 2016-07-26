@@ -1,16 +1,15 @@
 import json
+import logging
 import os
 import shutil
-import logging
-import sys
 from pprint import pformat
 
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 
-from model.base_model import BaseRunner
 from model.model import Tower
 from config.get_config import get_config_from_file, get_config
+from model.base_model import BaseRunner
 from model.read_squad_data import read_data
 
 flags = tf.app.flags
@@ -61,7 +60,7 @@ flags.DEFINE_boolean("draft", False, "Draft? (quick initialize) [False]")
 # App-specific options
 # TODO : Any other options
 flags.DEFINE_integer("hidden_size", 32, "Hidden size [32]")
-flags.DEFINE_float("keep_prob", 0.9, "Keep prob [0.9]")
+flags.DEFINE_float("keep_prob", 0.5, "Keep prob [0.9]")
 flags.DEFINE_bool("finetune", True, "Fine-tune? [True]")
 flags.DEFINE_integer("filter_height", 5, "Filter height [5]")
 flags.DEFINE_integer("filter_stride", 1, "Filter stride [1]")
