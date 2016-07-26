@@ -8,7 +8,7 @@ import numpy as np
 import nltk
 from collections import OrderedDict, Counter
 from tqdm import tqdm
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 import re
 
@@ -35,12 +35,13 @@ def _get_args():
     # TODO : put more args here
     parser.add_argument("--glove_dir", default=glove_dir)
     parser.add_argument("--glove_corpus", default="6B")
-    parser.add_argument("--glove_word_size", default=50)
+    parser.add_argument("--glove_word_size", default=100)
     parser.add_argument("--version", default="1.0")
     parser.add_argument("--count_th", default=100, type=int)
     parser.add_argument("--para_size_th", default=8, type=int)
     parser.add_argument("--sent_size_th", default=64, type=int)
     parser.add_argument("--word_size_th", default=16, type=int)
+    parser.add_argument("--char_count_th", default=500, type=int)
     parser.add_argument("--debug", default=False, type=_bool)
     return parser.parse_args()
 
@@ -55,6 +56,7 @@ def _prepro(args):
     para_size_th = args.para_size_th
     sent_size_th = args.sent_size_th
     word_size_th = args.word_size_th
+    char_count_th = args.char_count_th
     # TODO : formally specify this path
     glove_path = os.path.join(glove_dir, "glove.{}.{}d.txt".format(glove_corpus, glove_word_size))
     if glove_corpus == '6B':
@@ -84,7 +86,7 @@ def _prepro(args):
 
     word2vec_dict = _get_word2vec_dict(glove_path, train_shared, train_batched, total=total, count_th=count_th)
     word2idx_dict = {word: idx for idx, word in enumerate(word2vec_dict.keys())}  # Must be an ordered dict!
-    char2idx_dict = _get_char2idx_dict(train_shared, train_batched)
+    char2idx_dict = _get_char2idx_dict(train_shared, train_batched, char_count_th=char_count_th)
     params['emb_mat'] = list(word2vec_dict.values())
     _apply(word2idx_dict, char2idx_dict, train_shared, train_batched, word_size_th=word_size_th)
     _apply(word2idx_dict, char2idx_dict, dev_shared, dev_batched, word_size_th=word_size_th)
@@ -94,10 +96,12 @@ def _prepro(args):
     _save(target_dir, shared, batched, params, mode2idxs_dict, word2idx_dict, char2idx_dict)
 
 
-def _get_char2idx_dict(train_shared, train_batched):
+def _get_char2idx_dict(train_shared, train_batched, char_count_th=1000):
     chars = [NULL, UNK]
-    chars += (set(char for paras in train_shared['X'] for sents in paras for sent in sents for word in sent for char in word) |
-        set(char for ques in train_batched['Q'] for word in ques for char in word))
+    counter = Counter(list(char for paras in train_shared['X'] for sents in paras for sent in sents for word in sent for char in word) +
+        list(char for ques in train_batched['Q'] for word in ques for char in word))
+    filtered_counter = {word: count for word, count in counter.items() if count >= char_count_th}
+    chars.extend(filtered_counter.keys())
     char2idx_dict = dict(map(reversed, enumerate(chars)))
     return char2idx_dict
 

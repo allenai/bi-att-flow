@@ -61,11 +61,11 @@ flags.DEFINE_boolean("draft", False, "Draft? (quick initialize) [False]")
 # App-specific options
 # TODO : Any other options
 flags.DEFINE_integer("hidden_size", 32, "Hidden size [32]")
-flags.DEFINE_float("keep_prob", 0.5, "Keep prob [0.5]")
+flags.DEFINE_float("keep_prob", 0.9, "Keep prob [0.9]")
 flags.DEFINE_bool("finetune", True, "Fine-tune? [True]")
 flags.DEFINE_integer("filter_height", 5, "Filter height [5]")
 flags.DEFINE_integer("filter_stride", 1, "Filter stride [1]")
-flags.DEFINE_integer("char_vec_size", 8, "char vec size [8]")
+flags.DEFINE_integer("char_vec_size", 8, "char vec size [16]")
 
 
 
