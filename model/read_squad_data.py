@@ -17,6 +17,9 @@ class SharedDataSet(DataSet):
         X = self.shared['X']
         refs = batch['*X']
         batch['X'] = [X[i][j] for i, j in refs]
+        CX = self.shared['CX']
+        refs = batch['*CX']
+        batch['CX'] = [CX[i][j] for i, j in refs]
         return batch
 
 
