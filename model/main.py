@@ -116,8 +116,10 @@ def _load_metadata(config):
     data_dir = config.data_dir
     metadata_path = os.path.join(data_dir, "metadata.json")
     param_path = os.path.join(data_dir, "param.json")
+    char_idxs_path = os.path.join(data_dir, "char_idxs.json")
     metadata = json.load(open(metadata_path, "r"))
     params = json.load(open(param_path, 'r'))
+    char_idxs = json.load(open(char_idxs_path, 'r'))
 
     emb_mat = np.array(params['emb_mat'], dtype='float32')
 
@@ -129,8 +131,18 @@ def _load_metadata(config):
     config.word_vec_size = metadata['word_vec_size']
     config.max_word_size = metadata['max_word_size']
     config.char_vocab_size = metadata['char_vocab_size']
+    config.all_vocab_size = metadata['all_vocab_size']
 
     config.emb_mat = emb_mat
+
+    c = np.zeros([config.all_vocab_size, config.max_word_size], dtype='int32')
+    c_mask = np.zeros([config.all_vocab_size, config.max_word_size], dtype='bool')
+    for i, chars in enumerate(char_idxs):
+        for j, char in enumerate(chars):
+            c[i, j] = char
+            c_mask[i, j] = True
+    config.c = c
+    config.c_mask = c_mask
 
 
 def _main(config, num_trials):
