@@ -1,3 +1,6 @@
+from _operator import mul
+from functools import reduce
+
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import init_ops
 from tensorflow.python.ops import math_ops
@@ -32,16 +35,23 @@ def linear(args, output_size, bias, bias_start=0.0, scope=None, var_on_cpu=False
     # Calculate the total size of arguments on dimension 1.
     total_arg_size = 0
     shapes = [a.get_shape().as_list() for a in args]
-    assert len(set(tuple(shape[:-1]) for shape in shapes)) <= 1
-
-    new_shapes = [flatten(shape, 2) for shape in shapes]
-    res_shape = shapes[0][:-1] + [output_size]
+    rank = len(shapes[0])
+    if any(None in shape for shape in shapes):
+        ishapes = [tf.shape(a) for a in args]
+        first_dim = reduce(mul, [ishapes[0][i] for i in range(rank-1)])
+        new_shapes = [[first_dim, shape[rank-1]] for shape in shapes]
+        res_shape = [ishapes[0][i] for i in range(rank-1)] + [output_size]
+        # new_shapes = [flatten(shape, 2) for shape in shapes]
+    else:
+        assert len(set(tuple(shape[:-1]) for shape in shapes)) <= 1
+        new_shapes = [flatten(shape, 2) for shape in shapes]
+        res_shape = shapes[0][:-1] + [output_size]
     args = [tf.reshape(arg, new_shape) for arg, new_shape in zip(args, new_shapes)]
 
     for new_shape in new_shapes:
         if len(new_shape) != 2:
             raise ValueError("Linear is expecting 2D arguments: %s" % str(shapes))
-        if not new_shape[1]:
+        if new_shape[1] is None:
             raise ValueError("Linear expects shape[1] of arguments: %s" % str(shapes))
         else:
             total_arg_size += new_shape[1]

@@ -41,7 +41,7 @@ class Tower(BaseTower):
 
         is_train = tf.placeholder('bool', shape=[], name='is_train')
         # TODO : define placeholders and put them in ph
-        x = tf.placeholder("int32", shape=[N, M, J], name='x')
+        x = tf.placeholder("int32", shape=[None, M, J], name='x')
         cx = tf.placeholder("int32", shape=[N, M, J, W], name='cx')
         q = tf.placeholder("int32", shape=[N, K], name='q')
         cq = tf.placeholder("int32", shape=[N, K, W], name='cq')
@@ -60,6 +60,7 @@ class Tower(BaseTower):
         ph['q_mask'] = q_mask
         ph['cq_mask'] = cq_mask
         ph['is_train'] = is_train
+        N = tf.shape(x)[0]
 
         # TODO : put your codes here
         with tf.variable_scope("main") as vs:
@@ -94,12 +95,15 @@ class Tower(BaseTower):
             cell = BasicLSTMCell(D, state_is_tuple=True)
             cell = DropoutWrapper(cell, input_keep_prob=keep_prob, is_train=is_train)
             Ax_flat = tf.reshape(Ax, [N*M, J, D])
+
             x_sent_length = tf.reduce_sum(tf.cast(tf.reshape(x_mask, [N*M, J]), 'int32'), 1)  # [N*M]
+            Ax_flat.set_shape([None, None, D])
             Ax_flat_out_fw, _ = dynamic_rnn(cell, Ax_flat, x_sent_length, dtype='float', scope='fw')  # [N*M, J, d]
             Ax_flat_out_bw, _ = reverse_dynamic_rnn(cell, Ax_flat, x_sent_length, dtype='float', scope='bw')
             Ax_flat_out_fw = tf.reshape(Ax_flat_out_fw, [N, M*J, D])
             Ax_flat_out_bw = tf.reshape(Ax_flat_out_bw, [N, M*J, D])
             vs.reuse_variables()
+            Aq.set_shape([None, None, D])
             _, (_, Aq_final_fw) = dynamic_rnn(cell, Aq, q_length, dtype='float', scope='fw')  # [N, d]
             _, (_, Aq_final_bw) = reverse_dynamic_rnn(cell, Aq, q_length, dtype='float', scope='bw')  # [N, d]
             Ax_flat_out = tf.concat(2, [Ax_flat_out_fw, Ax_flat_out_bw])

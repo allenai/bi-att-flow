@@ -98,9 +98,10 @@ def flatten(shape, dim=1):
     :param shape:
     :return:
     """
-    assert len(shape) >= dim
+    shape_rank = len(shape)
+    assert shape_rank >= dim
     keep = dim - 1
-    out = [reduce(mul, shape[:len(shape)-keep], 1)] + shape[len(shape)-keep:]
+    out = [reduce(mul, shape[:shape_rank-keep], 1)] + shape[shape_rank-keep:]
     return out
 
 
