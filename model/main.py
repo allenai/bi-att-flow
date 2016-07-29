@@ -64,7 +64,9 @@ flags.DEFINE_float("keep_prob", 0.5, "Keep prob [0.9]")
 flags.DEFINE_bool("finetune", True, "Fine-tune? [True]")
 flags.DEFINE_integer("filter_height", 5, "Filter height [5]")
 flags.DEFINE_integer("filter_stride", 1, "Filter stride [1]")
-flags.DEFINE_integer("char_vec_size", 8, "char vec size [16]")
+flags.DEFINE_integer("char_vec_size", 8, "char vec size [8]")
+flags.DEFINE_integer("para_size", 8, "para size [8]")
+flags.DEFINE_integer("sent_size", 64, "sent size [64]")
 
 
 
@@ -122,10 +124,10 @@ def _load_metadata(config):
     emb_mat = np.array(params['emb_mat'], dtype='float32')
 
     # TODO: set other parameters, e.g.
-    config.max_sent_size = metadata['max_sent_size']
-    config.max_num_sents = metadata['max_num_sents']
+    config.max_sent_size = metadata['max_sent_size'] if not config.train else config.sent_size
+    config.max_num_sents = metadata['max_num_sents'] if not config.train else config.para_size
     config.vocab_size = metadata['vocab_size']
-    config.max_ques_size = metadata['max_ques_size']
+    config.max_ques_size = metadata['max_ques_size'] if not config.train else config.sent_size
     config.word_vec_size = metadata['word_vec_size']
     config.max_word_size = metadata['max_word_size']
     config.char_vocab_size = metadata['char_vocab_size']
@@ -174,7 +176,7 @@ def _main(config, num_trials):
         sess = tf.Session(graph=graph, config=tf.ConfigProto(allow_soft_placement=True))
         # TODO : initialize BaseRunner-subclassed object
         runner = BaseRunner(config, sess, towers)
-        with graph.as_default(), tf.device("/gpu:0"):
+        with graph.as_default(), tf.device("/{}:0".format(config.device_type)):
             runner.initialize()
             if config.train:
                 if config.load:
@@ -185,24 +187,20 @@ def _main(config, num_trials):
                 val_losses.append(val_loss)
             else:
                 runner.load()
-            test_loss, test_acc = runner.eval(comb_test_ds, eval_tensor_names=eval_tensor_names,
-                                   num_batches=config.test_num_batches, eval_ph_names=eval_ph_names)
-            test_accs.append(test_acc)
+                test_loss, test_acc = runner.eval(comb_test_ds, eval_tensor_names=eval_tensor_names,
+                                                  num_batches=config.test_num_batches, eval_ph_names=eval_ph_names)
+                test_accs.append(test_acc)
 
         if config.train:
             best_trial_idx = get_best_trial_idx(val_losses)
             logging.info("-" * 80)
             logging.info("Num trials: {}".format(trial_idx))
             logging.info("Min val loss: {:.4f}".format(min(val_losses)))
-            logging.info("Test acc at min val acc: {:.2f}%".format(100 * test_accs[best_trial_idx]))
             logging.info("Trial idx: {}".format(best_trial_idx+1))
+        else:
+            logging.info("Max test acc: {:.4f}".format(max(test_accs)))
 
-        # Cheating, but for speed
-        if test_acc == 1.0:
-            break
-
-    best_trial_idx = get_best_trial_idx(val_losses)
-    summary = "{:.2f}% at trial {}".format(test_accs[best_trial_idx] * 100, best_trial_idx)
+    summary = ""
     return summary
 
 

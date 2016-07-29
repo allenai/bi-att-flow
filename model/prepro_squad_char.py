@@ -38,8 +38,8 @@ def _get_args():
     parser.add_argument("--glove_word_size", default=100)
     parser.add_argument("--version", default="1.0")
     parser.add_argument("--count_th", default=100, type=int)
-    parser.add_argument("--para_size_th", default=8, type=int)
-    parser.add_argument("--sent_size_th", default=64, type=int)
+    parser.add_argument("--para_size_th", default=9999, type=int)
+    parser.add_argument("--sent_size_th", default=9999, type=int)
     parser.add_argument("--word_size_th", default=16, type=int)
     parser.add_argument("--char_count_th", default=500, type=int)
     parser.add_argument("--debug", default=False, type=_bool)
@@ -57,6 +57,7 @@ def _prepro(args):
     sent_size_th = args.sent_size_th
     word_size_th = args.word_size_th
     char_count_th = args.char_count_th
+    debug = args.debug
     # TODO : formally specify this path
     glove_path = os.path.join(glove_dir, "glove.{}.{}d.txt".format(glove_corpus, glove_word_size))
     if glove_corpus == '6B':
@@ -81,8 +82,8 @@ def _prepro(args):
     train_path = os.path.join(source_dir, template.format("train", version))
     dev_path = os.path.join(source_dir, template.format("dev", version))
 
-    _insert_raw_data(train_path, train_shared, train_batched, para_size_th=para_size_th, sent_size_th=sent_size_th)
-    _insert_raw_data(dev_path, dev_shared, dev_batched, X_offset=len(train_shared['X']), para_size_th=para_size_th, sent_size_th=sent_size_th)
+    _insert_raw_data(train_path, train_shared, train_batched, para_size_th=para_size_th, sent_size_th=sent_size_th, debug=debug)
+    _insert_raw_data(dev_path, dev_shared, dev_batched, X_offset=len(train_shared['X']), para_size_th=para_size_th, sent_size_th=sent_size_th, debug=debug)
 
     word2vec_dict = _get_word2vec_dict(glove_path, train_shared, train_batched, total=total, count_th=count_th)
     word2idx_dict = {word: idx for idx, word in enumerate(word2vec_dict.keys())}  # Must be an ordered dict!
@@ -161,7 +162,7 @@ def _index(l, w, d):
     raise ValueError("{} is not in list".format(w))
 
 
-def _insert_raw_data(file_path, raw_shared, raw_batched, X_offset=0, para_size_th=8, sent_size_th=32):
+def _insert_raw_data(file_path, raw_shared, raw_batched, X_offset=0, para_size_th=8, sent_size_th=32, debug=False):
     START = "sstartt"
     STOP = "sstopp"
     X = raw_shared['X']
@@ -230,7 +231,8 @@ def _insert_raw_data(file_path, raw_shared, raw_batched, X_offset=0, para_size_t
                         ids.append(id_)
                         batched_idx += 1
                         continue  # considering only one answer for now
-                # break  # for debugging
+                if debug:
+                    break  # for debugging
         if counter > 0:
             logging.warning("# answer mismatches: {}".format(counter))
         logging.info("# skipped questions: {}".format(skip_count))

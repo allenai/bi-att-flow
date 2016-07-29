@@ -7,9 +7,21 @@ import numpy as np
 from model.read_data import DataSet
 
 
+def _okay(data, shared, idx, para_size, sent_size):
+    para_size = para_size or 9999
+    sent_size = sent_size or 9999
+    idx1, idx2 = data['*X'][idx]
+    para = shared['X'][idx1][idx2]
+    ques = data['Q'][idx]
+    return len(para) <= para_size and max(map(len, para)) <= sent_size and len(ques) <= sent_size
+
+
 class SharedDataSet(DataSet):
-    def __init__(self, name, batch_size, data, shared, idxs, idx2id=None, shuffle=True):
-        super(SharedDataSet, self).__init__(name, batch_size, data, idxs, idx2id=idx2id, shuffle=shuffle)
+    def __init__(self, name, batch_size, data, shared, idxs, idx2id=None, shuffle=True, para_size=None, sent_size=None):
+        new_idxs = [idx for idx in idxs
+                    if _okay(data, shared, idx, para_size, sent_size)]
+        print("{}/{} examples are kept.".format(len(new_idxs), len(idxs)))
+        super(SharedDataSet, self).__init__(name, batch_size, data, new_idxs, idx2id=idx2id, shuffle=shuffle)
         self.shared = shared
 
     def get_next_labeled_batch(self, partial=False):
@@ -39,7 +51,12 @@ def read_data(params, mode):
         idxs = mode2idxs_dict['dev']
     else:
         idxs = mode2idxs_dict[mode]
-    data_set = SharedDataSet(mode, batch_size, data, shared, idxs, shuffle=shuffle)
+
+    para_size, sent_size = params.para_size, params.sent_size
+    if mode == 'test':
+        para_size, sent_size = None, None
+
+    data_set = SharedDataSet(mode, batch_size, data, shared, idxs, shuffle=shuffle, para_size=para_size, sent_size=sent_size)
     return data_set
 
 
