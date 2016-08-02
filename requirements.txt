@@ -2,3 +2,4 @@ tensorflow
 nltk
 progressbar2
 tqdm
+requests
