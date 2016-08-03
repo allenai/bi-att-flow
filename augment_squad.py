@@ -18,7 +18,6 @@ def _get_args():
     parser.add_argument("--port", default=port)
     return parser.parse_args()
 
-
 def _augment(ih, dict_, key, is_doc):
     assert isinstance(ih, CoreNLPInterface)
     content = dict_[key]
@@ -27,14 +26,14 @@ def _augment(ih, dict_, key, is_doc):
     else:
         sents = [content]
     words = list(map(ih.split_sent, sents))
-    const = list(map(ih.get_const_str, sents))
+    # const = list(map(ih.get_const_str, sents))
     dep = list(map(ih.get_dep, sents))
     if not is_doc:
         words = words[0]
-        const = const[0]
+        # const = const[0]
         dep = dep[0]
     dict_["{}_words".format(key)] = words
-    dict_["{}_const".format(key)] = const
+    # dict_["{}_const".format(key)] = const
     dict_["{}_dep".format(key)] = dep
 
 
