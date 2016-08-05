@@ -3,6 +3,8 @@ import logging
 import requests
 import nltk
 import json
+import networkx as nx
+import time
 
 
 class CoreNLPInterface(object):
@@ -10,29 +12,44 @@ class CoreNLPInterface(object):
         self._url = url
         self._port = port
 
-    def get(self, type_, in_):
+    def get(self, type_, in_, num_max_requests=100):
         in_ = in_.encode("utf-8")
         url = "http://{}:{}/{}".format(self._url, self._port, type_)
-        r = requests.post(url, data=in_)
-        out = r.text
+        out = None
+        for _ in range(num_max_requests):
+            try:
+                r = requests.post(url, data=in_)
+                out = r.text
+                if out == 'error':
+                    out = None
+                break
+            except:
+                time.sleep(1000)
         return out
 
     def split_doc(self, doc):
         out = self.get("doc", doc)
-        return json.loads(out)
+        return out if out is None else json.loads(out)
 
     def split_sent(self, sent):
         out = self.get("sent", sent)
-        return json.loads(out)
+        return out if out is None else json.loads(out)
 
     def get_dep(self, sent):
         out = self.get("dep", sent)
-        return json.loads(out)
+        return out if out is None else json.loads(out)
 
-    def get_const_str(self, sent):
+    def get_const(self, sent):
         out = self.get("const", sent)
         return out
 
-    def get_const(self, sent):
-        out = self.get_const_str(sent)
-        return nltk.tree.Tree.fromstring(out)
+    def get_const_tree(self, sent):
+        out = self.get_const(sent)
+        return out if out is None else nltk.tree.Tree.fromstring(out)
+
+    @staticmethod
+    def dep2tree(dep):
+        tree = nx.DiGraph()
+        for dep, i, gov, j, label in dep:
+            tree.add_edge(gov, dep, label=label)
+        return tree

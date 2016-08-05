@@ -18,6 +18,7 @@ def _get_args():
     parser.add_argument("--port", default=port)
     return parser.parse_args()
 
+
 def _augment(ih, dict_, key, is_doc):
     assert isinstance(ih, CoreNLPInterface)
     content = dict_[key]
@@ -25,22 +26,24 @@ def _augment(ih, dict_, key, is_doc):
         sents = ih.split_doc(content)
     else:
         sents = [content]
-    words = list(map(ih.split_sent, sents))
-    # const = list(map(ih.get_const_str, sents))
+    # words = list(map(ih.split_sent, sents))
+    const = list(map(ih.get_const, sents))
     dep = list(map(ih.get_dep, sents))
     if not is_doc:
-        words = words[0]
-        # const = const[0]
+        const = const[0]
         dep = dep[0]
-    dict_["{}_words".format(key)] = words
-    # dict_["{}_const".format(key)] = const
+    dict_["{}_const".format(key)] = const
     dict_["{}_dep".format(key)] = dep
+    if is_doc:
+        return sum(each is None for each in dep)
+    return int(dep is None)
 
 
 def _prepro(args):
     in_path = args.in_path
     out_path = args.out_path
     ih = CoreNLPInterface(args.domain, args.port)
+    counter = 0
 
     with open(in_path, 'r') as fh:
         d = json.load(fh)
@@ -50,13 +53,16 @@ def _prepro(args):
             for para in article['paragraphs']:
                 pbar.update(1)
                 context = para['context']
-                _augment(ih, para, 'context', True)
+                counter += _augment(ih, para, 'context', True)
                 for qa in para['qas']:
                     question = qa['question']
-                    _augment(ih, qa, 'question', False)
+                    counter += _augment(ih, qa, 'question', False)
                     for answer in qa['answers']:
                         text = answer['text']
-                        _augment(ih, answer, 'text', False)
+                        # answer_start = answer['answer_start']
+                        # answer_stop = answer_start + len(text)
+                        # _augment(ih, answer, 'text', False)
+            print(counter)
         pbar.close()
 
     with open(out_path, 'w') as fh:
