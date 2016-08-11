@@ -19,12 +19,12 @@ class CoreNLPInterface(object):
         for _ in range(num_max_requests):
             try:
                 r = requests.post(url, data=in_)
-                out = r.text
+                out = r.content.decode('utf-8')
                 if out == 'error':
                     out = None
                 break
             except:
-                time.sleep(1000)
+                time.sleep(1)
         return out
 
     def split_doc(self, doc):
