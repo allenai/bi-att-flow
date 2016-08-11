@@ -3,3 +3,4 @@ nltk
 progressbar2
 tqdm
 requests
+networkx
