@@ -68,7 +68,9 @@ def get_data(data_path):
 
 
 def prepro(args):
+    train_data_path = os.path.join(args.source_dir, "train-v1.0-aug.json")
     dev_data_path = os.path.join(args.source_dir, "dev-v1.0-aug.json")
+    data_train, shared_train = get_data(train_data_path)
     data_dev, shared_dev = get_data(dev_data_path)
 
 def main():

@@ -59,7 +59,6 @@ def _prepro(args):
     mismatch_counter = 0
 
     START = "SSSTARTTT"
-    STOP = "SSSTOPPP"
 
     with open(in_path, 'r') as fh:
         d = json.load(fh)
@@ -97,7 +96,7 @@ def _prepro(args):
                         answer['stop_idx'] = stop_idx
                         answer_words = [each[0] for each in context_nodes[start_idx[0]][start_idx[1]:stop_idx[1]]]
                         if answer_words != text_words:
-                            print(answer_words, text_words)
+                            # print(answer_words, text_words)
                             mismatch_counter += 1
                 # break
             # print(counter)

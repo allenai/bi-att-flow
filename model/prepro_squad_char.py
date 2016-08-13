@@ -9,6 +9,9 @@ import nltk
 from collections import OrderedDict, Counter
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import networkx as nx
+
+from corenlp_interface import CoreNLPInterface
 
 import re
 
@@ -72,7 +75,7 @@ def _prepro(args):
         raise ValueError()
     # TODO : put something here; Fake data shown
     version = args.version
-    template = "{}-v{}.json"
+    template = "{}-v{}-aug.json"
     train_shared = {'X': [], 'CX': []}  # X stores parass
     train_batched = {'*X': [], '*CX': [], 'Q': [], 'CQ': [], 'Y': [], 'ids': []}
     dev_shared = {'X': [], 'CX': []}  # X stores parass
@@ -145,9 +148,12 @@ def _print_stats(train_path, dev_path, min_count):
 
 
 def _tokenize(raw):
+    h = CoreNLPInterface("127.0.0.1", 8003)
     raw = raw.lower()
-    sents = nltk.sent_tokenize(raw)
-    tokens = [nltk.word_tokenize(sent) for sent in sents]
+    # sents = nltk.sent_tokenize(raw)
+    sents = h.split_doc(raw)
+    # tokens = [nltk.word_tokenize(sent) for sent in sents]
+    tokens = list(map(h.split_sent, sents))
     return tokens
 
 
@@ -160,6 +166,16 @@ def _index(l, w, d):
         except ValueError:
             continue
     raise ValueError("{} is not in list".format(w))
+
+
+def _get_answer_idx(tree, start_idx, stop_idx):
+    assert isinstance(tree, nx.DiGraph)
+    for node in tree.nodes():
+        d = nx.descendants(tree, node) | {node}
+        # minus 1 because d is 1 indexed
+        if len(d) > 0 and min(d)-1 == start_idx and max(d)-1 == stop_idx - 1:
+            return node
+    return None
 
 
 def _insert_raw_data(file_path, raw_shared, raw_batched, X_offset=0, para_size_th=8, sent_size_th=32, debug=False):
@@ -175,6 +191,7 @@ def _insert_raw_data(file_path, raw_shared, raw_batched, X_offset=0, para_size_t
     with open(file_path, 'r') as fh:
         d = json.load(fh)
         counter = 0
+        dep_counter = 0
         for article_idx, article in enumerate(tqdm(d['data'])):
             X_i = []
             X.append(X_i)
@@ -224,6 +241,15 @@ def _insert_raw_data(file_path, raw_shared, raw_batched, X_offset=0, para_size_t
                         temp_idx = _index(temp_sents, STOP, 2)
                         stop_idx = temp_idx[0], temp_idx[1] - 1
 
+                        tree = CoreNLPInterface.dep2tree(para['context_dep'][start_idx[0]])
+                        answer_idx = _get_answer_idx(tree, start_idx[1], stop_idx[1])
+                        if answer_idx is None:
+                            # print(para['context_dep'][start_idx[0]])
+                            # print(question_words, para['context_words'][start_idx[0]], text, start_idx[1], stop_idx[1])
+                            dep_counter += 1
+                            continue
+
+
                         # Store stuff
                         RX.append(ref_idx)
                         Q.append(question_words)
@@ -235,9 +261,10 @@ def _insert_raw_data(file_path, raw_shared, raw_batched, X_offset=0, para_size_t
                     break  # for debugging
         if counter > 0:
             logging.warning("# answer mismatches: {}".format(counter))
-        logging.info("# skipped questions: {}".format(skip_count))
-        logging.info("# articles: {}, # paragraphs: {}".format(len(X), sum(len(x) for x in X)))
-        logging.info("# questions: {}".format(len(Q)))
+        logging.warning("# answer not expressible by dep: {}".format(dep_counter))
+        logging.warning("# skipped questions: {}".format(skip_count))
+        logging.warning("# articles: {}, # paragraphs: {}".format(len(X), sum(len(x) for x in X)))
+        logging.warning("# questions: {}".format(len(Q)))
 
         # Stats
         """
@@ -357,7 +384,7 @@ def _save(target_dir, shared, batched, params, mode2idxs_dict, word2idx_dict, ch
 
 
 def main():
-    logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger().setLevel(logging.WARNING)
     args = _get_args()
     _prepro(args)
 
