@@ -1,7 +1,10 @@
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.ops.rnn import dynamic_rnn
+from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 
 from basic.read_data import DataSet
+from my.tensorflow import exp_mask
 from my.tensorflow.nn import linear
 
 
@@ -12,8 +15,15 @@ class Model(object):
                                            initializer=tf.constant_initializer(0), trainable=False)
 
         # Define forward inputs here
-        self.x = tf.placeholder('float', [None, config.dim], name='x')
-        self.y = tf.placeholder('int32', [None], name='y')
+        N, M, JX, JQ, VW, VC = \
+            config.batch_size, config.max_num_sents, config.max_sent_size, \
+            config.max_ques_size, config.word_vocab_size, config.char_vocab_size
+        self.x = tf.placeholder('int32', [None, M, JX], name='x')
+        self.x_mask = tf.placeholder('bool', [None, M, JX], name='x_mask')
+        self.q = tf.placeholder('int32', [None, JQ], name='q')
+        self.q_mask = tf.placeholder('bool', [None, JQ], name='q_mask')
+        self.y = tf.placeholder('bool', [None, M, JX], name='y')
+        self.is_train = tf.placeholder('bool', [], name='is_train')
 
         # Define misc
 
@@ -32,20 +42,34 @@ class Model(object):
         self.summary = tf.merge_all_summaries()
 
     def _build_forward(self):
-        aff1 = linear([self.x], 4, True, scope='aff1')
-        matrix = tf.get_collection(tf.GraphKeys.VARIABLES, "aff1/Matrix")[0]
-        tf.histogram_summary(matrix.op.name, matrix)
-        tf.add_to_collection('ema/histogram', matrix)
-        relu1 = tf.nn.relu(aff1, name='relu1')
-        aff2 = linear([relu1], 2, True, scope='aff2')
-        yp = tf.nn.softmax(aff2, name='yp')
-        self.logits = aff2
-        self.yp = yp
+        config = self.config
+        N, M, JX, JQ, VW, VC, d = \
+            config.batch_size, config.max_num_sents, config.max_sent_size, \
+            config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size
+        word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, d], dtype='float')
+
+        Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
+        x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
+        Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
+        q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
+
+        cell = BasicLSTMCell(d, state_is_tuple=True)
+
+        Ax = tf.reshape(Ax, [-1, JX, d])
+        x_len = tf.reshape(x_len, [-1])
+        h, _ = dynamic_rnn(cell, Ax, x_len, dtype='float', scope='rnn/x')  # [N*M, JX, d]
+        h = tf.reshape(h, [-1, M, JX, d])
+
+        _, (_, u) = dynamic_rnn(cell, Aq, q_len, dtype='float', scope='rnn/q')  # [2, N, d]
+
+        u = tf.expand_dims(tf.expand_dims(u, 1), 1)  # [N, 1, 1, d]
+        self.logits = exp_mask(tf.reduce_sum(h * u, 3), self.x_mask)  # [N, M, JX]
+        self.yp = tf.nn.sigmoid(self.logits)
 
     def _build_loss(self):
-        ce_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(self.logits, self.y), name='loss')
+        ce_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.logits, tf.cast(self.y, 'float')))
         tf.add_to_collection('losses', ce_loss)
-        self.loss = tf.add_n(tf.get_collection('losses'))
+        self.loss = tf.add_n(tf.get_collection('losses'), name='loss')
         tf.scalar_summary(self.loss.op.name, self.loss)
         tf.add_to_collection('ema/scalar', self.loss)
 
@@ -69,23 +93,42 @@ class Model(object):
     def get_var_list(self):
         return self.var_list
 
-    def get_feed_dict(self, batch, supervised=True):
+    def get_feed_dict(self, batch, is_train, supervised=True):
         assert isinstance(batch, DataSet)
-        N, d = self.config.batch_size, self.config.dim
+        config = self.config
+        N, M, JX, JQ, VW, VC, d = \
+            config.batch_size, config.max_num_sents, config.max_sent_size, \
+            config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size
         feed_dict = {}
 
-        x = np.zeros([N, d], dtype='float')
+        x = np.zeros([N, M, JX], dtype='int32')
+        x_mask = np.zeros([N, M, JX], dtype='bool')
+        q = np.zeros([N, JQ], dtype='int32')
+        q_mask = np.zeros([N, JQ], dtype='bool')
+
         feed_dict[self.x] = x
-        X = batch.data['X']
-        for i, xi in enumerate(X):
+        feed_dict[self.x_mask] = x_mask
+        feed_dict[self.q] = q
+        feed_dict[self.q_mask] = q_mask
+        feed_dict[self.is_train] = is_train
+        for i, xi in enumerate(batch.data['x']):
             for j, xij in enumerate(xi):
-                x[i, j] = xij
+                for k, xijk in enumerate(xij):
+                    x[i, j, k] = xijk
+                    x_mask[i, j, k] = True
+
+        for i, qi in enumerate(batch.data['q']):
+            for j, qij in enumerate(qi):
+                q[i, j] = qij
+                q_mask[i, j] = True
 
         if supervised:
-            y = np.zeros([N], dtype='int')
+            y = np.zeros([N, M, JX], dtype='bool')
             feed_dict[self.y] = y
-            Y = batch.data['Y']
-            for i, yi in enumerate(Y):
-                y[i] = yi
+            for i, yi in enumerate(batch.data['y']):
+                start_idx, stop_idx = yi
+                j = start_idx[0]
+                for k in range(start_idx[1], stop_idx[1]):
+                    y[i, j, k] = True
 
         return feed_dict

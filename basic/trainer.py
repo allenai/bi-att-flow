@@ -26,7 +26,7 @@ class Trainer(object):
 
     def step(self, sess, batch, get_summary=False):
         assert isinstance(sess, tf.Session)
-        feed_dict = self.model.get_feed_dict(batch)
+        feed_dict = self.model.get_feed_dict(batch, True)
         if get_summary:
             loss, summary, train_op = \
                 sess.run([self.loss, self.summary, self.train_op], feed_dict=feed_dict)

@@ -49,7 +49,10 @@ def load_metadata(config, data_type):
 
 def read_data(config, data_type):
     data_path = os.path.join(config.data_dir, "data_{}.json".format(data_type))
+    shared_path = os.path.join(config.data_dir, "shared_{}.json".format(data_type))
     with open(data_path, 'r') as fh:
         data = json.load(fh)
-        data_set = DataSet(data, data_type)
-        return data_set
+    with open(shared_path, 'r') as fh:
+        shared = json.load(fh)
+    data_set = DataSet(data, data_type, shared=shared)
+    return data_set

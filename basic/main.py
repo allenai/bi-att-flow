@@ -3,11 +3,12 @@ import json
 import math
 import os
 import shutil
+from pprint import pprint
 
 import tensorflow as tf
 from tqdm import tqdm
 
-from basic.evaluator import AccuracyEvaluator, Evaluator
+from basic.evaluator import AccuracyEvaluator, Evaluator, F1Evaluator
 from basic.graph_handler import GraphHandler
 from basic.model import Model
 from basic.trainer import Trainer
@@ -27,15 +28,26 @@ def main(config):
         raise ValueError("invalid value for 'mode': {}".format(config.mode))
 
 
+def _config_draft(config):
+    if config.draft:
+        config.num_steps = 2
+        config.eval_period = 1
+        config.log_period = 1
+        config.save_period = 1
+
+
 def _train(config):
     load_metadata(config, 'train')  # this updates the config file according to metadata file
+    _config_draft(config)
+    pprint(config.__flags, indent=2)
+
     train_data = read_data(config, 'train')
     dev_data = read_data(config, 'dev')
 
     # construct model graph and variables (using default graph)
     model = Model(config)
     trainer = Trainer(config, model)
-    evaluator = AccuracyEvaluator(config, model)
+    evaluator = F1Evaluator(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     # Variables
@@ -53,7 +65,9 @@ def _train(config):
 
         # Occasional evaluation and saving
         if global_step % config.eval_period == 0:
-            e = evaluator.get_evaluation_from_batches(sess, dev_data.get_batches(config.batch_size))
+            num_batches = 1 if config.draft else math.ceil(dev_data.num_examples / config.batch_size)
+            e = evaluator.get_evaluation_from_batches(
+                sess, tqdm(dev_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
             graph_handler.add_summary(e.summary, global_step)
             graph_handler.dump_eval(e)
             print(e)
@@ -63,23 +77,29 @@ def _train(config):
 
 def _test(config):
     load_metadata(config, 'test')  # this updates the config file according to metadata file
+    _config_draft(config)
+    pprint(config.__flag, indent=2)
+
     test_data = read_data(config, 'test')
 
     model = Model(config)
-    evaluator = AccuracyEvaluator(config, model)
+    evaluator = F1Evaluator(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     sess = tf.Session()
     graph_handler.initialize(sess)
 
-    num_steps_per_epoch = math.ceil(test_data.num_examples / config.batch_size)
-    e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_batches(config.batch_size), total=num_steps_per_epoch))
+    num_batches = 1 if config.draft else math.ceil(test_data.num_examples / config.batch_size)
+    e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
     graph_handler.dump_eval(e)
     print(e)
 
 
 def _forward(config):
     load_metadata(config, 'forward')
+    _config_draft(config)
+    pprint(config.__flag, indent=2)
+
     forward_data = read_data(config, 'forward')
 
     model = Model(config)
@@ -89,8 +109,8 @@ def _forward(config):
     sess = tf.Session()
     graph_handler.initialize(sess)
 
-    num_steps_per_epoch = math.ceil(forward_data.num_examples / config.batch_size)
-    e = evaluator.get_evaluation_from_batches(sess, tqdm(forward_data.get_batches(config.batch_size), total=num_steps_per_epoch))
+    num_batches = 1 if config.draft else math.ceil(forward_data.num_examples / config.batch_size)
+    e = evaluator.get_evaluation_from_batches(sess, tqdm(forward_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
     graph_handler.dump_eval(e)
     print(e)
 

@@ -3,14 +3,10 @@ from functools import reduce
 from operator import mul
 import numpy as np
 
-VERY_BIG_NUMBER = 1e10
+VERY_BIG_NUMBER = 1e9
+VERY_SMALL_NUMBER = 1e-9
 VERY_POSITIVE_NUMBER = VERY_BIG_NUMBER
 VERY_NEGATIVE_NUMBER = -VERY_BIG_NUMBER
-
-
-def get_initializer(matrix):
-    def _initializer(shape, dtype=None): return matrix
-    return _initializer
 
 
 def variable_on_cpu(name, shape, initializer):
@@ -92,22 +88,9 @@ def average_gradients(tower_grads):
     return average_grads
 
 
-def flatten(shape, dim=1):
-    """
-    [a, b, c, ... , z] -> [a*b*...*y, z]
-    :param shape:
-    :return:
-    """
-    shape_rank = len(shape)
-    assert shape_rank >= dim
-    keep = dim - 1
-    out = [reduce(mul, shape[:shape_rank-keep], 1)] + shape[shape_rank-keep:]
-    return out
-
-
-def exp_mask(val, mask, name="masked_val"):
+def exp_mask(val, mask, name=None):
     """Give very negative number to unmasked elements in val.
-    For example, [-3, -2, 10], [True, True, False] -> [-3, -2, -1e10].
+    For example, [-3, -2, 10], [True, True, False] -> [-3, -2, -1e9].
     Typically, this effectively masks in exponential space (e.g. softmax)
     Args:
         val: values to be masked
@@ -117,17 +100,20 @@ def exp_mask(val, mask, name="masked_val"):
     Returns:
         Same shape as val, where some elements are very small (exponentially zero)
     """
+    if name is None:
+        name = "exp_mask"
     return tf.add(val, (1 - tf.cast(mask, 'float')) * VERY_NEGATIVE_NUMBER, name=name)
 
 
-def translate(tensor, translation):
-    shape = tensor.get_shape().as_list()
-    translation = np.array(translation, dtype='int32')
-    start = np.maximum(translation, np.zeros(translation.shape)).astype('int32')
-    stop = np.minimum(shape, shape + translation).astype('int32')
-    size = (stop - start).astype('int32')
-    left_padding = list(start.astype('int32'))
-    right_padding = list((shape - stop).astype('int32'))
-    paddings = list(zip(left_padding, right_padding))
-    return tf.pad(tf.slice(tensor, start, size), paddings, mode='CONSTANT')
+def flatten(tensor, keep):
+    assert keep >= 1
+    flat = tf.reshape(tensor, [-1] + tensor.get_shape().as_list()[-keep:])
+    return flat
 
+
+def reconstruct(tensor, ref, keep):
+    pre_shape = [tf.shape(ref)[i] for i in range(len(ref.get_shape().as_list()[:-keep]))]
+    keep_shape = tensor.get_shape().as_list()[-keep:]
+    target_shape = pre_shape + keep_shape
+    out = tf.reshape(tensor, target_shape)
+    return out
