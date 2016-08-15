@@ -6,6 +6,7 @@ from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 from basic.read_data import DataSet
 from my.tensorflow import exp_mask
 from my.tensorflow.nn import linear
+from my.tensorflow.rnn_cell import SwitchableDropoutWrapper
 
 
 class Model(object):
@@ -15,12 +16,14 @@ class Model(object):
                                            initializer=tf.constant_initializer(0), trainable=False)
 
         # Define forward inputs here
-        N, M, JX, JQ, VW, VC = \
+        N, M, JX, JQ, VW, VC, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
-            config.max_ques_size, config.word_vocab_size, config.char_vocab_size
+            config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.max_word_size
         self.x = tf.placeholder('int32', [None, M, JX], name='x')
+        self.cx = tf.placeholder('int32', [None, M, JX, W], name='cx')
         self.x_mask = tf.placeholder('bool', [None, M, JX], name='x_mask')
         self.q = tf.placeholder('int32', [None, JQ], name='q')
+        self.cq = tf.placeholder('int32', [None, JQ, W], name='cq')
         self.q_mask = tf.placeholder('bool', [None, JQ], name='q_mask')
         self.y = tf.placeholder('bool', [None, M, JX], name='y')
         self.is_train = tf.placeholder('bool', [], name='is_train')
@@ -43,31 +46,51 @@ class Model(object):
 
     def _build_forward(self):
         config = self.config
-        N, M, JX, JQ, VW, VC, d = \
+        N, M, JX, JQ, VW, VC, d, dc = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
-            config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size
-        word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, d], dtype='float')
+            config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, \
+            config.char_emb_size
 
-        Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
-        x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
-        Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
-        q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
+        with tf.variable_scope("char_emb"):
+            char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
+            Acx = tf.nn.embedding_lookup(char_emb_mat, self.cx)  # [N, M, JX, W, dc]
+            Acq = tf.nn.embedding_lookup(char_emb_mat, self.cq)  # [N, JQ, W, dc]
+            xxc = tf.reduce_max(Acx, 3)  # [N, M, JX, dc]
+            qqc = tf.reduce_max(Acq, 2)  # [N, JQ, dc]
 
-        cell = BasicLSTMCell(d, state_is_tuple=True)
+        with tf.variable_scope("word_emb"):
+            word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, d], dtype='float')
+            Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
+            Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
 
-        Ax = tf.reshape(Ax, [-1, JX, d])
-        x_len = tf.reshape(x_len, [-1])
-        h, _ = dynamic_rnn(cell, Ax, x_len, dtype='float', scope='rnn/x')  # [N*M, JX, d]
-        h = tf.reshape(h, [-1, M, JX, d])
+        xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, dc+d]
+        qq = tf.concat(2, [qqc, Aq])  # [N, JQ, dc+d]
 
-        _, (_, u) = dynamic_rnn(cell, Aq, q_len, dtype='float', scope='rnn/q')  # [2, N, d]
+        with tf.variable_scope("rnn"):
+            cell = BasicLSTMCell(d + dc, state_is_tuple=True)
+            cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
+            x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
+            q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
+
+            xx = tf.reshape(xx, [-1, JX, d+dc])
+            x_len = tf.reshape(x_len, [-1])
+            h, _ = dynamic_rnn(cell, xx, x_len, dtype='float')  # [N*M, JX, d]
+            h = tf.reshape(h, [-1, M, JX, d+dc])
+
+            tf.get_variable_scope().reuse_variables()
+            _, (_, u) = dynamic_rnn(cell, qq, q_len, dtype='float')  # [2, N, d]
 
         u = tf.expand_dims(tf.expand_dims(u, 1), 1)  # [N, 1, 1, d]
-        self.logits = exp_mask(tf.reduce_sum(h * u, 3), self.x_mask)  # [N, M, JX]
-        self.yp = tf.nn.sigmoid(self.logits)
+        self.logits = tf.reshape(exp_mask(tf.reduce_sum(h * u, 3), self.x_mask), [-1, M * JX])  # [N, M, JX]
+        self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
 
     def _build_loss(self):
-        ce_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.logits, tf.cast(self.y, 'float')))
+        config = self.config
+        N, M, JX, JQ, VW, VC = \
+            config.batch_size, config.max_num_sents, config.max_sent_size, \
+            config.max_ques_size, config.word_vocab_size, config.char_vocab_size
+        ce_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
+            self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float')))
         tf.add_to_collection('losses', ce_loss)
         self.loss = tf.add_n(tf.get_collection('losses'), name='loss')
         tf.scalar_summary(self.loss.op.name, self.loss)
@@ -96,19 +119,23 @@ class Model(object):
     def get_feed_dict(self, batch, is_train, supervised=True):
         assert isinstance(batch, DataSet)
         config = self.config
-        N, M, JX, JQ, VW, VC, d = \
+        N, M, JX, JQ, VW, VC, d, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
-            config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size
+            config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, config.max_word_size
         feed_dict = {}
 
         x = np.zeros([N, M, JX], dtype='int32')
+        cx = np.zeros([N, M, JX, W], dtype='int32')
         x_mask = np.zeros([N, M, JX], dtype='bool')
         q = np.zeros([N, JQ], dtype='int32')
+        cq = np.zeros([N, JQ, W], dtype='int32')
         q_mask = np.zeros([N, JQ], dtype='bool')
 
         feed_dict[self.x] = x
         feed_dict[self.x_mask] = x_mask
+        feed_dict[self.cx] = cx
         feed_dict[self.q] = q
+        feed_dict[self.cq] = cq
         feed_dict[self.q_mask] = q_mask
         feed_dict[self.is_train] = is_train
         for i, xi in enumerate(batch.data['x']):
@@ -117,18 +144,28 @@ class Model(object):
                     x[i, j, k] = xijk
                     x_mask[i, j, k] = True
 
+        for i, cxi in enumerate(batch.data['cx']):
+            for j, cxij in enumerate(cxi):
+                for k, cxijk in enumerate(cxij):
+                    for l, cxijkl in enumerate(cxijk):
+                        cx[i, j, k, l] = cxijkl
+
         for i, qi in enumerate(batch.data['q']):
             for j, qij in enumerate(qi):
                 q[i, j] = qij
                 q_mask[i, j] = True
+
+        for i, cqi in enumerate(batch.data['cq']):
+            for j, cqij in enumerate(cqi):
+                for k, cqijk in enumerate(cqij):
+                    cq[i, j, k] = cqijk
 
         if supervised:
             y = np.zeros([N, M, JX], dtype='bool')
             feed_dict[self.y] = y
             for i, yi in enumerate(batch.data['y']):
                 start_idx, stop_idx = yi
-                j = start_idx[0]
-                for k in range(start_idx[1], stop_idx[1]):
-                    y[i, j, k] = True
+                j, k = start_idx
+                y[i, j, k] = True
 
         return feed_dict

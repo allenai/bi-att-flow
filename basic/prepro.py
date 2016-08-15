@@ -55,6 +55,7 @@ def get_data(args, data_path, is_train):
         max_ques_size = 0
         max_ques_word_size = 0
         max_sent_word_size = 0
+        max_word_size = 0
 
         rx, q, y = [], [], []
         cq = []
@@ -98,6 +99,7 @@ def get_data(args, data_path, is_train):
                 max_num_sents = max(max_num_sents, len(context_nodes))
                 max_sent_size = max(max_sent_size, max(map(len, context_nodes)))
                 max_num_words = max(max_num_words, sum(map(len, context_nodes)))
+                max_word_size = max(max_word_size, max(len(word) for sent in context_words for word in sent))
                 max_sent_word_size = max(max_sent_word_size, max(len(word) for sent in context_words for word in sent))
                 consts = para['context_const']
                 # context_words, context_tags, context_starts, context_stops = zip(*context_nodes)
@@ -117,6 +119,7 @@ def get_data(args, data_path, is_train):
                         # If span is extended further than the sent length
                         if stop_idx[1] > len(context_words[stop_idx[0]]):
                             invalid_stop_idx_counter += 1
+                            break
                         full_span = [start_idx, stop_idx]
                         support_tree = nltk.tree.Tree.fromstring(consts[start_idx[0]])
                         span = (start_idx[1], stop_idx[1])
@@ -141,6 +144,7 @@ def get_data(args, data_path, is_train):
         print("max ques size: {}".format(max_ques_size))
         print("max sent word size: {}".format(max_sent_word_size))
         print("max ques word size: {}".format(max_ques_word_size))
+        print("max word size: {}".format(max_word_size))
 
         wv = {word: i+2 for i, word in enumerate(word for word, count in word_counter.items() if count >= args.min_word_count)}
         cv = {char: i+2 for i, char in enumerate(char for char, count in char_counter.items() if count >= args.min_char_count)}
@@ -157,9 +161,10 @@ def get_data(args, data_path, is_train):
                     'max_ques_size': max_ques_size,
                     'max_sent_word_size': max_sent_word_size,
                     'max_ques_word_size': max_ques_word_size,
+                    'max_word_size': max_word_size,
                     'word_vocab_size': len(wv),
                     'char_vocab_size': len(cv)}
-        data = {'*x': rx, 'cq': cq, 'q': q, 'y': y}
+        data = {'*x': rx, '*cx': rx, 'cq': cq, 'q': q, 'y': y}
         shared = {'x': x, 'cx': cx, 'wv': wv, 'cv': cv}
         return data, shared, metadata
 
@@ -174,7 +179,7 @@ def recursive_replace(l, v):
 
 
 def apply(data, shared, wv, cv):
-    data = {'*x': data['*x'], 'cq': recursive_replace(data['cq'], cv), 'q': recursive_replace(data['q'], wv), 'y': data['y']}
+    data = {'*x': data['*x'], '*cx': data['*cx'], 'cq': recursive_replace(data['cq'], cv), 'q': recursive_replace(data['q'], wv), 'y': data['y']}
     shared = {'x': recursive_replace(shared['x'], wv), 'cx': recursive_replace(shared['cx'], cv), 'wv': shared['wv'], 'cv': shared['cv']}
     return data, shared
 
@@ -197,6 +202,10 @@ def prepro(args):
     data_train, shared_train = apply(data_train, shared_train, wv, cv)
     data_test, shared_test = apply(data_test, shared_test, wv, cv)
     data_train, data_dev = split(data_train, args.train_ratio)
+    shared_test['wv'] = wv
+    shared_test['cv'] = cv
+    metadata_test['word_vocab_size'] = metadata_train['word_vocab_size']
+    metadata_test['char_vocab_size'] = metadata_train['char_vocab_size']
 
     if not os.path.exists(args.target_dir):
         os.makedirs(args.target_dir)

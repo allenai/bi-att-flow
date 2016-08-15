@@ -15,4 +15,3 @@ def linear(args, output_size, bias, bias_start=0.0, scope=None):
     out = reconstruct(flat_out, args[0], 1)
     return out
 
-
