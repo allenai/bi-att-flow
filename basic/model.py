@@ -46,36 +46,44 @@ class Model(object):
 
     def _build_forward(self):
         config = self.config
-        N, M, JX, JQ, VW, VC, d, dc = \
+        N, M, JX, JQ, VW, VC, d, dc, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, \
-            config.char_emb_size
+            config.char_emb_size, config.max_word_size
 
         with tf.variable_scope("char_emb"):
             char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
             Acx = tf.nn.embedding_lookup(char_emb_mat, self.cx)  # [N, M, JX, W, dc]
             Acq = tf.nn.embedding_lookup(char_emb_mat, self.cq)  # [N, JQ, W, dc]
-            xxc = tf.reduce_max(Acx, 3)  # [N, M, JX, dc]
-            qqc = tf.reduce_max(Acq, 2)  # [N, JQ, dc]
+
+            filter = tf.get_variable("filter", shape=[1, config.char_filter_height, dc, d], dtype='float')
+            bias = tf.get_variable("bias", shape=[d], dtype='float')
+            strides = [1, 1, 1, 1]
+            Acx = tf.reshape(Acx, [-1, JX, W, dc])
+            Acq = tf.reshape(Acq, [-1, JQ, W, dc])
+            xxc = tf.nn.conv2d(Acx, filter, strides, "VALID") + bias  # [N*M, JX, W/filter_stride, d]
+            qqc = tf.nn.conv2d(Acq, filter, strides, "VALID") + bias  # [N, JQ, W/filter_stride, d]
+            xxc = tf.reshape(tf.reduce_max(tf.nn.relu(xxc), 2), [-1, M, JX, d])
+            qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, d])
 
         with tf.variable_scope("word_emb"):
             word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, d], dtype='float')
             Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
             Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
 
-        xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, dc+d]
-        qq = tf.concat(2, [qqc, Aq])  # [N, JQ, dc+d]
+        xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, 2d]
+        qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
 
         with tf.variable_scope("rnn"):
-            cell = BasicLSTMCell(d + dc, state_is_tuple=True)
+            cell = BasicLSTMCell(2*d, state_is_tuple=True)
             cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
             x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
             q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
-            xx = tf.reshape(xx, [-1, JX, d+dc])
+            xx = tf.reshape(xx, [-1, JX, 2*d])
             x_len = tf.reshape(x_len, [-1])
-            h, _ = dynamic_rnn(cell, xx, x_len, dtype='float')  # [N*M, JX, d]
-            h = tf.reshape(h, [-1, M, JX, d+dc])
+            h, _ = dynamic_rnn(cell, xx, x_len, dtype='float')  # [N*M, JX, 2*d]
+            h = tf.reshape(h, [-1, M, JX, 2*d])
 
             tf.get_variable_scope().reuse_variables()
             _, (_, u) = dynamic_rnn(cell, qq, q_len, dtype='float')  # [2, N, d]
