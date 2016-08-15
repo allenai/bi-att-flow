@@ -106,8 +106,11 @@ def exp_mask(val, mask, name=None):
 
 
 def flatten(tensor, keep):
-    assert keep >= 1
-    flat = tf.reshape(tensor, [-1] + tensor.get_shape().as_list()[-keep:])
+    if keep == 0:
+        out_shape = [-1]
+    else:
+        out_shape = [-1] + tensor.get_shape().as_list()[-keep:]
+    flat = tf.reshape(tensor, out_shape)
     return flat
 
 
@@ -117,3 +120,12 @@ def reconstruct(tensor, ref, keep):
     target_shape = pre_shape + keep_shape
     out = tf.reshape(tensor, target_shape)
     return out
+
+
+def add_wd(wd, scope=None):
+    scope = scope or tf.get_variable_scope().name
+    variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope)
+    with tf.name_scope("weight_decay"):
+        for var in variables:
+            weight_decay = tf.mul(tf.nn.l2_loss(var), wd, name="{}/wd".format(var.op.name))
+            tf.add_to_collection('losses', weight_decay)

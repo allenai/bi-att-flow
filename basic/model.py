@@ -1,11 +1,11 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.ops.rnn import dynamic_rnn
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 
 from basic.read_data import DataSet
 from my.tensorflow import exp_mask
 from my.tensorflow.nn import linear
+from my.tensorflow.rnn import bidirectional_dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper
 
 
@@ -80,16 +80,15 @@ class Model(object):
             x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
             q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
-            xx = tf.reshape(xx, [-1, JX, 2*d])
-            x_len = tf.reshape(x_len, [-1])
-            h, _ = dynamic_rnn(cell, xx, x_len, dtype='float')  # [N*M, JX, 2*d]
-            h = tf.reshape(h, [-1, M, JX, 2*d])
-
+            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float')  # [N, M, JX, 2d]
             tf.get_variable_scope().reuse_variables()
-            _, (_, u) = dynamic_rnn(cell, qq, q_len, dtype='float')  # [2, N, d]
+            _, (_, (fw_u, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float')  # [2, N, d]
+            h = fw_h + bw_h
+            u = fw_u + bw_u
 
         u = tf.expand_dims(tf.expand_dims(u, 1), 1)  # [N, 1, 1, d]
-        self.logits = tf.reshape(exp_mask(tf.reduce_sum(h * u, 3), self.x_mask), [-1, M * JX])  # [N, M, JX]
+        self.logits = tf.reshape(exp_mask(linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot'),
+                                          self.x_mask), [-1, M * JX])  # [N, M, JX]
         self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
 
     def _build_loss(self):
