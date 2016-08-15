@@ -82,13 +82,19 @@ class Model(object):
 
             (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float')  # [N, M, JX, 2d]
             tf.get_variable_scope().reuse_variables()
-            _, (_, (fw_u, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float')  # [2, N, d]
+            (fw_us, bw_us), (_, (fw_u, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float')  # [N, J, d], [N, d]
             h = fw_h + bw_h
-            u = fw_u + bw_u
+            if config.pool_rnn:
+                u = tf.reduce_max(fw_us + bw_us, 1)  # [N, d]
+            else:
+                u = fw_u + bw_u
 
         u = tf.expand_dims(tf.expand_dims(u, 1), 1)  # [N, 1, 1, d]
-        self.logits = tf.reshape(exp_mask(linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot'),
-                                          self.x_mask), [-1, M * JX])  # [N, M, JX]
+        if config.tanh_dot:
+            dot = tf.reduce_sum(u * tf.tanh(linear(h, 2*d, True, wd=config.wd, scope='dot')), 3)
+        else:
+            dot = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot')
+        self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
         self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
 
     def _build_loss(self):

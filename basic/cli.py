@@ -31,6 +31,8 @@ flags.DEFINE_float("input_keep_prob", 0.5, "Input keep prob [0.5]")
 flags.DEFINE_integer("char_emb_size", 8, "Char emb size [8]")
 flags.DEFINE_integer("char_filter_height", 4, "Char filter height [4]")
 flags.DEFINE_float("wd", 0.001, "Weight decay [0.001]")
+flags.DEFINE_bool("pool_rnn", False, "Pool RNN [False]")
+flags.DEFINE_bool("tanh_dot", False, "Tanh Dot [ False]")
 
 
 def main(_):
