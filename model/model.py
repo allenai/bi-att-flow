@@ -3,7 +3,7 @@ from tensorflow.python.ops.rnn import dynamic_rnn
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 
 from my.tensorflow import get_initializer
-from my.tensorflow.rnn_cell import DropoutWrapper
+from my.tensorflow.rnn_cell import DropoutWrapper, SwitchableDropoutWrapper
 
 from model.base_model import BaseTower
 import numpy as np
@@ -93,7 +93,7 @@ class Tower(BaseTower):
             q_length = tf.reduce_sum(tf.cast(q_mask, 'int32'), 1)  # [N]
             D = word_vec_size + d
             cell = BasicLSTMCell(D, state_is_tuple=True)
-            cell = DropoutWrapper(cell, input_keep_prob=keep_prob, is_train=is_train)
+            cell = SwitchableDropoutWrapper(cell, is_train, input_keep_prob=keep_prob)
             Ax_flat = tf.reshape(Ax, [N*M, J, D])
 
             x_sent_length = tf.reduce_sum(tf.cast(tf.reshape(x_mask, [N*M, J]), 'int32'), 1)  # [N*M]

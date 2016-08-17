@@ -13,7 +13,7 @@ from basic.graph_handler import GraphHandler
 from basic.model import Model
 from basic.trainer import Trainer
 
-from basic.read_data import load_metadata, read_data
+from basic.read_data import load_metadata, read_data, get_squad_data_filter
 
 
 def main(config):
@@ -34,6 +34,7 @@ def _config_draft(config):
         config.eval_period = 1
         config.log_period = 1
         config.save_period = 1
+        config.eval_num_batches = 1
 
 
 def _train(config):
@@ -41,8 +42,9 @@ def _train(config):
     _config_draft(config)
     pprint(config.__flags, indent=2)
 
-    train_data = read_data(config, 'train')
-    dev_data = read_data(config, 'dev')
+    data_filter = get_squad_data_filter(config)
+    train_data = read_data(config, 'train', data_filter=data_filter)
+    dev_data = read_data(config, 'dev', data_filter=data_filter)
 
     # construct model graph and variables (using default graph)
     model = Model(config)
@@ -56,7 +58,7 @@ def _train(config):
 
     # begin training
     num_steps = config.num_steps or int(config.num_epochs * train_data.num_examples / config.batch_size)
-    for batch in tqdm(train_data.get_batches(config.batch_size, num_batches=num_steps, shuffle=True), total=num_steps):
+    for _, batch in tqdm(train_data.get_batches(config.batch_size, num_batches=num_steps, shuffle=True), total=num_steps):
         global_step = sess.run(model.global_step) + 1  # +1 because all calculations are done after step
         get_summary = global_step % config.log_period == 0
         loss, summary, train_op = trainer.step(sess, batch, get_summary=get_summary)
@@ -65,10 +67,10 @@ def _train(config):
 
         # Occasional evaluation and saving
         if global_step % config.eval_period == 0:
-            num_batches = 1 if config.draft else math.ceil(dev_data.num_examples / config.batch_size)
+            num_batches = config.eval_num_batches or math.ceil(dev_data.num_examples / config.batch_size)
             e = evaluator.get_evaluation_from_batches(
                 sess, tqdm(dev_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
-            graph_handler.add_summary(e.summary, global_step)
+            graph_handler.add_summaries(e.summaries, global_step)
             graph_handler.dump_eval(e)
             print(e)
         if global_step % config.save_period == 0 or global_step == num_steps:
@@ -89,7 +91,7 @@ def _test(config):
     sess = tf.Session()
     graph_handler.initialize(sess)
 
-    num_batches = 1 if config.draft else math.ceil(test_data.num_examples / config.batch_size)
+    num_batches = config.eval_num_batches or math.ceil(test_data.num_examples / config.batch_size)
     e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
     graph_handler.dump_eval(e)
     print(e)

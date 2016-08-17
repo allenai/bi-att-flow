@@ -10,8 +10,8 @@ import nltk
 
 from nltk_utils import set_span, tree_contains_span, find_max_f1_span
 
-NULL = "<NULL>"
-UNK = "<UNK>"
+NULL = "-NULL-"
+UNK = "-UNK-"
 
 
 def bool_(arg):
@@ -31,9 +31,6 @@ def get_args():
     parser.add_argument("--target_dir", default=target_dir)
     parser.add_argument("--min_word_count", default=100, type=int)
     parser.add_argument("--min_char_count", default=500, type=int)
-    parser.add_argument("--max_word_size", default=16, type=int)
-    parser.add_argument("--max_num_sents", default=16, type=int)
-    parser.add_argument("--max_sent_size", default=64, type=int)
     parser.add_argument("--debug", default=False, type=bool_)
     parser.add_argument("--train_ratio", default=0.9, type=int)
     # TODO : put more args here
@@ -41,9 +38,6 @@ def get_args():
 
 
 def get_data(args, data_path, is_train):
-    arg_max_num_sents = args.max_num_sents if is_train else 9999
-    arg_max_sent_size = args.max_sent_size if is_train else 9999
-
     with open(data_path, 'r') as fh:
         d = json.load(fh)
         size = sum(len(article['paragraphs']) for article in d['data'])
@@ -61,6 +55,8 @@ def get_data(args, data_path, is_train):
         cq = []
         x = []
         cx = []
+        ids = []
+        idxs = []
 
         word_counter = Counter()
         char_counter = Counter()
@@ -85,17 +81,11 @@ def get_data(args, data_path, is_train):
                         context_nodes.append(nodes)
                         context_edges.append(edges)
 
-                context_words = [[each[0][:args.max_word_size] for each in nodes] for nodes in context_nodes]
+                context_words = [[each[0] for each in nodes] for nodes in context_nodes]
                 context_chars = [[list(word) for word in sent] for sent in context_words]
                 x_a.append(context_words)
                 cx_a.append(context_chars)
-                word_counter.update(word for sent in context_words for word in sent)
-                char_counter.update(char for sent in context_words for word in sent for char in word)
 
-                if len(context_nodes) > arg_max_num_sents:
-                    continue
-                if max(map(len, context_nodes)) > arg_max_sent_size:
-                    continue
                 max_num_sents = max(max_num_sents, len(context_nodes))
                 max_sent_size = max(max_sent_size, max(map(len, context_nodes)))
                 max_num_words = max(max_num_words, sum(map(len, context_nodes)))
@@ -105,11 +95,16 @@ def get_data(args, data_path, is_train):
                 # context_words, context_tags, context_starts, context_stops = zip(*context_nodes)
                 for qa in para['qas']:
                     question = qa['question']
+                    id_ = qa['id']
                     question_dep = qa['question_dep']
                     if question_dep is None:
                         print("unparsed question (ignoring): {}".format(question))
-                    question_words = [] if question_dep is None else [each[0][:args.max_word_size] for each in question_dep[0]]
+                    question_words = [] if question_dep is None else [each[0] for each in question_dep[0]]
                     question_chars = [[]] if question_dep is None else [list(word) for word in question_words]
+                    word_counter.update(word for sent in context_words for word in sent)
+                    char_counter.update(char for sent in context_words for word in sent for char in word)
+                    word_counter.update(word for word in question_words)
+                    char_counter.update(char for word in question_chars for char in word)
                     max_ques_size = max(max_ques_size, len(question_words))
                     max_ques_word_size = max(max_ques_word_size, max(map(len, question_chars)))
                     bs = []
@@ -119,7 +114,9 @@ def get_data(args, data_path, is_train):
                         # If span is extended further than the sent length
                         if stop_idx[1] > len(context_words[stop_idx[0]]):
                             invalid_stop_idx_counter += 1
-                            break
+                            # FIXME : adhoc (answer being last word), not ignoring single question
+                            start_idx[1] = len(context_words[start_idx[0]]) - 1
+                            stop_idx[1] = start_idx[1] + 1
                         full_span = [start_idx, stop_idx]
                         support_tree = nltk.tree.Tree.fromstring(consts[start_idx[0]])
                         span = (start_idx[1], stop_idx[1])
@@ -134,6 +131,8 @@ def get_data(args, data_path, is_train):
                         q.append(question_words)
                         cq.append(question_chars)
                         y.append(full_span)
+                        ids.append(id_)
+                        idxs.append(len(idxs))
             if args.debug:
                 break
         print("num invalid stop idx: {}".format(invalid_stop_idx_counter))
@@ -164,7 +163,7 @@ def get_data(args, data_path, is_train):
                     'max_word_size': max_word_size,
                     'word_vocab_size': len(wv),
                     'char_vocab_size': len(cv)}
-        data = {'*x': rx, '*cx': rx, 'cq': cq, 'q': q, 'y': y}
+        data = {'*x': rx, '*cx': rx, 'cq': cq, 'q': q, 'y': y, 'ids': ids, 'idxs': idxs}
         shared = {'x': x, 'cx': cx, 'wv': wv, 'cv': cv}
         return data, shared, metadata
 
@@ -179,7 +178,8 @@ def recursive_replace(l, v):
 
 
 def apply(data, shared, wv, cv):
-    data = {'*x': data['*x'], '*cx': data['*cx'], 'cq': recursive_replace(data['cq'], cv), 'q': recursive_replace(data['q'], wv), 'y': data['y']}
+    data = {'*x': data['*x'], '*cx': data['*cx'], 'cq': recursive_replace(data['cq'], cv),
+            'q': recursive_replace(data['q'], wv), 'y': data['y'], 'ids': data['ids'], 'idxs': data['idxs']}
     shared = {'x': recursive_replace(shared['x'], wv), 'cx': recursive_replace(shared['cx'], cv), 'wv': shared['wv'], 'cv': shared['cv']}
     return data, shared
 

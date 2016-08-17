@@ -6,10 +6,16 @@ from collections import defaultdict
 
 import numpy as np
 import tensorflow as tf
+import progressbar as pb
 
 from model.read_data import DataSet, NUM
 from my.tensorflow import average_gradients
-from my.utils import get_pbar
+
+
+def get_pbar(num, prefix=""):
+    assert isinstance(prefix, str)
+    pbar = pb.ProgressBar(widgets=[prefix, pb.Percentage(), pb.Bar(), pb.ETA()], maxval=num)
+    return pbar
 
 
 class BaseRunner(object):

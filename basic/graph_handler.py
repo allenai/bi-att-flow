@@ -34,9 +34,13 @@ class GraphHandler(object):
     def add_summary(self, summary, global_step):
         self.writer.add_summary(summary, global_step)
 
+    def add_summaries(self, summaries, global_step):
+        for summary in summaries:
+            self.add_summary(summary, global_step)
+
     def dump_eval(self, e):
         assert isinstance(e, Evaluation)
-        path = os.path.join(self.config.eval_dir, "{}-{}.json".format(e.data_type, str(e.global_step).zfill(3)))
+        path = os.path.join(self.config.eval_dir, "{}-{}.json".format(e.data_type, str(e.global_step).zfill(6)))
         with open(path, 'w') as fh:
             json.dump(e.dict, fh)
 
