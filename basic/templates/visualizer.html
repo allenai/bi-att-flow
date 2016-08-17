@@ -9,7 +9,7 @@
         $(document).ready(function(){
             $(".att").each(function() {
                 // var val = parseFloat($(this).text());
-                var val = parseFloat($(this).attr("color")) * 100;
+                var val = parseFloat($(this).attr("color"));
                 var scale = chroma.scale(['white', 'red']);
                 var color = scale(val).hex();
                 $(this).attr("bgcolor", color);
@@ -26,6 +26,7 @@
         <tr>
             <th>ID</th>
             <th>Question</th>
+            <th>Answer</th>
             <th>Paragraph</th>
         </tr>
         {% for row in rows %}
@@ -36,6 +37,7 @@
                         {{ qj }}
                     {% endfor %}
                 </td>
+                <td>{{ row.a }}</td>
                 <td>
                     <table>
                     {% for xj, yj, ypj in zip(row.para, row.y, row.yp) %}

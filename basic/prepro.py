@@ -57,6 +57,7 @@ def get_data(args, data_path, is_train):
         cx = []
         ids = []
         idxs = []
+        a = []
 
         word_counter = Counter()
         char_counter = Counter()
@@ -133,6 +134,7 @@ def get_data(args, data_path, is_train):
                         y.append(full_span)
                         ids.append(id_)
                         idxs.append(len(idxs))
+                        a.append(answer['text'])
             if args.debug:
                 break
         print("num invalid stop idx: {}".format(invalid_stop_idx_counter))
@@ -163,7 +165,7 @@ def get_data(args, data_path, is_train):
                     'max_word_size': max_word_size,
                     'word_vocab_size': len(wv),
                     'char_vocab_size': len(cv)}
-        data = {'*x': rx, '*cx': rx, 'cq': cq, 'q': q, 'y': y, 'ids': ids, 'idxs': idxs}
+        data = {'*x': rx, '*cx': rx, 'cq': cq, 'q': q, 'y': y, 'ids': ids, 'idxs': idxs, 'a': a}
         shared = {'x': x, 'cx': cx, 'wv': wv, 'cv': cv}
         return data, shared, metadata
 
@@ -179,7 +181,7 @@ def recursive_replace(l, v):
 
 def apply(data, shared, wv, cv):
     data = {'*x': data['*x'], '*cx': data['*cx'], 'cq': recursive_replace(data['cq'], cv),
-            'q': recursive_replace(data['q'], wv), 'y': data['y'], 'ids': data['ids'], 'idxs': data['idxs']}
+            'q': recursive_replace(data['q'], wv), 'y': data['y'], 'ids': data['ids'], 'idxs': data['idxs'], 'a': data['a']}
     shared = {'x': recursive_replace(shared['x'], wv), 'cx': recursive_replace(shared['cx'], cv), 'wv': shared['wv'], 'cv': shared['cv']}
     return data, shared
 
