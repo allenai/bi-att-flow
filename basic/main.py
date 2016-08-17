@@ -8,7 +8,7 @@ from pprint import pprint
 import tensorflow as tf
 from tqdm import tqdm
 
-from basic.evaluator import AccuracyEvaluator2
+from basic.evaluator import TempEvaluator
 from basic.graph_handler import GraphHandler
 from basic.model import Model
 from basic.trainer import Trainer
@@ -49,7 +49,7 @@ def _train(config):
     # construct model graph and variables (using default graph)
     model = Model(config)
     trainer = Trainer(config, model)
-    evaluator = AccuracyEvaluator2(config, model)
+    evaluator = TempEvaluator(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     # Variables
@@ -85,7 +85,7 @@ def _test(config):
     test_data = read_data(config, 'test')
 
     model = Model(config)
-    evaluator = AccuracyEvaluator2(config, model)
+    evaluator = TempEvaluator(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     sess = tf.Session()
@@ -105,7 +105,7 @@ def _forward(config):
     forward_data = read_data(config, 'forward')
 
     model = Model(config)
-    evaluator = AccuracyEvaluator2(config, model)
+    evaluator = TempEvaluator(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     sess = tf.Session()

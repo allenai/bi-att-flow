@@ -74,7 +74,7 @@ def accuracy2_visualizer(args):
     idx2char_dict = {idx: char for char, idx in cv.items()}
 
     rows = []
-    for i, (idx, yi, ypi) in enumerate(zip(*[eval_[key] for key in ('idxs', 'y', 'yp')])):
+    for i, (idx, yi, y2i, ypi, yp2i) in enumerate(zip(*[eval_[key] for key in ('idxs', 'y', 'y2', 'yp', 'yp2')])):
         id_, cq, rcx, a = (data[key][idx] for key in ('ids', 'cq', '*cx', 'a'))
         cx = shared['cx'][rcx[0]][rcx[1]]
         ques = ["".join(idx2char_dict[idx] for idx in word) for word in cq]
@@ -85,7 +85,9 @@ def accuracy2_visualizer(args):
             'ques': ques,
             'para': para,
             'y': yi,
+            'y2': y2i,
             'yp': ypi,
+            'yp2': yp2i,
             'a': a
                }
         rows.append(row)

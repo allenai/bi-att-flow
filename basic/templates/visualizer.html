@@ -9,7 +9,7 @@
         $(document).ready(function(){
             $(".att").each(function() {
                 // var val = parseFloat($(this).text());
-                var val = parseFloat($(this).attr("color"));
+                var val = parseFloat($(this).attr("color")) * 100;
                 var scale = chroma.scale(['white', 'red']);
                 var color = scale(val).hex();
                 $(this).attr("bgcolor", color);
@@ -40,16 +40,21 @@
                 <td>{{ row.a }}</td>
                 <td>
                     <table>
-                    {% for xj, yj, ypj in zip(row.para, row.y, row.yp) %}
+                    {% for xj, yj, y2j, ypj, yp2j in zip(row.para, row.y, row.y2, row.yp, row.yp2) %}
                         <tr>
-                        {% for xjk, yjk, ypjk in zip(xj, yj, ypj) %}
+                        {% for xjk, yjk, y2jk, ypjk in zip(xj, yj, y2j, ypj) %}
                             <td class="att" color="{{ ypjk }}">
-                            {% if yjk %}
+                            {% if yjk or y2jk %}
                                 <b>{{ xjk }}</b>
                             {% else %}
                                 {{ xjk }}
                             {% endif %}
                             </td>
+                        {% endfor %}
+                        </tr>
+                        <tr>
+                        {% for xjk, yp2jk in zip(xj, yp2j) %}
+                            <td class="att" color="{{ yp2jk }}">-</td>
                         {% endfor %}
                         </tr>
                     {% endfor %}

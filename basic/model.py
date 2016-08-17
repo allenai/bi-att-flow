@@ -26,6 +26,7 @@ class Model(object):
         self.cq = tf.placeholder('int32', [None, JQ, W], name='cq')
         self.q_mask = tf.placeholder('bool', [None, JQ], name='q_mask')
         self.y = tf.placeholder('bool', [None, M, JX], name='y')
+        self.y2 = tf.placeholder('bool', [None, M, JX], name='y2')
         self.is_train = tf.placeholder('bool', [], name='is_train')
 
         # Define misc
@@ -94,8 +95,11 @@ class Model(object):
             dot = tf.reduce_sum(u * tf.tanh(linear(h, 2*d, True, wd=config.wd, scope='dot')), 3)
         else:
             dot = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot')
+            dot2 = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot2')
         self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
+        self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
         self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
+        self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
 
     def _build_loss(self):
         config = self.config
@@ -105,6 +109,10 @@ class Model(object):
         ce_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
             self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float')))
         tf.add_to_collection('losses', ce_loss)
+        ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
+            self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
+        tf.add_to_collection("losses", ce_loss2)
+
         self.loss = tf.add_n(tf.get_collection('losses'), name='loss')
         tf.scalar_summary(self.loss.op.name, self.loss)
         tf.add_to_collection('ema/scalar', self.loss)
@@ -175,10 +183,14 @@ class Model(object):
 
         if supervised:
             y = np.zeros([N, M, JX], dtype='bool')
+            y2 = np.zeros([N, M, JX], dtype='bool')
             feed_dict[self.y] = y
+            feed_dict[self.y2] = y2
             for i, yi in enumerate(batch.data['y']):
                 start_idx, stop_idx = yi
                 j, k = start_idx
-                y[i, j, k] = True
+                y[i, j, k-1] = True
+                j, l = stop_idx
+                y2[i, j, l-1] = True
 
         return feed_dict
