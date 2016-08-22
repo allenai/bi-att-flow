@@ -6,10 +6,10 @@ from corenlp_interface import CoreNLPInterface
 
 in_path = sys.argv[1]
 out_path = sys.argv[2]
-port = int(sys.argv[3])
+url = sys.argv[3]
+port = int(sys.argv[4])
 data = json.load(open(in_path, 'r'))
 
-url = "vision-server2.corp.ai2"
 h = CoreNLPInterface(url, port)
 
 
@@ -22,7 +22,7 @@ def find_all(a_str, sub):
         start += len(sub)  # use start += 1 to find overlapping matches
 
 
-def toHex(s):
+def to_hex(s):
     return " ".join(map(hex, map(ord, s)))
 
 
@@ -33,7 +33,7 @@ def handle_nobreak(cand, text):
         return cand
     elif cand == text.replace(u'\u00A0', ' '):
         return text
-    raise Exception("{} '{}' {} '{}'".format(cand, toHex(cand), text, toHex(text)))
+    raise Exception("{} '{}' {} '{}'".format(cand, to_hex(cand), text, to_hex(text)))
 
 
 # resolving unicode complication
