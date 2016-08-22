@@ -151,6 +151,8 @@ class TempEvaluation(AccuracyEvaluation):
         self.dict['yp2'] = yp2
         self.dict['f1s'] = f1s
         self.dict['f1'] = self.f1
+        f1_summary = tf.Summary(value=[tf.Summary.Value(tag='dev/f1', simple_value=self.f1)])
+        self.summaries.append(f1_summary)
 
     def __add__(self, other):
         if other == 0:
@@ -192,8 +194,8 @@ class TempEvaluator(LabeledEvaluator):
 
     @staticmethod
     def span_f1(yi, y2i, ypi, yp2i):
-        true_span = (np.argmax(yi.flatten()), np.argmax(y2i.flatten()))
-        pred_span = (np.argmax(ypi.flatten()), np.argmax(yp2i.flatten()))
+        true_span = (np.argmax(yi.flatten()), np.argmax(y2i.flatten())+1)
+        pred_span = (np.argmax(ypi.flatten()), np.argmax(yp2i.flatten())+1)
         f1 = span_f1(true_span, pred_span)
         return f1
 

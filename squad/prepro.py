@@ -40,6 +40,9 @@ def get_args():
 
 
 def prepro(args):
+    if os.path.exists(args.target_dir):
+        os.makedirs(args.target_dir)
+
     data_train, shared_train = prepro_each(args, 'train', 0.0, args.train_ratio)
     data_dev, shared_dev = prepro_each(args, 'train', args.train_ratio, 1.0)
     data_test, shared_test = prepro_each(args, 'dev')
@@ -84,6 +87,9 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
     start_ai = int(round(len(source_data['data']) * start_ratio))
     stop_ai = int(round(len(source_data['data']) * stop_ratio))
     for ai, article in enumerate(tqdm(source_data['data'][start_ai:stop_ai])):
+        xp, cxp = [], []
+        x.append(xp)
+        cx.append(cxp)
         for pi, para in enumerate(article['paragraphs']):
             xi = []
             for dep in para['deps']:
@@ -92,8 +98,8 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
                 else:
                     xi.append([node[0] for node in dep[0]])
             cxi = [[list(xijk) for xijk in xij] for xij in xi]
-            x.append(xi)
-            cx.append(cxi)
+            xp.append(xi)
+            cxp.append(cxi)
 
             for xij in xi:
                 for xijk in xij:
@@ -102,6 +108,8 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
                         char_counter[xijkl] += len(para['qas'])
 
             rxi = [ai, pi]
+            assert len(x) - 1 == ai
+            assert len(x[ai]) - 1 == pi
             for qa in para['qas']:
                 dep = qa['dep']
                 qi = [] if dep is None else [node[0] for node in dep[0]]

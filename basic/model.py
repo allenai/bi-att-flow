@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 
 from basic.read_data import DataSet
-from my.tensorflow import exp_mask
+from my.tensorflow import exp_mask, get_initializer
 from my.tensorflow.nn import linear
 from my.tensorflow.rnn import bidirectional_dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper
@@ -68,22 +68,25 @@ class Model(object):
             qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, d])
 
         with tf.variable_scope("word_emb"):
-            word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, d], dtype='float')
-            Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
-            Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
+            if config.mode == 'train':
+                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, 100], initializer=get_initializer(config.emb_mat))
+            else:
+                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float')
+            Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, ]
+            Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, ]
 
         xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, 2d]
         qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
 
-        with tf.variable_scope("rnn"):
-            cell = BasicLSTMCell(2*d, state_is_tuple=True)
-            cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
-            x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
-            q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
+        cell = BasicLSTMCell(d, state_is_tuple=True)
+        cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
+        x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
+        q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float')  # [N, M, JX, 2d]
+        with tf.variable_scope("rnn1"):
+            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='start')  # [N, M, JX, 2d]
             tf.get_variable_scope().reuse_variables()
-            (fw_us, bw_us), (_, (fw_u, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float')  # [N, J, d], [N, d]
+            (fw_us, bw_us), (_, (fw_u, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='start')  # [N, J, d], [N, d]
             h = fw_h + bw_h
             if config.pool_rnn:
                 u = tf.reduce_max(fw_us + bw_us, 1)  # [N, d]
@@ -91,15 +94,13 @@ class Model(object):
                 u = fw_u + bw_u
 
         u = tf.expand_dims(tf.expand_dims(u, 1), 1)  # [N, 1, 1, d]
-        if config.tanh_dot:
-            dot = tf.reduce_sum(u * tf.tanh(linear(h, 2*d, True, wd=config.wd, scope='dot')), 3)
-        else:
-            dot = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot')
-            dot2 = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot2')
+
+        dot = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot')
+        # dot2 = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot2')
         self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
-        self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
+        # self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
         self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
-        self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
+        # self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
 
     def _build_loss(self):
         config = self.config
@@ -109,9 +110,11 @@ class Model(object):
         ce_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
             self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float')))
         tf.add_to_collection('losses', ce_loss)
+        """
         ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
             self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
         tf.add_to_collection("losses", ce_loss2)
+        """
 
         self.loss = tf.add_n(tf.get_collection('losses'), name='loss')
         tf.scalar_summary(self.loss.op.name, self.loss)
@@ -159,27 +162,44 @@ class Model(object):
         feed_dict[self.cq] = cq
         feed_dict[self.q_mask] = q_mask
         feed_dict[self.is_train] = is_train
+
+        def _get_word(word):
+            d = batch.shared['word2idx']
+            if word in d:
+                return d[word]
+            return 1
+
+        def _get_char(char):
+            d = batch.shared['char2idx']
+            if char in d:
+                return d[char]
+            return 1
+
         for i, xi in enumerate(batch.data['x']):
             for j, xij in enumerate(xi):
                 for k, xijk in enumerate(xij):
-                    x[i, j, k] = xijk
+                    x[i, j, k] = _get_word(xijk)
                     x_mask[i, j, k] = True
 
         for i, cxi in enumerate(batch.data['cx']):
             for j, cxij in enumerate(cxi):
                 for k, cxijk in enumerate(cxij):
                     for l, cxijkl in enumerate(cxijk):
-                        cx[i, j, k, l] = cxijkl
+                        cx[i, j, k, l] = _get_char(cxijkl)
+                        if l + 1 == config.max_word_size:
+                            break
 
         for i, qi in enumerate(batch.data['q']):
             for j, qij in enumerate(qi):
-                q[i, j] = qij
+                q[i, j] = _get_word(qij)
                 q_mask[i, j] = True
 
         for i, cqi in enumerate(batch.data['cq']):
             for j, cqij in enumerate(cqi):
                 for k, cqijk in enumerate(cqij):
-                    cq[i, j, k] = cqijk
+                    cq[i, j, k] = _get_char(cqijk)
+                    if k + 1 == config.max_word_size:
+                        break
 
         if supervised:
             y = np.zeros([N, M, JX], dtype='bool')
@@ -189,8 +209,8 @@ class Model(object):
             for i, yi in enumerate(batch.data['y']):
                 start_idx, stop_idx = yi
                 j, k = start_idx
-                y[i, j, k-1] = True
-                j, l = stop_idx
-                y2[i, j, l-1] = True
+                y[i, j, k] = True
+                j2, k2 = stop_idx
+                y2[i, j2, k2-1] = True
 
         return feed_dict

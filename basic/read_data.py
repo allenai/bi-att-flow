@@ -15,7 +15,7 @@ class DataSet(object):
         self.shared = shared
         self.valid_idxs = range(self.num_examples) if valid_idxs is None else valid_idxs
 
-    def get_batches(self, batch_size, num_batches=None, shuffle=False, data_filter=None):
+    def get_batches(self, batch_size, num_batches=None, shuffle=False):
         num_batches_per_epoch = int(math.ceil(self.num_examples / batch_size))
         if num_batches is None:
             num_batches = num_batches_per_epoch
@@ -39,6 +39,11 @@ class DataSet(object):
             yield batch_idxs, batch_ds
 
 
+class SquadDataSet(DataSet):
+    def __init__(self, data, data_type, shared=None, valid_idxs=None):
+        super(SquadDataSet, self).__init__(data, data_type, shared=shared, valid_idxs=valid_idxs)
+
+
 def load_metadata(config, data_type):
     metadata_path = os.path.join(config.data_dir, "metadata_{}.json".format(data_type))
     with open(metadata_path, 'r') as fh:
@@ -48,7 +53,7 @@ def load_metadata(config, data_type):
         return metadata
 
 
-def read_data(config, data_type, data_filter=None):
+def read_data(config, data_type, ref=None, data_filter=None):
     data_path = os.path.join(config.data_dir, "data_{}.json".format(data_type))
     shared_path = os.path.join(config.data_dir, "shared_{}.json".format(data_type))
     with open(data_path, 'r') as fh:
@@ -56,8 +61,9 @@ def read_data(config, data_type, data_filter=None):
     with open(shared_path, 'r') as fh:
         shared = json.load(fh)
 
+    num_examples = len(next(iter(data.values())))
     if data_filter is None:
-        valid_idxs = len(next(iter(data)))
+        valid_idxs = range(num_examples)
     else:
         mask = []
         keys = data.keys()
@@ -67,17 +73,30 @@ def read_data(config, data_type, data_filter=None):
             mask.append(data_filter(each, shared))
         valid_idxs = [idx for idx in range(len(mask)) if mask[idx]]
 
-    print("Loaded {} examples from {}".format(len(valid_idxs), data_type))
+    print("Loaded {}/{} examples from {}".format(len(valid_idxs), num_examples, data_type))
+
+    if ref is None:
+        shared['word2idx'] = {word: idx + 2 for idx, word in
+                              enumerate(word for word, count in shared['word_counter'].items()
+                                        if count > config.word_count_th)}
+        shared['char2idx'] = {char: idx + 2 for idx, char in
+                              enumerate(char for char, count in shared['char_counter'].items()
+                                        if count > config.char_count_th)}
+        NULL = "-NULL-"
+        UNK = "-UNK-"
+        shared['word2idx'][NULL] = 0
+        shared['word2idx'][UNK] = 1
+        shared['char2idx'][NULL] = 0
+        shared['char2idx'][UNK] = 1
+    else:
+        shared['word2idx'] = ref.shared['word2idx']
+        shared['char2idx'] = ref.shared['char2idx']
 
     data_set = DataSet(data, data_type, shared=shared, valid_idxs=valid_idxs)
     return data_set
 
 
 def get_squad_data_filter(config):
-    config.max_num_sents = config.num_sents_th
-    config.max_ques_size = config.ques_size_th
-    config.max_sent_size = config.sent_size_th
-
     def data_filter(data_point, shared):
         assert shared is not None
         rx, rcx, q, cq, y = (data_point[key] for key in ('*x', '*cx', 'q', 'cq', 'y'))
@@ -92,3 +111,28 @@ def get_squad_data_filter(config):
         return True
     return data_filter
 
+
+def update_config(config, data_sets):
+    config.max_num_sents = 0
+    config.max_sent_size = 0
+    config.max_ques_size = 0
+    config.max_word_size = 0
+    for data_set in data_sets:
+        data = data_set.data
+        shared = data_set.shared
+        for idx in data_set.valid_idxs:
+            rx = data['*x'][idx]
+            q = data['q'][idx]
+            sents = shared['x'][rx[0]][rx[1]]
+            config.max_num_sents = max(config.max_num_sents, len(sents))
+            config.max_sent_size = max(config.max_sent_size, max(map(len, sents)))
+            config.max_word_size = max(config.max_word_size, max(len(word) for sent in sents for word in sent))
+            if len(q) > 0:
+                config.max_ques_size = max(config.max_ques_size, len(q))
+                config.max_word_size = max(config.max_word_size, max(len(word) for word in q))
+
+    config.max_word_size = min(config.max_word_size, config.word_size_th)
+
+    config.char_vocab_size = len(data_sets[0].shared['char2idx'])
+    config.word_vec_size = len(next(iter(data_sets[0].shared['word2vec'].values())))
+    config.word_vocab_size = len(data_sets[0].shared['word2idx'])

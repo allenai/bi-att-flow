@@ -9,7 +9,7 @@
         $(document).ready(function(){
             $(".att").each(function() {
                 // var val = parseFloat($(this).text());
-                var val = parseFloat($(this).attr("color")) * 100;
+                var val = parseFloat($(this).attr("color"));
                 var scale = chroma.scale(['white', 'red']);
                 var color = scale(val).hex();
                 $(this).attr("bgcolor", color);

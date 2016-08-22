@@ -51,14 +51,16 @@ def span_overlap(s1, s2):
 
 def span_prec(true_span, pred_span):
     overlap = span_overlap(true_span, pred_span)
-    overlap_size = 0 if overlap is None else span_len(overlap)
-    return overlap_size / span_len(pred_span)
+    if overlap is None:
+        return 0
+    return span_len(overlap) / span_len(pred_span)
 
 
 def span_recall(true_span, pred_span):
     overlap = span_overlap(true_span, pred_span)
-    overlap_size = 0 if overlap is None else span_len(overlap)
-    return overlap_size / span_len(true_span)
+    if overlap is None:
+        return 0
+    return span_len(overlap) / span_len(true_span)
 
 
 def span_f1(true_span, pred_span):

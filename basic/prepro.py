@@ -27,14 +27,34 @@ def get_args():
     home = os.path.expanduser("~")
     source_dir = os.path.join(home, "data", "squad")
     target_dir = "data/squad"
+    glove_dir = os.path.join(home, "data", "glove")
     parser.add_argument("--source_dir", default=source_dir)
     parser.add_argument("--target_dir", default=target_dir)
     parser.add_argument("--min_word_count", default=100, type=int)
     parser.add_argument("--min_char_count", default=500, type=int)
     parser.add_argument("--debug", default=False, type=bool_)
     parser.add_argument("--train_ratio", default=0.9, type=int)
+    parser.add_argument("--glove_corpus", default="6B")
+    parser.add_argument("--glove_dir", default=glove_dir)
+    parser.add_argument("--glove_word_size", default=100, type=int)
     # TODO : put more args here
     return parser.parse_args()
+
+
+def get_idx2vec_dict(args, wv):
+    glove_path = os.path.join(args.glove_dir, "glove.{}.{}d.txt".format(args.glove_corpus, args.glove_word_size))
+    sizes = {'6B': int(4e5), '42B': int(1.9e6), '840B': int(2.2e6), '2B': int(1.2e6)}
+    total = sizes[args.glove_corpus]
+    idx2vec_dict = {}
+    with open(glove_path, 'r') as fh:
+        for line in tqdm(fh, total=total):
+            array = line.lstrip().rstrip().split(" ")
+            word = array[0]
+            if word in wv:
+                vector = list(map(float, array[1:]))
+                idx2vec_dict[wv[word]] = vector
+    print("{}/{} of word vocab have corresponding vectors in {}".format(len(idx2vec_dict), len(wv), glove_path))
+    return idx2vec_dict
 
 
 def get_data(args, data_path, is_train):
@@ -102,9 +122,9 @@ def get_data(args, data_path, is_train):
                         print("unparsed question (ignoring): {}".format(question))
                     question_words = [] if question_dep is None else [each[0] for each in question_dep[0]]
                     question_chars = [[]] if question_dep is None else [list(word) for word in question_words]
-                    word_counter.update(word for sent in context_words for word in sent)
+                    word_counter.update(word.lower() for sent in context_words for word in sent)
                     char_counter.update(char for sent in context_words for word in sent for char in word)
-                    word_counter.update(word for word in question_words)
+                    word_counter.update(word.lower() for word in question_words)
                     char_counter.update(char for word in question_chars for char in word)
                     max_ques_size = max(max_ques_size, len(question_words))
                     max_ques_word_size = max(max_ques_word_size, max(map(len, question_chars)))
@@ -113,7 +133,10 @@ def get_data(args, data_path, is_train):
                         start_idx = answer['start_idx']
                         stop_idx = answer['stop_idx']
                         # If span is extended further than the sent length
-                        if stop_idx[1] > len(context_words[stop_idx[0]]):
+                        if start_idx[1] >= len(context_nodes[start_idx[0]]) or stop_idx[1] > len(context_words[stop_idx[0]]):
+                            print(ai, pi)
+                            print(context_nodes[start_idx[0]])
+                            print(answer['text'])
                             invalid_stop_idx_counter += 1
                             # FIXME : adhoc (answer being last word), not ignoring single question
                             start_idx[1] = len(context_words[start_idx[0]]) - 1
@@ -170,8 +193,10 @@ def get_data(args, data_path, is_train):
         return data, shared, metadata
 
 
-def recursive_replace(l, v):
+def recursive_replace(l, v, lower=False):
     if isinstance(l, str):
+        if lower:
+            l = l.lower()
         if l in v:
             return v[l]
         else:
@@ -181,8 +206,8 @@ def recursive_replace(l, v):
 
 def apply(data, shared, wv, cv):
     data = {'*x': data['*x'], '*cx': data['*cx'], 'cq': recursive_replace(data['cq'], cv),
-            'q': recursive_replace(data['q'], wv), 'y': data['y'], 'ids': data['ids'], 'idxs': data['idxs'], 'a': data['a']}
-    shared = {'x': recursive_replace(shared['x'], wv), 'cx': recursive_replace(shared['cx'], cv), 'wv': shared['wv'], 'cv': shared['cv']}
+            'q': recursive_replace(data['q'], wv, lower=True), 'y': data['y'], 'ids': data['ids'], 'idxs': data['idxs'], 'a': data['a']}
+    shared = {'x': recursive_replace(shared['x'], wv, lower=True), 'cx': recursive_replace(shared['cx'], cv), 'wv': shared['wv'], 'cv': shared['cv']}
     return data, shared
 
 
@@ -208,6 +233,9 @@ def prepro(args):
     shared_test['cv'] = cv
     metadata_test['word_vocab_size'] = metadata_train['word_vocab_size']
     metadata_test['char_vocab_size'] = metadata_train['char_vocab_size']
+
+    idx2vec_dict = get_idx2vec_dict(args, wv)
+    shared_train['idx2vec'] = idx2vec_dict
 
     if not os.path.exists(args.target_dir):
         os.makedirs(args.target_dir)

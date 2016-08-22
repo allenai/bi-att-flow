@@ -7,13 +7,14 @@ from pprint import pprint
 
 import tensorflow as tf
 from tqdm import tqdm
+import numpy as np
 
-from basic.evaluator import TempEvaluator
+from basic.evaluator import AccuracyEvaluator2
 from basic.graph_handler import GraphHandler
 from basic.model import Model
 from basic.trainer import Trainer
 
-from basic.read_data import load_metadata, read_data, get_squad_data_filter
+from basic.read_data import load_metadata, read_data, get_squad_data_filter, update_config
 
 
 def main(config):
@@ -38,18 +39,28 @@ def _config_draft(config):
 
 
 def _train(config):
-    load_metadata(config, 'train')  # this updates the config file according to metadata file
-    _config_draft(config)
-    pprint(config.__flags, indent=2)
+    # load_metadata(config, 'train')  # this updates the config file according to metadata file
 
     data_filter = get_squad_data_filter(config)
     train_data = read_data(config, 'train', data_filter=data_filter)
-    dev_data = read_data(config, 'dev', data_filter=data_filter)
+    dev_data = read_data(config, 'dev', ref=train_data, data_filter=data_filter)
+    update_config(config, [train_data, dev_data])
+
+    _config_draft(config)
+
+    word2vec_dict = train_data.shared['word2vec']
+    word2idx_dict = train_data.shared['word2idx']
+    idx2vec_dict = {word2idx_dict[word]: vec for word, vec in word2vec_dict.items() if word in word2idx_dict}
+    emb_mat = np.array([idx2vec_dict[idx] if idx in idx2vec_dict
+                        else np.random.multivariate_normal(np.zeros(config.word_vec_size), np.eye(config.word_vec_size))
+                        for idx in range(config.word_vocab_size)])
+    config.emb_mat = emb_mat
 
     # construct model graph and variables (using default graph)
+    pprint(config.__flags, indent=2)
     model = Model(config)
     trainer = Trainer(config, model)
-    evaluator = TempEvaluator(config, model)
+    evaluator = AccuracyEvaluator2(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     # Variables
@@ -85,7 +96,7 @@ def _test(config):
     test_data = read_data(config, 'test')
 
     model = Model(config)
-    evaluator = TempEvaluator(config, model)
+    evaluator = AccuracyEvaluator2(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     sess = tf.Session()
@@ -105,7 +116,7 @@ def _forward(config):
     forward_data = read_data(config, 'forward')
 
     model = Model(config)
-    evaluator = TempEvaluator(config, model)
+    evaluator = AccuracyEvaluator2(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     sess = tf.Session()
