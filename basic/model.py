@@ -72,8 +72,10 @@ class Model(object):
                 word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
             else:
                 word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
-            Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, ]
-            Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, ]
+            Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
+            Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
+            # Ax = linear([Ax], d, False, scope='Ax_reshape')
+            # Aq = linear([Aq], d, False, scope='Aq_reshape')
 
         xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, 2d]
         qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
@@ -87,13 +89,10 @@ class Model(object):
             (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='start')  # [N, M, JX, 2d]
             tf.get_variable_scope().reuse_variables()
             (fw_us, bw_us), (_, (fw_u, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='start')  # [N, J, d], [N, d]
-            h = fw_h + bw_h
-            if config.pool_rnn:
-                u = tf.reduce_max(fw_us + bw_us, 1)  # [N, d]
-            else:
-                u = fw_u + bw_u
+            h = tf.concat(3, [fw_h, bw_h])
+            u = tf.concat(1, [fw_u, bw_u])
 
-        u = tf.expand_dims(tf.expand_dims(u, 1), 1)  # [N, 1, 1, d]
+        u = tf.expand_dims(tf.expand_dims(u, 1), 1)  # [N, 1, 1, 4d]
 
         dot = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot')
         # dot2 = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot2')

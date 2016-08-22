@@ -88,8 +88,6 @@ class Tower(BaseTower):
             Ax = tf.concat(3, [Ax, Ax_c])  # [N, M, J, w+d]
             Aq = tf.concat(2, [Aq, Aq_c])  # [N, K, w+d]
 
-
-
             q_length = tf.reduce_sum(tf.cast(q_mask, 'int32'), 1)  # [N]
             D = word_vec_size + d
             cell = BasicLSTMCell(D, state_is_tuple=True)
