@@ -70,25 +70,23 @@ def accuracy2_visualizer(args):
     shared_path = os.path.join(data_dir, "shared_{}.json".format(data_type))
     data = json.load(open(data_path, 'r'))
     shared = json.load(open(shared_path, 'r'))
-    cv = shared['cv']
-    idx2char_dict = {idx: char for char, idx in cv.items()}
 
     rows = []
-    for i, (idx, yi, y2i, ypi, yp2i) in enumerate(zip(*[eval_[key] for key in ('idxs', 'y', 'y2', 'yp', 'yp2')])):
-        id_, cq, rcx, a = (data[key][idx] for key in ('ids', 'cq', '*cx', 'a'))
-        cx = shared['cx'][rcx[0]][rcx[1]]
-        ques = ["".join(idx2char_dict[idx] for idx in word) for word in cq]
-        para = [["".join(idx2char_dict[idx] for idx in word) for word in sent] for sent in cx]
+    for i, (idx, yi, ypi) in enumerate(zip(*[eval_[key] for key in ('idxs', 'y', 'yp')])):
+        id_, q, rx = (data[key][idx] for key in ('ids', 'q', '*x'))
+        x = shared['x'][rx[0]][rx[1]]
+        ques = [" ".join(q)]
+        para = [[word for word in sent] for sent in x]
         row = {
             'id': id_,
             'title': "Hello world!",
             'ques': ques,
             'para': para,
             'y': yi,
-            'y2': y2i,
+            'y2': yi,
             'yp': ypi,
-            'yp2': yp2i,
-            'a': a
+            'yp2': ypi,
+            'a': ""
                }
         rows.append(row)
 

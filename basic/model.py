@@ -69,9 +69,9 @@ class Model(object):
 
         with tf.variable_scope("word_emb"):
             if config.mode == 'train':
-                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, 100], initializer=get_initializer(config.emb_mat))
+                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
             else:
-                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float')
+                word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
             Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, ]
             Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, ]
 

@@ -40,7 +40,7 @@ def get_args():
 
 
 def prepro(args):
-    if os.path.exists(args.target_dir):
+    if not os.path.exists(args.target_dir):
         os.makedirs(args.target_dir)
 
     data_train, shared_train = prepro_each(args, 'train', 0.0, args.train_ratio)
@@ -69,9 +69,16 @@ def get_word2vec(args, word_counter):
         for line in tqdm(fh, total=total):
             array = line.lstrip().rstrip().split(" ")
             word = array[0]
+            vector = list(map(float, array[1:]))
             if word in word_counter:
-                vector = list(map(float, array[1:]))
                 word2vec_dict[word] = vector
+            elif word.capitalize() in word_counter:
+                word2vec_dict[word.capitalize()] = vector
+            elif word.lower() in word_counter:
+                word2vec_dict[word.lower()] = vector
+            elif word.upper() in word_counter:
+                word2vec_dict[word.upper()] = vector
+
     print("{}/{} of word vocab have corresponding vectors in {}".format(len(word2vec_dict), len(word_counter), glove_path))
     return word2vec_dict
 
@@ -133,6 +140,8 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
                         word_counter[qij] += 1
                         for qijk in qij:
                             char_counter[qijk] += 1
+
+                    break
 
     word2vec_dict = get_word2vec(args, word_counter)
 

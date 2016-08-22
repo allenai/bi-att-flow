@@ -53,7 +53,7 @@ def load_metadata(config, data_type):
         return metadata
 
 
-def read_data(config, data_type, ref=None, data_filter=None):
+def read_data(config, data_type, ref, data_filter=None):
     data_path = os.path.join(config.data_dir, "data_{}.json".format(data_type))
     shared_path = os.path.join(config.data_dir, "shared_{}.json".format(data_type))
     with open(data_path, 'r') as fh:
@@ -75,7 +75,8 @@ def read_data(config, data_type, ref=None, data_filter=None):
 
     print("Loaded {}/{} examples from {}".format(len(valid_idxs), num_examples, data_type))
 
-    if ref is None:
+    shared_path = os.path.join(config.out_dir, "shared.json")
+    if not ref:
         shared['word2idx'] = {word: idx + 2 for idx, word in
                               enumerate(word for word, count in shared['word_counter'].items()
                                         if count > config.word_count_th)}
@@ -88,9 +89,11 @@ def read_data(config, data_type, ref=None, data_filter=None):
         shared['word2idx'][UNK] = 1
         shared['char2idx'][NULL] = 0
         shared['char2idx'][UNK] = 1
+        json.dump({'word2idx': shared['word2idx'], 'char2idx': shared['char2idx']}, open(shared_path, 'w'))
     else:
-        shared['word2idx'] = ref.shared['word2idx']
-        shared['char2idx'] = ref.shared['char2idx']
+        new_shared = json.load(open(shared_path, 'r'))
+        for key, val in new_shared.items():
+            shared[key] = val
 
     data_set = DataSet(data, data_type, shared=shared, valid_idxs=valid_idxs)
     return data_set
@@ -134,5 +137,5 @@ def update_config(config, data_sets):
     config.max_word_size = min(config.max_word_size, config.word_size_th)
 
     config.char_vocab_size = len(data_sets[0].shared['char2idx'])
-    config.word_vec_size = len(next(iter(data_sets[0].shared['word2vec'].values())))
+    config.word_emb_size = len(next(iter(data_sets[0].shared['word2vec'].values())))
     config.word_vocab_size = len(data_sets[0].shared['word2idx'])

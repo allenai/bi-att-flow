@@ -42,8 +42,8 @@ def _train(config):
     # load_metadata(config, 'train')  # this updates the config file according to metadata file
 
     data_filter = get_squad_data_filter(config)
-    train_data = read_data(config, 'train', data_filter=data_filter)
-    dev_data = read_data(config, 'dev', ref=train_data, data_filter=data_filter)
+    train_data = read_data(config, 'train', False, data_filter=data_filter)
+    dev_data = read_data(config, 'dev', True, data_filter=data_filter)
     update_config(config, [train_data, dev_data])
 
     _config_draft(config)
@@ -51,6 +51,7 @@ def _train(config):
     word2vec_dict = train_data.shared['word2vec']
     word2idx_dict = train_data.shared['word2idx']
     idx2vec_dict = {word2idx_dict[word]: vec for word, vec in word2vec_dict.items() if word in word2idx_dict}
+    print("{}/{} unique words have corresponding glove vectors.".format(len(idx2vec_dict), len(word2idx_dict)))
     emb_mat = np.array([idx2vec_dict[idx] if idx in idx2vec_dict
                         else np.random.multivariate_normal(np.zeros(config.word_vec_size), np.eye(config.word_vec_size))
                         for idx in range(config.word_vocab_size)])
@@ -78,7 +79,9 @@ def _train(config):
 
         # Occasional evaluation and saving
         if global_step % config.eval_period == 0:
-            num_batches = config.eval_num_batches or math.ceil(dev_data.num_examples / config.batch_size)
+            num_batches = math.ceil(dev_data.num_examples / config.batch_size)
+            if 0 < config.eval_num_batches < num_batches:
+                num_batches = config.eval_num_batches
             e = evaluator.get_evaluation_from_batches(
                 sess, tqdm(dev_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
             graph_handler.add_summaries(e.summaries, global_step)
@@ -89,11 +92,10 @@ def _train(config):
 
 
 def _test(config):
-    load_metadata(config, 'test')  # this updates the config file according to metadata file
-    _config_draft(config)
     # pprint(config.__flag, indent=2)
-
-    test_data = read_data(config, 'test')
+    test_data = read_data(config, 'test', True)
+    update_config(config, [test_data])
+    _config_draft(config)
 
     model = Model(config)
     evaluator = AccuracyEvaluator2(config, model)
