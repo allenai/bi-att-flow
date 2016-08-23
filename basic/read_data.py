@@ -9,11 +9,12 @@ from my.utils import index
 
 class DataSet(object):
     def __init__(self, data, data_type, shared=None, valid_idxs=None):
-        self.num_examples = len(next(iter(data.values())))
+        total_num_examples = len(next(iter(data.values())))
         self.data = data  # e.g. {'X': [0, 1, 2], 'Y': [2, 3, 4]}
         self.data_type = data_type
         self.shared = shared
-        self.valid_idxs = range(self.num_examples) if valid_idxs is None else valid_idxs
+        self.valid_idxs = range(total_num_examples) if valid_idxs is None else valid_idxs
+        self.num_examples = len(self.valid_idxs)
 
     def get_batches(self, batch_size, num_batches=None, shuffle=False):
         num_batches_per_epoch = int(math.ceil(self.num_examples / batch_size))
