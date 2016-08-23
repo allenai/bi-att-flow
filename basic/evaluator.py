@@ -1,12 +1,8 @@
-import json
-import os
-
-import itertools
 import numpy as np
 import tensorflow as tf
 
 from basic.read_data import DataSet
-from nltk_utils import span_prec, span_f1
+from my.nltk_utils import span_f1
 
 
 class Evaluation(object):

@@ -1,19 +1,14 @@
 import argparse
+import itertools
 import json
 import logging
 import os
-
-import itertools
-import numpy as np
-import nltk
 from collections import OrderedDict, Counter
-from tqdm import tqdm
-import matplotlib.pyplot as plt
+
 import networkx as nx
+from tqdm import tqdm
 
-from corenlp_interface import CoreNLPInterface
-
-import re
+from my.corenlp_interface import CoreNLPInterface
 
 UNK = "<UNK>"
 NULL = "<NULL>"

@@ -89,7 +89,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
 
     q, cq, y, rx, rcx, ids, idxs = [], [], [], [], [], [], []
     x, cx = [], []
-    word_counter, char_counter = Counter(), Counter()
+    word_counter, char_counter, lower_word_counter = Counter(), Counter(), Counter()
 
     start_ai = int(round(len(source_data['data']) * start_ratio))
     stop_ai = int(round(len(source_data['data']) * stop_ratio))
@@ -111,6 +111,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
             for xij in xi:
                 for xijk in xij:
                     word_counter[xijk] += len(para['qas'])
+                    lower_word_counter[xijk.lower()] += len(para['qas'])
                     for xijkl in xijk:
                         char_counter[xijkl] += len(para['qas'])
 
@@ -138,15 +139,19 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
 
                     for qij in qi:
                         word_counter[qij] += 1
+                        lower_word_counter[qij.lower()] += 1
                         for qijk in qij:
                             char_counter[qijk] += 1
 
                     break
 
     word2vec_dict = get_word2vec(args, word_counter)
+    lower_word2vec_dict = get_word2vec(args, lower_word_counter)
 
     data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, 'idxs': idxs, 'ids': ids}
-    shared = {'x': x, 'cx': cx, 'word_counter': word_counter, 'char_counter': char_counter, 'word2vec': word2vec_dict}
+    shared = {'x': x, 'cx': cx,
+              'word_counter': word_counter, 'char_counter': char_counter, 'lower_word_counter': lower_word_counter,
+              'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dict}
 
     return data, shared
 

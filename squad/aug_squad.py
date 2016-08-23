@@ -1,8 +1,9 @@
-from tqdm import tqdm
 import json
 import sys
 
-from corenlp_interface import CoreNLPInterface
+from tqdm import tqdm
+
+from my.corenlp_interface import CoreNLPInterface
 
 in_path = sys.argv[1]
 out_path = sys.argv[2]

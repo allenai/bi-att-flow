@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import numpy as np
+from tqdm import tqdm
 
 from jinja2 import Environment, FileSystemLoader
 
