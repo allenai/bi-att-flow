@@ -94,7 +94,7 @@ class Model(object):
 
         u = tf.expand_dims(tf.expand_dims(u, 1), 1)  # [N, 1, 1, 4d]
 
-        dot = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot')
+        dot = linear(h * u, 1, True, squeeze=True, scope='dot')
         # dot2 = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot2')
         self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
         # self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
