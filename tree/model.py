@@ -164,8 +164,9 @@ class Model(object):
 
         def _get_word(word):
             d = batch.shared['word2idx']
-            if word in d:
-                return d[word]
+            for each in (word, word.lower(), word.capitalize(), word.upper()):
+                if each in d:
+                    return d[each]
             return 1
 
         def _get_char(char):

@@ -9,7 +9,7 @@ import tensorflow as tf
 from tqdm import tqdm
 import numpy as np
 
-from tree.evaluator import AccuracyEvaluator2
+from tree.evaluator import AccuracyEvaluator2, Evaluator
 from tree.graph_handler import GraphHandler
 from tree.model import Model
 from tree.trainer import Trainer
@@ -42,13 +42,13 @@ def _train(config):
     # load_metadata(config, 'train')  # this updates the config file according to metadata file
 
     data_filter = get_squad_data_filter(config)
-    train_data = read_data(config, 'train', False, data_filter=data_filter)
+    train_data = read_data(config, 'train', config.load, data_filter=data_filter)
     dev_data = read_data(config, 'dev', True, data_filter=data_filter)
     update_config(config, [train_data, dev_data])
 
     _config_draft(config)
 
-    word2vec_dict = train_data.shared['word2vec']
+    word2vec_dict = train_data.shared['lower_word2vec'] if config.lower_word else train_data.shared['word2vec']
     word2idx_dict = train_data.shared['word2idx']
     idx2vec_dict = {word2idx_dict[word]: vec for word, vec in word2vec_dict.items() if word in word2idx_dict}
     print("{}/{} unique words have corresponding glove vectors.".format(len(idx2vec_dict), len(word2idx_dict)))
@@ -92,11 +92,12 @@ def _train(config):
 
 
 def _test(config):
-    # pprint(config.__flag, indent=2)
     test_data = read_data(config, 'test', True)
     update_config(config, [test_data])
+
     _config_draft(config)
 
+    pprint(config.__flags, indent=2)
     model = Model(config)
     evaluator = AccuracyEvaluator2(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
@@ -104,27 +105,31 @@ def _test(config):
     sess = tf.Session()
     graph_handler.initialize(sess)
 
-    num_batches = config.eval_num_batches or math.ceil(test_data.num_examples / config.batch_size)
+    num_batches = math.ceil(test_data.num_examples / config.batch_size)
+    if 0 < config.eval_num_batches < num_batches:
+        num_batches = config.eval_num_batches
     e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
     graph_handler.dump_eval(e)
     print(e)
 
 
 def _forward(config):
-    load_metadata(config, 'forward')
+
+    forward_data = read_data(config, 'forward', True)
+
     _config_draft(config)
+
     pprint(config.__flag, indent=2)
-
-    forward_data = read_data(config, 'forward')
-
     model = Model(config)
-    evaluator = AccuracyEvaluator2(config, model)
+    evaluator = Evaluator(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     sess = tf.Session()
     graph_handler.initialize(sess)
 
-    num_batches = 1 if config.draft else math.ceil(forward_data.num_examples / config.batch_size)
+    num_batches = math.ceil(forward_data.num_examples / config.batch_size)
+    if 0 < config.eval_num_batches < num_batches:
+        num_batches = config.eval_num_batches
     e = evaluator.get_evaluation_from_batches(sess, tqdm(forward_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
     graph_handler.dump_eval(e)
     print(e)
