@@ -36,3 +36,18 @@ def fill(l, shape, dtype=None):
     return out
 
 
+def short_floats(o, precision):
+    class ShortFloat(float):
+        def __repr__(self):
+            return '%.{}g'.format(precision) % self
+
+    def _short_floats(obj):
+        if isinstance(obj, float):
+            return ShortFloat(obj)
+        elif isinstance(obj, dict):
+            return dict((k, _short_floats(v)) for k, v in obj.items())
+        elif isinstance(obj, (list, tuple)):
+            return tuple(map(_short_floats, obj))
+        return obj
+
+    return _short_floats(o)

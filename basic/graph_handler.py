@@ -5,6 +5,7 @@ import os
 import tensorflow as tf
 
 from basic.evaluator import Evaluation
+from my.utils import short_floats
 
 
 class GraphHandler(object):
@@ -45,11 +46,8 @@ class GraphHandler(object):
             self.add_summary(summary, global_step)
 
     def dump_eval(self, e, precision=2):
-        original_float_repr = encoder.FLOAT_REPR
-        encoder.FLOAT_REPR = lambda o: format(o, '.{}f'.format(precision))
         assert isinstance(e, Evaluation)
         path = os.path.join(self.config.eval_dir, "{}-{}.json".format(e.data_type, str(e.global_step).zfill(6)))
         with open(path, 'w') as fh:
-            json.dump(e.dict, fh)
-        encoder.FLOAT_REPR = original_float_repr
+            json.dump(short_floats(e.dict, precision), fh)
 
