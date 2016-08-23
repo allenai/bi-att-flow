@@ -36,6 +36,7 @@ class GraphHandler(object):
             checkpoint = tf.train.get_checkpoint_state(save_dir)
             assert checkpoint is not None, "cannot load checkpoint at {}".format(save_dir)
             save_path = checkpoint.model_checkpoint_path
+        print("Loading saved model from {}".format(save_path))
         self.saver.restore(sess, save_path)
 
     def add_summary(self, summary, global_step):

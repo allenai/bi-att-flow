@@ -3,11 +3,11 @@ from pprint import pprint
 
 import tensorflow as tf
 
-from tree.main import main as m
+from basic.main import main as m
 
 flags = tf.app.flags
 
-flags.DEFINE_string("model_name", "basic", "Model name [tree]")
+flags.DEFINE_string("model_name", "tree", "Model name [basic]")
 flags.DEFINE_string("data_dir", "data/squad", "Data dir [data/squad]")
 flags.DEFINE_integer("run_id", 0, "Run ID [0]")
 
@@ -34,6 +34,7 @@ flags.DEFINE_integer("char_emb_size", 8, "Char emb size [8]")
 flags.DEFINE_integer("char_filter_height", 5, "Char filter height [5]")
 flags.DEFINE_float("wd", 0.001, "Weight decay [0.001]")
 flags.DEFINE_bool("lower_word", False, "lower word [True]")
+flags.DEFINE_bool("dump_eval", True, "dump eval? [True]")
 
 flags.DEFINE_integer("word_count_th", 100, "word count th [100]")
 flags.DEFINE_integer("char_count_th", 500, "char count th [500]")

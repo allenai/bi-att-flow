@@ -85,8 +85,8 @@ def _train(config):
             e = evaluator.get_evaluation_from_batches(
                 sess, tqdm(dev_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
             graph_handler.add_summaries(e.summaries, global_step)
-            graph_handler.dump_eval(e)
-            print(e)
+            if config.dump_eval:
+                graph_handler.dump_eval(e)
         if global_step % config.save_period == 0 or global_step == num_steps:
             graph_handler.save(sess, global_step=global_step)
 
@@ -109,7 +109,8 @@ def _test(config):
     if 0 < config.eval_num_batches < num_batches:
         num_batches = config.eval_num_batches
     e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
-    graph_handler.dump_eval(e)
+    if config.dump_eval:
+        graph_handler.dump_eval(e)
     print(e)
 
 
