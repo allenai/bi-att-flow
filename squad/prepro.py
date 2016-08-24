@@ -6,7 +6,10 @@ import os
 # no metadata
 from collections import Counter
 
+import nltk
 from tqdm import tqdm
+
+from my.nltk_utils import load_compressed_tree
 
 
 def bool_(arg):
@@ -88,15 +91,18 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
     source_data = json.load(open(source_path, 'r'))
 
     q, cq, y, rx, rcx, ids, idxs = [], [], [], [], [], [], []
-    x, cx = [], []
+    x, cx, tx, stx = [], [], [], []
     word_counter, char_counter, lower_word_counter = Counter(), Counter(), Counter()
+    pos_counter = Counter()
 
     start_ai = int(round(len(source_data['data']) * start_ratio))
     stop_ai = int(round(len(source_data['data']) * stop_ratio))
     for ai, article in enumerate(tqdm(source_data['data'][start_ai:stop_ai])):
-        xp, cxp = [], []
+        xp, cxp, txp, stxp = [], [], [], []
         x.append(xp)
         cx.append(cxp)
+        tx.append(txp)
+        stx.append(stxp)
         for pi, para in enumerate(article['paragraphs']):
             xi = []
             for dep in para['deps']:
@@ -107,6 +113,12 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
             cxi = [[list(xijk) for xijk in xij] for xij in xi]
             xp.append(xi)
             cxp.append(cxi)
+            txp.append(para['consts'])
+            stxp.append([str(load_compressed_tree(s)) for s in para['consts']])
+            trees = map(nltk.tree.Tree.fromstring, para['consts'])
+            for tree in trees:
+                for subtree in tree.subtrees():
+                    pos_counter[subtree.label()] += 1
 
             for xij in xi:
                 for xijk in xij:
@@ -144,14 +156,16 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
                             char_counter[qijk] += 1
 
                     break
+            if args.debug:
+                break
 
     word2vec_dict = get_word2vec(args, word_counter)
     lower_word2vec_dict = get_word2vec(args, lower_word_counter)
 
-    data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, 'idxs': idxs, 'ids': ids}
-    shared = {'x': x, 'cx': cx,
+    data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, '*tx': rx, '*stx': rx, 'idxs': idxs, 'ids': ids}
+    shared = {'x': x, 'cx': cx, 'tx': tx, 'stx': stx,
               'word_counter': word_counter, 'char_counter': char_counter, 'lower_word_counter': lower_word_counter,
-              'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dict}
+              'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dict, 'pos_counter': pos_counter}
 
     return data, shared
 

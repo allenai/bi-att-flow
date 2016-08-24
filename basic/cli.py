@@ -17,13 +17,14 @@ flags.DEFINE_integer("num_epochs", 50, "Total number of epochs for training [50]
 flags.DEFINE_integer("num_steps", 0, "Number of steps [0]")
 flags.DEFINE_integer("eval_num_batches", 100, "eval num batches [100]")
 flags.DEFINE_integer("load_step", 0, "load step [0]")
+flags.DEFINE_integer("early_stop", 4, "early stop [4]")
 
 flags.DEFINE_string("mode", "test", "train | test | forward [test]")
 flags.DEFINE_boolean("load", True, "load saved data? [True]")
 flags.DEFINE_boolean("progress", True, "Show progress? [True]")
 flags.DEFINE_integer("log_period", 100, "Log period [100]")
 flags.DEFINE_integer("eval_period", 1000, "Eval period [1000]")
-flags.DEFINE_integer("save_period", 5000, "Save Period [5000]")
+flags.DEFINE_integer("save_period", 1000, "Save Period [1000]")
 flags.DEFINE_float("decay", 0.9, "Exponential moving average decay [0.9]")
 
 flags.DEFINE_boolean("draft", False, "Draft for quick testing? [False]")

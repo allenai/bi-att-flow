@@ -4,6 +4,9 @@ import random
 import itertools
 import math
 
+import nltk
+
+from my.nltk_utils import load_compressed_tree
 from my.utils import index
 
 
@@ -80,19 +83,24 @@ def read_data(config, data_type, ref, data_filter=None):
     if not ref:
         word_counter = shared['lower_word_counter'] if config.lower_word else shared['word_counter']
         char_counter = shared['char_counter']
+        pos_counter = shared['pos_counter']
         shared['word2idx'] = {word: idx + 2 for idx, word in
                               enumerate(word for word, count in word_counter.items()
                                         if count > config.word_count_th)}
         shared['char2idx'] = {char: idx + 2 for idx, char in
                               enumerate(char for char, count in char_counter.items()
                                         if count > config.char_count_th)}
+        shared['pos2idx'] = {pos: idx + 2 for idx, pos in enumerate(pos_counter.keys())}
         NULL = "-NULL-"
         UNK = "-UNK-"
         shared['word2idx'][NULL] = 0
         shared['word2idx'][UNK] = 1
         shared['char2idx'][NULL] = 0
         shared['char2idx'][UNK] = 1
-        json.dump({'word2idx': shared['word2idx'], 'char2idx': shared['char2idx']}, open(shared_path, 'w'))
+        shared['pos2idx'][NULL] = 0
+        shared['pos2idx'][UNK] = 1
+        json.dump({'word2idx': shared['word2idx'], 'char2idx': shared['char2idx'],
+                   'pos2idx': shared['pos2idx']}, open(shared_path, 'w'))
     else:
         new_shared = json.load(open(shared_path, 'r'))
         for key, val in new_shared.items():
@@ -123,6 +131,7 @@ def update_config(config, data_sets):
     config.max_sent_size = 0
     config.max_ques_size = 0
     config.max_word_size = 0
+    config.max_tree_height = 0
     for data_set in data_sets:
         data = data_set.data
         shared = data_set.shared
@@ -130,6 +139,8 @@ def update_config(config, data_sets):
             rx = data['*x'][idx]
             q = data['q'][idx]
             sents = shared['x'][rx[0]][rx[1]]
+            trees = map(load_compressed_tree, shared['stx'][rx[0]][rx[1]])
+            config.max_tree_height = max(config.max_tree_height, max(tree.height() for tree in trees))
             config.max_num_sents = max(config.max_num_sents, len(sents))
             config.max_sent_size = max(config.max_sent_size, max(map(len, sents)))
             config.max_word_size = max(config.max_word_size, max(len(word) for sent in sents for word in sent))
@@ -142,3 +153,4 @@ def update_config(config, data_sets):
     config.char_vocab_size = len(data_sets[0].shared['char2idx'])
     config.word_emb_size = len(next(iter(data_sets[0].shared['word2vec'].values())))
     config.word_vocab_size = len(data_sets[0].shared['word2idx'])
+    config.pos_vocab_size = len(data_sets[0].shared['pos2idx'])

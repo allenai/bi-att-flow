@@ -1,4 +1,5 @@
 import nltk
+import numpy as np
 
 
 def _set_span(t, i):
@@ -72,6 +73,52 @@ def span_f1(true_span, pred_span):
 
 
 def find_max_f1_span(tree, span):
-    return max(((t.span, span_f1(t.span, span)) for t in tree.subtrees()), key=lambda p: p[1])
+    return find_max_f1_subtree(tree, span).span
+
+
+def find_max_f1_subtree(tree, span):
+    return max(((t, span_f1(t.span, span)) for t in tree.subtrees()), key=lambda p: p[1])[0]
+
+
+def tree2matrix(tree, node2num, row_size=None, col_size=None, dtype='int32'):
+    set_span(tree)
+    D = tree.height() - 1
+    B = len(tree.leaves())
+    row_size = row_size or D
+    col_size = col_size or B
+    matrix = np.zeros([row_size, col_size], dtype=dtype)
+    mask = np.zeros([row_size, col_size, col_size], dtype='bool')
+
+    def _fill(cur_tree, row, col):
+        matrix[row, col] = node2num(cur_tree)
+        for subtree in cur_tree:
+            if isinstance(subtree, nltk.tree.Tree):
+                cur_col = subtree.span[0]
+                mask[row][col][cur_col] = True
+                _fill(subtree, row-1, cur_col)
+
+    _fill(tree, D-1, 0)
+    return matrix, mask
+
+
+def load_compressed_tree(s):
+
+    def compress_tree(tree):
+        assert not isinstance(tree, str)
+        if len(tree) == 1:
+            if isinstance(tree[0], nltk.tree.Tree):
+                return compress_tree(tree[0])
+            else:
+                return tree
+        else:
+            for i, t in enumerate(tree):
+                if isinstance(t, nltk.tree.Tree):
+                    tree[i] = compress_tree(t)
+                else:
+                    tree[i] = t
+            return tree
+
+    return compress_tree(nltk.tree.Tree.fromstring(s))
+
 
 

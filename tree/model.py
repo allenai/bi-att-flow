@@ -2,11 +2,12 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 
+from my.nltk_utils import tree2matrix, find_max_f1_subtree, load_compressed_tree, set_span
 from tree.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
 from my.tensorflow.nn import linear
-from my.tensorflow.rnn import bidirectional_dynamic_rnn
-from my.tensorflow.rnn_cell import SwitchableDropoutWrapper
+from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
+from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, NoOpCell, TreeRNNCell
 
 
 class Model(object):
@@ -16,17 +17,17 @@ class Model(object):
                                            initializer=tf.constant_initializer(0), trainable=False)
 
         # Define forward inputs here
-        N, M, JX, JQ, VW, VC, W = \
+        N, M, JX, JQ, VW, VC, W, H = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
-            config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.max_word_size
+            config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.max_word_size, config.max_tree_height
         self.x = tf.placeholder('int32', [None, M, JX], name='x')
         self.cx = tf.placeholder('int32', [None, M, JX, W], name='cx')
-        self.x_mask = tf.placeholder('bool', [None, M, JX], name='x_mask')
         self.q = tf.placeholder('int32', [None, JQ], name='q')
         self.cq = tf.placeholder('int32', [None, JQ, W], name='cq')
-        self.q_mask = tf.placeholder('bool', [None, JQ], name='q_mask')
         self.y = tf.placeholder('bool', [None, M, JX], name='y')
-        self.y2 = tf.placeholder('bool', [None, M, JX], name='y2')
+        self.tx = tf.placeholder('int32', [None, M, H, JX], name='tx')
+        self.tx_edge_mask = tf.placeholder('bool', [None, M, H, JX, JX], name='tx_edge_mask')
+        self.ty = tf.placeholder('bool', [None, M, H, JX], name='ty')
         self.is_train = tf.placeholder('bool', [], name='is_train')
 
         # Define misc
@@ -51,6 +52,11 @@ class Model(object):
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, \
             config.char_emb_size, config.max_word_size
+        H = config.max_tree_height
+
+        x_mask = self.x > 0
+        q_mask = self.q > 0
+        tx_mask = self.tx > 0  # [N, M, H, JX]
 
         with tf.variable_scope("char_emb"):
             char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
@@ -79,42 +85,46 @@ class Model(object):
 
         xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, 2d]
         qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
+        D = d + config.word_emb_size
 
-        cell = BasicLSTMCell(d, state_is_tuple=True)
+
+        with tf.variable_scope("pos_emb"):
+            pos_emb_mat = tf.get_variable("pos_emb_mat", shape=[config.pos_vocab_size, d], dtype='float')
+            Atx = tf.nn.embedding_lookup(pos_emb_mat, self.tx)  # [N, M, H, JX, d]
+
+        cell = BasicLSTMCell(D, state_is_tuple=True)
         cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
-        x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
-        q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
+        x_len = tf.reduce_sum(tf.cast(x_mask, 'int32'), 2)  # [N, M]
+        q_len = tf.reduce_sum(tf.cast(q_mask, 'int32'), 1)  # [N]
 
-        with tf.variable_scope("rnn1"):
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='start')  # [N, M, JX, 2d]
-            tf.get_variable_scope().reuse_variables()
+        with tf.variable_scope("u"):
             (fw_us, bw_us), (_, (fw_u, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='start')  # [N, J, d], [N, d]
-            h = tf.concat(3, [fw_h, bw_h])
-            u = tf.concat(1, [fw_u, bw_u])
+            u = fw_u + bw_u / 2.0
 
-        u = tf.expand_dims(tf.expand_dims(u, 1), 1)  # [N, 1, 1, 4d]
+        with tf.variable_scope("h"):
+            no_op_cell = NoOpCell(D)
+            tree_rnn_cell = TreeRNNCell(no_op_cell, d, tf.reduce_max)
+            initial_state = tf.reshape(xx, [N*M*JX, D])  # [N*M*JX, D]
+            inputs = tf.concat(4, [Atx, tf.cast(self.tx_edge_mask, 'float')])  # [N, M, H, JX, d+JX]
+            inputs = tf.reshape(tf.transpose(inputs, [0, 1, 3, 2, 4]), [N*M*JX, H, d + JX])  # [N*M*JX, H, d+JX]
+            length = tf.reshape(tf.reduce_sum(tf.cast(tx_mask, 'int32'), 2), [N*M*JX])
+            h, _ = dynamic_rnn(tree_rnn_cell, inputs, length, initial_state=initial_state)  # [N*M*JX, H, D]
+            h = tf.transpose(tf.reshape(h, [N, M, JX, H, D]), [0, 1, 3, 2, 4])  # [N, M, H, JX, D]
 
+        u = tf.expand_dims(tf.expand_dims(tf.expand_dims(u, 1), 1), 1)  # [N, 1, 1, 1, 4d]
         dot = linear(h * u, 1, True, squeeze=True, scope='dot')
-        # dot2 = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot2')
-        self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
-        # self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
-        self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
-        # self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
+        self.logits = tf.reshape(exp_mask(dot, tx_mask), [N, M * H * JX])  # [N, M, H, JX]
+        self.yp = tf.reshape(tf.nn.softmax(self.logits), [N, M, H, JX])
 
     def _build_loss(self):
         config = self.config
         N, M, JX, JQ, VW, VC = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size
+        H = config.max_tree_height
         ce_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-            self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float')))
+            self.logits, tf.cast(tf.reshape(self.ty, [N, M * H * JX]), 'float')))
         tf.add_to_collection('losses', ce_loss)
-        """
-        ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-            self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
-        tf.add_to_collection("losses", ce_loss2)
-        """
-
         self.loss = tf.add_n(tf.get_collection('losses'), name='loss')
         tf.scalar_summary(self.loss.op.name, self.loss)
         tf.add_to_collection('ema/scalar', self.loss)
@@ -142,24 +152,25 @@ class Model(object):
     def get_feed_dict(self, batch, is_train, supervised=True):
         assert isinstance(batch, DataSet)
         config = self.config
-        N, M, JX, JQ, VW, VC, d, W = \
+        N, M, JX, JQ, VW, VC, d, W, H = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
-            config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, config.max_word_size
+            config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, config.max_word_size, \
+            config.max_tree_height
         feed_dict = {}
 
         x = np.zeros([N, M, JX], dtype='int32')
         cx = np.zeros([N, M, JX, W], dtype='int32')
-        x_mask = np.zeros([N, M, JX], dtype='bool')
         q = np.zeros([N, JQ], dtype='int32')
         cq = np.zeros([N, JQ, W], dtype='int32')
-        q_mask = np.zeros([N, JQ], dtype='bool')
+        tx = np.zeros([N, M, H, JX], dtype='int32')
+        tx_edge_mask = np.zeros([N, M, H, JX, JX], dtype='bool')
 
         feed_dict[self.x] = x
-        feed_dict[self.x_mask] = x_mask
         feed_dict[self.cx] = cx
         feed_dict[self.q] = q
         feed_dict[self.cq] = cq
-        feed_dict[self.q_mask] = q_mask
+        feed_dict[self.tx] = tx
+        feed_dict[self.tx_edge_mask] = tx_edge_mask
         feed_dict[self.is_train] = is_train
 
         def _get_word(word):
@@ -175,11 +186,16 @@ class Model(object):
                 return d[char]
             return 1
 
+        def _get_pos(tree):
+            d = batch.shared['pos2idx']
+            if tree.label() in d:
+                return d[tree.label()]
+            return 1
+
         for i, xi in enumerate(batch.data['x']):
             for j, xij in enumerate(xi):
                 for k, xijk in enumerate(xij):
                     x[i, j, k] = _get_word(xijk)
-                    x_mask[i, j, k] = True
 
         for i, cxi in enumerate(batch.data['cx']):
             for j, cxij in enumerate(cxi):
@@ -192,7 +208,6 @@ class Model(object):
         for i, qi in enumerate(batch.data['q']):
             for j, qij in enumerate(qi):
                 q[i, j] = _get_word(qij)
-                q_mask[i, j] = True
 
         for i, cqi in enumerate(batch.data['cq']):
             for j, cqij in enumerate(cqi):
@@ -201,16 +216,36 @@ class Model(object):
                     if k + 1 == config.max_word_size:
                         break
 
+        for i, txi in enumerate(batch.data['stx']):
+            for j, txij in enumerate(txi):
+                txij_mat, txij_mask = tree2matrix(load_compressed_tree(txij), _get_pos, row_size=H, col_size=JX)
+                tx[i, j, :, :], tx_edge_mask[i, j, :, :, :] = txij_mat, txij_mask
+
         if supervised:
             y = np.zeros([N, M, JX], dtype='bool')
-            y2 = np.zeros([N, M, JX], dtype='bool')
             feed_dict[self.y] = y
-            feed_dict[self.y2] = y2
             for i, yi in enumerate(batch.data['y']):
                 start_idx, stop_idx = yi
                 j, k = start_idx
                 y[i, j, k] = True
-                j2, k2 = stop_idx
-                y2[i, j2, k2-1] = True
+
+            ty = np.zeros([N, M, H, JX], dtype='bool')
+            feed_dict[self.ty] = ty
+            for i, yi in enumerate(batch.data['y']):
+                start_idx, stop_idx = yi
+                sent_idx = start_idx[0]
+                if start_idx[0] == stop_idx[0]:
+                    span = [start_idx[1], stop_idx[1]]
+                else:
+                    span = [start_idx[1], len(batch.data['x'][sent_idx])]
+                tree = load_compressed_tree(batch.data['stx'][i][sent_idx])
+                set_span(tree)
+                best_subtree = find_max_f1_subtree(tree, span)
+
+                def _get_y(t):
+                    return t == best_subtree
+
+                tyij, _ = tree2matrix(tree, _get_y, H, JX, dtype='bool')
+                ty[i, start_idx[0], :, :] = tyij
 
         return feed_dict

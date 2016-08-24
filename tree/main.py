@@ -70,6 +70,9 @@ def _train(config):
 
     # begin training
     num_steps = config.num_steps or int(config.num_epochs * train_data.num_examples / config.batch_size)
+    max_acc = 0
+    noupdate_count = 0
+    global_step = 0
     for _, batch in tqdm(train_data.get_batches(config.batch_size, num_batches=num_steps, shuffle=True), total=num_steps):
         global_step = sess.run(model.global_step) + 1  # +1 because all calculations are done after step
         get_summary = global_step % config.log_period == 0
@@ -78,6 +81,8 @@ def _train(config):
             graph_handler.add_summary(summary, global_step)
 
         # Occasional evaluation and saving
+        if global_step % config.save_period == 0:
+            graph_handler.save(sess, global_step=global_step)
         if global_step % config.eval_period == 0:
             num_batches = math.ceil(dev_data.num_examples / config.batch_size)
             if 0 < config.eval_num_batches < num_batches:
@@ -85,10 +90,17 @@ def _train(config):
             e = evaluator.get_evaluation_from_batches(
                 sess, tqdm(dev_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
             graph_handler.add_summaries(e.summaries, global_step)
+            if e.acc > max_acc:
+                max_acc = e.acc
+                noupdate_count = 0
+            else:
+                noupdate_count += 1
+                if noupdate_count == config.early_stop:
+                    break
             if config.dump_eval:
                 graph_handler.dump_eval(e)
-        if global_step % config.save_period == 0 or global_step == num_steps:
-            graph_handler.save(sess, global_step=global_step)
+    if global_step % config.save_period != 0:
+        graph_handler.save(sess, global_step=global_step)
 
 
 def _test(config):
@@ -109,9 +121,9 @@ def _test(config):
     if 0 < config.eval_num_batches < num_batches:
         num_batches = config.eval_num_batches
     e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
+    print(e)
     if config.dump_eval:
         graph_handler.dump_eval(e)
-    print(e)
 
 
 def _forward(config):
@@ -132,8 +144,9 @@ def _forward(config):
     if 0 < config.eval_num_batches < num_batches:
         num_batches = config.eval_num_batches
     e = evaluator.get_evaluation_from_batches(sess, tqdm(forward_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
-    graph_handler.dump_eval(e)
     print(e)
+    if config.dump_eval:
+        graph_handler.dump_eval(e)
 
 
 def set_dirs(config):
