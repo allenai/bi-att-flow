@@ -96,6 +96,9 @@ def tree2matrix(tree, node2num, row_size=None, col_size=None, dtype='int32'):
                 cur_col = subtree.span[0]
                 mask[row][col][cur_col] = True
                 _fill(subtree, row-1, cur_col)
+            else:
+                for r in range(row+1):
+                    mask[r][col][col] = True
 
     _fill(tree, D-1, 0)
     return matrix, mask

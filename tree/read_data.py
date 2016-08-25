@@ -113,14 +113,17 @@ def read_data(config, data_type, ref, data_filter=None):
 def get_squad_data_filter(config):
     def data_filter(data_point, shared):
         assert shared is not None
-        rx, rcx, q, cq, y = (data_point[key] for key in ('*x', '*cx', 'q', 'cq', 'y'))
-        x, cx = shared['x'], shared['cx']
+        rx, rcx, q, cq, y  = (data_point[key] for key in ('*x', '*cx', 'q', 'cq', 'y'))
+        x, cx, stx = shared['x'], shared['cx'], shared['stx']
         if len(q) > config.ques_size_th:
             return False
         xi = x[rx[0]][rx[1]]
         if len(xi) > config.num_sents_th:
             return False
         if any(len(xij) > config.sent_size_th for xij in xi):
+            return False
+        stxi = stx[rx[0]][rx[1]]
+        if any(nltk.tree.Tree.fromstring(s).height() > config.tree_height_th for s in stxi):
             return False
         return True
     return data_filter
@@ -139,7 +142,7 @@ def update_config(config, data_sets):
             rx = data['*x'][idx]
             q = data['q'][idx]
             sents = shared['x'][rx[0]][rx[1]]
-            trees = map(load_compressed_tree, shared['stx'][rx[0]][rx[1]])
+            trees = map(nltk.tree.Tree.fromstring, shared['stx'][rx[0]][rx[1]])
             config.max_tree_height = max(config.max_tree_height, max(tree.height() for tree in trees))
             config.max_num_sents = max(config.max_num_sents, len(sents))
             config.max_sent_size = max(config.max_sent_size, max(map(len, sents)))

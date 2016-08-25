@@ -1,3 +1,4 @@
+import nltk
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell
@@ -87,7 +88,6 @@ class Model(object):
         qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
         D = d + config.word_emb_size
 
-
         with tf.variable_scope("pos_emb"):
             pos_emb_mat = tf.get_variable("pos_emb_mat", shape=[config.pos_vocab_size, d], dtype='float')
             Atx = tf.nn.embedding_lookup(pos_emb_mat, self.tx)  # [N, M, H, JX, d]
@@ -108,11 +108,19 @@ class Model(object):
             inputs = tf.concat(4, [Atx, tf.cast(self.tx_edge_mask, 'float')])  # [N, M, H, JX, d+JX]
             inputs = tf.reshape(tf.transpose(inputs, [0, 1, 3, 2, 4]), [N*M*JX, H, d + JX])  # [N*M*JX, H, d+JX]
             length = tf.reshape(tf.reduce_sum(tf.cast(tx_mask, 'int32'), 2), [N*M*JX])
+            # length = tf.reshape(tf.reduce_sum(tf.cast(tf.transpose(tx_mask, [0, 1, 3, 2]), 'float'), 3), [-1])
             h, _ = dynamic_rnn(tree_rnn_cell, inputs, length, initial_state=initial_state)  # [N*M*JX, H, D]
             h = tf.transpose(tf.reshape(h, [N, M, JX, H, D]), [0, 1, 3, 2, 4])  # [N, M, H, JX, D]
+            # guarantee that the true answer cell has reasonable vals
+            v = tf.reduce_sum(h * tf.cast(tf.expand_dims(self.ty, -1), 'float'))
+            tf.scalar_summary('v1', v)
+            tf.scalar_summary('v2', tf.reduce_sum(tf.cast(self.ty, 'int32')))
+            tf.scalar_summary('v3', tf.reduce_sum(Atx * tf.cast(tf.expand_dims(self.ty, -1), 'float')))
+            tf.scalar_summary('v4', tf.reduce_sum(tf.cast(self.tx_edge_mask, 'float') * tf.cast(tf.expand_dims(self.ty, -1), 'float')))
 
         u = tf.expand_dims(tf.expand_dims(tf.expand_dims(u, 1), 1), 1)  # [N, 1, 1, 1, 4d]
-        dot = linear(h * u, 1, True, squeeze=True, scope='dot')
+        dot = linear(h * u, 1, True, squeeze=True, scope='dot')  # [N, M, H, JX]
+        # self.logits = tf.reshape(dot, [N, M * H * JX])
         self.logits = tf.reshape(exp_mask(dot, tx_mask), [N, M * H * JX])  # [N, M, H, JX]
         self.yp = tf.reshape(tf.nn.softmax(self.logits), [N, M, H, JX])
 
@@ -218,7 +226,7 @@ class Model(object):
 
         for i, txi in enumerate(batch.data['stx']):
             for j, txij in enumerate(txi):
-                txij_mat, txij_mask = tree2matrix(load_compressed_tree(txij), _get_pos, row_size=H, col_size=JX)
+                txij_mat, txij_mask = tree2matrix(nltk.tree.Tree.fromstring(txij), _get_pos, row_size=H, col_size=JX)
                 tx[i, j, :, :], tx_edge_mask[i, j, :, :, :] = txij_mat, txij_mask
 
         if supervised:
@@ -238,7 +246,7 @@ class Model(object):
                     span = [start_idx[1], stop_idx[1]]
                 else:
                     span = [start_idx[1], len(batch.data['x'][sent_idx])]
-                tree = load_compressed_tree(batch.data['stx'][i][sent_idx])
+                tree = nltk.tree.Tree.fromstring(batch.data['stx'][i][sent_idx])
                 set_span(tree)
                 best_subtree = find_max_f1_subtree(tree, span)
 
@@ -246,6 +254,6 @@ class Model(object):
                     return t == best_subtree
 
                 tyij, _ = tree2matrix(tree, _get_y, H, JX, dtype='bool')
-                ty[i, start_idx[0], :, :] = tyij
+                ty[i, sent_idx, :, :] = tyij
 
         return feed_dict

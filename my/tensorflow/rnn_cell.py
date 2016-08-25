@@ -39,6 +39,7 @@ class TreeRNNCell(RNNCell):
             B = tf.shape(mask)[1]
             prev_state = tf.expand_dims(tf.reshape(state, [-1, B, d]), 1)  # [N, B, d] -> [N, 1, B, d]
             mask = tf.tile(tf.expand_dims(tf.reshape(mask, [-1, B, B]), -1), [1, 1, 1, d])  # [N, B, B, d]
+            # prev_state = self._reduce_func(tf.tile(prev_state, [1, B, 1, 1]), 2)
             prev_state = self._reduce_func(exp_mask(prev_state, mask), 2)  # [N, B, d]
             prev_state = tf.reshape(prev_state, [-1, d])  # [N*B, d]
             return self._cell(x, prev_state)

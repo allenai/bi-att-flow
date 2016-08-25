@@ -31,10 +31,10 @@ def main(config):
 
 def _config_draft(config):
     if config.draft:
-        config.num_steps = 2
-        config.eval_period = 1
+        config.num_steps = 10
+        config.eval_period = 10
         config.log_period = 1
-        config.save_period = 1
+        config.save_period = 10
         config.eval_num_batches = 1
 
 
