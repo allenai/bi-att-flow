@@ -77,7 +77,7 @@ def find_max_f1_span(tree, span):
 
 
 def find_max_f1_subtree(tree, span):
-    return max(((t, span_f1(t.span, span)) for t in tree.subtrees()), key=lambda p: p[1])[0]
+    return max(((t, span_f1(span, t.span)) for t in tree.subtrees()), key=lambda p: p[1])[0]
 
 
 def tree2matrix(tree, node2num, row_size=None, col_size=None, dtype='int32'):
@@ -89,18 +89,20 @@ def tree2matrix(tree, node2num, row_size=None, col_size=None, dtype='int32'):
     matrix = np.zeros([row_size, col_size], dtype=dtype)
     mask = np.zeros([row_size, col_size, col_size], dtype='bool')
 
-    def _fill(cur_tree, row, col):
-        matrix[row, col] = node2num(cur_tree)
-        for subtree in cur_tree:
-            if isinstance(subtree, nltk.tree.Tree):
-                cur_col = subtree.span[0]
-                mask[row][col][cur_col] = True
-                _fill(subtree, row-1, cur_col)
+    for subtree in tree.subtrees():
+        row = subtree.height() - 2
+        col = subtree.span[0]
+        matrix[row, col] = node2num(subtree)
+        for subsub in subtree.subtrees():
+            if isinstance(subsub, nltk.tree.Tree):
+                mask[row, col, subsub.span[0]] = True
+                if not isinstance(subsub[0], nltk.tree.Tree):
+                    c = subsub.span[0]
+                    for r in range(row):
+                        mask[r, c, c] = True
             else:
-                for r in range(row+1):
-                    mask[r][col][col] = True
+                mask[row, col, col] = True
 
-    _fill(tree, D-1, 0)
     return matrix, mask
 
 

@@ -59,4 +59,5 @@ def bidirectional_dynamic_rnn(cell_fw, cell_bw, inputs, sequence_length=None,
 
     fw_outputs = reconstruct(flat_fw_outputs, inputs, 2)
     bw_outputs = reconstruct(flat_bw_outputs, inputs, 2)
+    # FIXME : final state is not reshaped!
     return (fw_outputs, bw_outputs), final_state

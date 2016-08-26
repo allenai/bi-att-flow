@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/1.1.1/chroma.min.js"></script>
+    <script>
+        $(document).ready(function(){
+            $(".att").each(function() {
+                // var val = parseFloat($(this).text());
+                var val = parseFloat($(this).attr("color"));
+                var scale = chroma.scale(['white', 'red']);
+                var color = scale(val).hex();
+                $(this).attr("bgcolor", color);
+            });
+        })
+    </script>
+</head>
+<style>
+    table, th, td {border: 1px solid black}
+</style>
+<body>
+    <h2>{{ title }}</h2>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Question</th>
+            <th>Answer</th>
+            <th>Paragraph</th>
+        </tr>
+        {% for row in rows %}
+            <tr>
+                <td>{{ row.id }}</td>
+                <td>
+                    {% for qj in row.ques %}
+                        {{ qj }}
+                    {% endfor %}
+                </td>
+                <td>{{ row.a }}</td>
+                <td>
+                    <table>
+                    {% for xj, yj, y2j, ypj, yp2j in zip(row.para, row.y, row.y2, row.yp, row.yp2) %}
+                        <tr>
+                        {% for xjk, yjk, y2jk, ypjk in zip(xj, yj, y2j, ypj) %}
+                            <td class="att" color="{{ ypjk }}">
+                            {% if yjk or y2jk %}
+                                <b>{{ xjk }}</b>
+                            {% else %}
+                                {{ xjk }}
+                            {% endif %}
+                            </td>
+                        {% endfor %}
+                        </tr>
+                        <tr>
+                        {% for xjk, yp2jk in zip(xj, yp2j) %}
+                            <td class="att" color="{{ yp2jk }}">-</td>
+                        {% endfor %}
+                        </tr>
+                    {% endfor %}
+                    </table>
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
