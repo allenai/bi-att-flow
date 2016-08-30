@@ -111,13 +111,13 @@ class Model(object):
         N, M, JX, JQ, VW, VC = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size
-        s_ce_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(self.s_logits, self.sy), name='s_ce_loss')
+        # s_ce_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(self.s_logits, self.sy), name='s_ce_loss')
         w_ce_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(self.w_logits, self.wy), name='w_ce_loss')
-        tf.add_to_collection('losses', s_ce_loss)
+        # tf.add_to_collection('losses', s_ce_loss)
         tf.add_to_collection('losses', w_ce_loss)
 
         self.loss = tf.add_n(tf.get_collection('losses'), name='loss')
-        tf.scalar_summary(s_ce_loss.op.name, s_ce_loss)
+        # tf.scalar_summary(s_ce_loss.op.name, s_ce_loss)
         tf.scalar_summary(w_ce_loss.op.name, w_ce_loss)
         tf.scalar_summary(self.loss.op.name, self.loss)
         tf.add_to_collection('ema/scalar', self.loss)

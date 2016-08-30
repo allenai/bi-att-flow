@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import os
 
 from basic.read_data import DataSet
 from my.nltk_utils import span_f1
@@ -116,24 +117,29 @@ class AccuracyEvaluator(LabeledEvaluator):
         assert isinstance(data_set, DataSet)
         feed_dict = self.model.get_feed_dict(data_set, False)
         global_step, yp, loss = sess.run([self.model.global_step, self.model.yp, self.model.loss], feed_dict=feed_dict)
-        y = feed_dict[self.model.y]
+        y = data_set.data['y']
         yp = yp[:data_set.num_examples]
         correct = [self.__class__.compare(yi, ypi) for yi, ypi in zip(y, yp)]
-        e = AccuracyEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y.tolist(), correct, float(loss))
+        e = AccuracyEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y, correct, float(loss))
         return e
 
     @staticmethod
     def compare(yi, ypi):
-        return int(np.argmax(yi)) == int(np.argmax(ypi))
+        for start, stop in yi:
+            if start == int(np.argmax(ypi)):
+                return True
+        return False
 
 
 class AccuracyEvaluator2(AccuracyEvaluator):
     @staticmethod
     def compare(yi, ypi):
-        i = int(np.argmax(yi.flatten()))
-        j = int(np.argmax(ypi.flatten()))
-        # print(i, j, i == j)
-        return i == j
+        for start, stop in yi:
+            para_start = int(np.argmax(np.max(ypi, 1)))
+            sent_start = int(np.argmax(ypi[para_start]))
+            if tuple(start) == (para_start, sent_start):
+                return True
+        return False
 
 
 class TempEvaluation(AccuracyEvaluation):

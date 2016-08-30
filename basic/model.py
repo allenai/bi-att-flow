@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell
@@ -86,15 +88,18 @@ class Model(object):
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("rnn1"):
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='start')  # [N, M, JX, 2d]
-            tf.get_variable_scope().reuse_variables()
-            (fw_us, bw_us), (_, (fw_u, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='start')  # [N, J, d], [N, d]
-            h = tf.concat(3, [fw_h, bw_h])
+            (fw_us, bw_us), (_, (fw_u, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='u')  # [N, J, d], [N, d]
             u = tf.concat(1, [fw_u, bw_u])
+            u = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1])
 
-        u = tf.expand_dims(tf.expand_dims(u, 1), 1)  # [N, 1, 1, 4d]
+            xx = tf.concat(3, [xx, u])
 
-        dot = linear(h * u, 1, True, squeeze=True, scope='dot', wd=config.wd)
+            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
+            h = tf.concat(3, [fw_h, bw_h])
+            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, h, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
+            h = tf.concat(3, [fw_h, bw_h])
+
+        dot = linear(h, 1, True, squeeze=True, scope='dot', wd=config.wd)
         # dot2 = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot2')
         self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
         # self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
@@ -207,7 +212,7 @@ class Model(object):
             feed_dict[self.y] = y
             feed_dict[self.y2] = y2
             for i, yi in enumerate(batch.data['y']):
-                start_idx, stop_idx = yi
+                start_idx, stop_idx = random.choice(yi)
                 j, k = start_idx
                 y[i, j, k] = True
                 j2, k2 = stop_idx

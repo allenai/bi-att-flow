@@ -104,6 +104,7 @@ def _train(config):
 
 
 def _test(config):
+    assert config.load
     test_data = read_data(config, 'test', True)
     update_config(config, [test_data])
 
@@ -127,6 +128,7 @@ def _test(config):
 
 
 def _forward(config):
+    assert config.load
 
     forward_data = read_data(config, 'forward', True)
 

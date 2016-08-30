@@ -134,20 +134,13 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
                 dep = qa['dep']
                 qi = [] if dep is None else [node[0] for node in dep[0]]
                 cqi = [list(qij) for qij in qi]
+                yi = []
                 for answer in qa['answers']:
                     yi0 = answer['answer_word_start'] or [0, 0]
                     yi1 = answer['answer_word_stop'] or [0, 1]
                     assert len(xi[yi0[0]]) > yi0[1]
                     assert len(xi[yi1[0]]) >= yi1[1]
-                    yi = [yi0, yi1]
-
-                    q.append(qi)
-                    cq.append(cqi)
-                    y.append(yi)
-                    rx.append(rxi)
-                    rcx.append(rxi)
-                    ids.append(qa['id'])
-                    idxs.append(len(idxs))
+                    yi.append([yi0, yi1])
 
                     for qij in qi:
                         word_counter[qij] += 1
@@ -155,7 +148,14 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
                         for qijk in qij:
                             char_counter[qijk] += 1
 
-                    break
+                q.append(qi)
+                cq.append(cqi)
+                y.append(yi)
+                rx.append(rxi)
+                rcx.append(rxi)
+                ids.append(qa['id'])
+                idxs.append(len(idxs))
+
             if args.debug:
                 break
 
