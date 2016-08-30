@@ -51,3 +51,7 @@ def short_floats(o, precision):
         return obj
 
     return _short_floats(o)
+
+
+def argmax(x):
+    return np.unravel_index(x.argmax(), x.shape)
