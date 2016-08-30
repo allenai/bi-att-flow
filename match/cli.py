@@ -3,7 +3,7 @@ from pprint import pprint
 
 import tensorflow as tf
 
-from basic.main import main as m
+from match.main import main as m
 
 flags = tf.app.flags
 

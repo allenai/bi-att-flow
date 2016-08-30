@@ -4,11 +4,11 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 
-from basic.read_data import DataSet
+from match.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
 from my.tensorflow.nn import linear
 from my.tensorflow.rnn import bidirectional_dynamic_rnn
-from my.tensorflow.rnn_cell import SwitchableDropoutWrapper
+from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, MatchCell
 
 
 class Model(object):
@@ -84,39 +84,37 @@ class Model(object):
 
         cell = BasicLSTMCell(d, state_is_tuple=True)
         cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
+        match_cell = MatchCell(cell, 2*d, JQ)
         x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
-        with tf.variable_scope("rnn1"):
-            (fw_us, bw_us), (_, (fw_u, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='u')  # [N, J, d], [N, d]
-            u = tf.concat(1, [fw_u, bw_u])
-            u = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1])
+        with tf.variable_scope("prepro"):
+            (fw_u, bw_u), _ = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='u')  # [N, J, d], [N, d]
+            u = tf.concat(2, [fw_u, bw_u])  # [N, JQ, 2d]
 
-            xx = tf.concat(3, [xx, u])
+            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='h')  # [N, M, JX, 2d]
+            h = tf.concat(3, [fw_h, bw_h])  # [N, M, JX, 2d]
 
-            (fw_h, bw_h), (_, (fw_hl, bw_hl)) = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
-            h = tf.concat(3, [fw_h, bw_h])
-            (fw_h, bw_h), (_, (fw_hl, bw_hl)) = bidirectional_dynamic_rnn(cell, cell, h, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
-            h = tf.concat(3, [fw_h, bw_h])
-            hl = tf.concat(1, [fw_hl, bw_hl])
-            hl = tf.reshape(hl, [N, M, 2*d])
-            (fw_h2, bw_h2), (_, (fw_hl2, bw_hl2)) = bidirectional_dynamic_rnn(cell, cell, h, x_len, dtype='float', scope='h3')  # [N, M, JX, 2d]
-            h2 = tf.concat(3, [fw_h2, bw_h2])
-            hl2 = tf.concat(1, [fw_hl2, bw_hl2])
-            hl2 = tf.reshape(hl2, [N, M, 2*d])
+        with tf.variable_scope("match"):
+            u_tiled = tf.tile(tf.reshape(u, [N, 1, 1, JQ*2*d]), [1, M, JX, 1])
+            hu = tf.concat(3, [h, u_tiled])  # [N, M, JX, d + JQ*d]
+            (fw_hr, bw_hr), _ = bidirectional_dynamic_rnn(match_cell, match_cell, hu, x_len, dtype='float', scope='hr')
+            hr = tf.concat(3, [fw_hr, bw_hr])  # [N, M, JX, 2*d]
 
-        if config.model == '1':
-            z1 = linear(hl, d, True, scope='z1', wd=config.wd)
-            z2 = linear([z1, hl2], d, True, scope='z2', wd=config.wd)
-            z1 = tf.tile(tf.expand_dims(z1, 2), [1, 1, JX, 1])  # [N, M, JX, d]
-            z2 = tf.tile(tf.expand_dims(z2, 2), [1, 1, JX, 1])  # [N, M, JX, d]
-            dot = linear([h, z1], 1, True, squeeze=True, scope='dot', wd=config.wd)
-            dot2 = linear([h2, z2], 1, True, squeeze=True, scope='dot2', wd=config.wd)
-        elif config.model == '2':
-            dot = linear(h, 1, True, squeeze=True, scope='dot', wd=config.wd)
-            dot2 = linear(h2, 1, True, squeeze=True, scope='dot2', wd=config.wd)
-        else:
-            raise Exception()
+        with tf.variable_scope("start"):
+            f = tf.tanh(linear(hr, d, True, scope='f', wd=config.wd))
+            dot = linear(f, 1, True, squeeze=True, scope='dot', wd=config.wd)  # [N, M, JX]
+
+        with tf.variable_scope("stop"):
+            hri = tf.reduce_sum(tf.expand_dims(dot, -1) * hr, 2)  # [N, M, d]
+            hri = tf.reshape(hri, [N*M, 2*d])
+            with tf.variable_scope("cell"):
+                _, (_, ha) = cell(hri, cell.zero_state(N*M, 'float'))
+            ha = tf.reshape(ha, [N, M, d])
+            ha_tiled = tf.tile(tf.expand_dims(ha, 2), [1, 1, JX, 1])
+            f2 = tf.tanh(linear([hr, ha_tiled], d, True, scope='f2', wd=config.wd))
+            dot2 = linear(f2, 1, True, squeeze=True, scope='dot2', wd=config.wd)
+
         self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
         self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
         self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])

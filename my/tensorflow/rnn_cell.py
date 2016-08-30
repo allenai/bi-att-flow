@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import DropoutWrapper, RNNCell
 
 from my.tensorflow import exp_mask
+from my.tensorflow.nn import linear
 
 
 class SwitchableDropoutWrapper(DropoutWrapper):
@@ -67,3 +68,42 @@ class NoOpCell(RNNCell):
     @property
     def output_size(self):
         return self._num_units
+
+
+class MatchCell(RNNCell):
+    def __init__(self, cell, input_size, q_len):
+        self._cell = cell
+        self._input_size = input_size
+        # FIXME : This won't be needed with good shape guessing
+        self._q_len = q_len
+
+    @property
+    def state_size(self):
+        return self._cell.state_size
+
+    @property
+    def output_size(self):
+        return self._cell.output_size
+
+    def __call__(self, inputs, state, scope=None):
+        """
+
+        :param inputs: [N, d + JQ * d]
+        :param state: [N, d]
+        :param scope:
+        :return:
+        """
+        with tf.variable_scope(scope or self.__class__.__name__):
+            c_prev, h_prev = state
+            x = tf.slice(inputs, [0, 0], [-1, self._input_size])
+            qs = tf.slice(inputs, [0, self._input_size], [-1, -1])
+            qs = tf.reshape(qs, [-1, self._q_len, self._input_size])  # [N, JQ, d]
+            x_tiled = tf.tile(tf.expand_dims(x, 1), [1, self._q_len, 1])  # [N, JQ, d]
+            h_prev_tiled = tf.tile(tf.expand_dims(h_prev, 1), [1, self._q_len, 1])  # [N, JQ, d]
+            f = tf.tanh(linear([qs, x_tiled, h_prev_tiled], self._input_size, True, scope='f'))  # [N, JQ, d]
+            a = tf.nn.softmax(linear(f, 1, True, squeeze=True, scope='a'))  # [N, JQ]
+            q = tf.reduce_sum(qs * tf.expand_dims(a, -1), 1)
+            z = tf.concat(1, [x, q])  # [N, 2d]
+            return self._cell(z, state)
+
+
