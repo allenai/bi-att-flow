@@ -98,13 +98,15 @@ class Model(object):
             h = tf.concat(3, [fw_h, bw_h])
             (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, h, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
             h = tf.concat(3, [fw_h, bw_h])
+            (fw_h2, bw_h2), _ = bidirectional_dynamic_rnn(cell, cell, h, x_len, dtype='float', scope='h3')  # [N, M, JX, 2d]
+            h2 = tf.concat(3, [fw_h2, bw_h2])
 
         dot = linear(h, 1, True, squeeze=True, scope='dot', wd=config.wd)
-        # dot2 = linear(h * u, 1, True, squeeze=True, wd=config.wd, scope='dot2')
+        dot2 = linear(h2, 1, True, squeeze=True, scope='dot2', wd=config.wd)
         self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
-        # self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
+        self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
         self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
-        # self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
+        self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
 
     def _build_loss(self):
         config = self.config
@@ -114,11 +116,9 @@ class Model(object):
         ce_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
             self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float')))
         tf.add_to_collection('losses', ce_loss)
-        """
         ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
             self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
         tf.add_to_collection("losses", ce_loss2)
-        """
 
         self.loss = tf.add_n(tf.get_collection('losses'), name='loss')
         tf.scalar_summary(self.loss.op.name, self.loss)
