@@ -7,7 +7,7 @@ from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 from match.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
 from my.tensorflow.nn import linear
-from my.tensorflow.rnn import bidirectional_dynamic_rnn
+from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, MatchCell
 
 
@@ -18,17 +18,17 @@ class Model(object):
                                            initializer=tf.constant_initializer(0), trainable=False)
 
         # Define forward inputs here
-        N, M, JX, JQ, VW, VC, W = \
-            config.batch_size, config.max_num_sents, config.max_sent_size, \
+        N, JX, JQ, VW, VC, W = \
+            config.batch_size, config.max_para_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.max_word_size
-        self.x = tf.placeholder('int32', [None, M, JX], name='x')
-        self.cx = tf.placeholder('int32', [None, M, JX, W], name='cx')
-        self.x_mask = tf.placeholder('bool', [None, M, JX], name='x_mask')
+        self.x = tf.placeholder('int32', [None, JX], name='x')
+        self.cx = tf.placeholder('int32', [None, JX, W], name='cx')
+        self.x_mask = tf.placeholder('bool', [None, JX], name='x_mask')
         self.q = tf.placeholder('int32', [None, JQ], name='q')
         self.cq = tf.placeholder('int32', [None, JQ, W], name='cq')
         self.q_mask = tf.placeholder('bool', [None, JQ], name='q_mask')
-        self.y = tf.placeholder('bool', [None, M, JX], name='y')
-        self.y2 = tf.placeholder('bool', [None, M, JX], name='y2')
+        self.y = tf.placeholder('bool', [None, JX], name='y')
+        self.y2 = tf.placeholder('bool', [None, JX], name='y2')
         self.is_train = tf.placeholder('bool', [], name='is_train')
 
         # Define misc
@@ -49,14 +49,15 @@ class Model(object):
 
     def _build_forward(self):
         config = self.config
-        N, M, JX, JQ, VW, VC, d, dc, W = \
-            config.batch_size, config.max_num_sents, config.max_sent_size, \
+        N, JX, JQ, VW, VC, d, dc, W = \
+            config.batch_size, config.max_para_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, \
             config.char_emb_size, config.max_word_size
 
+        """
         with tf.variable_scope("char_emb"):
             char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
-            Acx = tf.nn.embedding_lookup(char_emb_mat, self.cx)  # [N, M, JX, W, dc]
+            Acx = tf.nn.embedding_lookup(char_emb_mat, self.cx)  # [N, JX, W, dc]
             Acq = tf.nn.embedding_lookup(char_emb_mat, self.cq)  # [N, JQ, W, dc]
 
             filter = tf.get_variable("filter", shape=[1, config.char_filter_height, dc, d], dtype='float')
@@ -64,72 +65,67 @@ class Model(object):
             strides = [1, 1, 1, 1]
             Acx = tf.reshape(Acx, [-1, JX, W, dc])
             Acq = tf.reshape(Acq, [-1, JQ, W, dc])
-            xxc = tf.nn.conv2d(Acx, filter, strides, "VALID") + bias  # [N*M, JX, W/filter_stride, d]
+            xxc = tf.nn.conv2d(Acx, filter, strides, "VALID") + bias  # [N, JX, W/filter_stride, d]
             qqc = tf.nn.conv2d(Acq, filter, strides, "VALID") + bias  # [N, JQ, W/filter_stride, d]
-            xxc = tf.reshape(tf.reduce_max(tf.nn.relu(xxc), 2), [-1, M, JX, d])
+            xxc = tf.reshape(tf.reduce_max(tf.nn.relu(xxc), 2), [-1, JX, d])
             qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, d])
+        """
 
         with tf.variable_scope("word_emb"):
             if config.mode == 'train':
                 word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
             else:
                 word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
-            Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
+            Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, JX, d]
             Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
             # Ax = linear([Ax], d, False, scope='Ax_reshape')
             # Aq = linear([Aq], d, False, scope='Aq_reshape')
 
-        xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, 2d]
-        qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
+        # xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, 2d]
+        # qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
+        xx = Ax
+        qq = Aq
 
         cell = BasicLSTMCell(d, state_is_tuple=True)
         cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
-        match_cell = MatchCell(cell, 2*d, JQ)
-        x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
+        match_cell = MatchCell(cell, d, JQ)
+        x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 1)  # [N]
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("prepro"):
-            (fw_u, bw_u), _ = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='u')  # [N, J, d], [N, d]
-            u = tf.concat(2, [fw_u, bw_u])  # [N, JQ, 2d]
-
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='h')  # [N, M, JX, 2d]
-            h = tf.concat(3, [fw_h, bw_h])  # [N, M, JX, 2d]
+            u, _ = dynamic_rnn(cell, qq, q_len, dtype='float', scope='u')  # [N, J, d], [N, d]
+            h, _ = dynamic_rnn(cell, xx, x_len, dtype='float', scope='h')  # [N, JX, 2d]
 
         with tf.variable_scope("match"):
-            u_tiled = tf.tile(tf.reshape(u, [N, 1, 1, JQ*2*d]), [1, M, JX, 1])
-            hu = tf.concat(3, [h, u_tiled])  # [N, M, JX, d + JQ*d]
+            u_tiled = tf.tile(tf.reshape(u, [N, 1, JQ*d]), [1, JX, 1])
+            hu = tf.concat(2, [h, u_tiled])  # [N, JX, d + JQ*d]
             (fw_hr, bw_hr), _ = bidirectional_dynamic_rnn(match_cell, match_cell, hu, x_len, dtype='float', scope='hr')
-            hr = tf.concat(3, [fw_hr, bw_hr])  # [N, M, JX, 2*d]
+            hr = tf.concat(2, [fw_hr, bw_hr])  # [N, JX, 2*d]
 
         with tf.variable_scope("start"):
             f = tf.tanh(linear(hr, d, True, scope='f', wd=config.wd))
-            dot = linear(f, 1, True, squeeze=True, scope='dot', wd=config.wd)  # [N, M, JX]
+            dot = linear(f, 1, True, squeeze=True, scope='dot', wd=config.wd)  # [N, JX]
 
         with tf.variable_scope("stop"):
-            hri = tf.reduce_sum(tf.expand_dims(dot, -1) * hr, 2)  # [N, M, d]
-            hri = tf.reshape(hri, [N*M, 2*d])
+            hri = tf.reduce_sum(tf.expand_dims(dot, -1) * hr, 1)  # [N, 2*d]
             with tf.variable_scope("cell"):
-                _, (_, ha) = cell(hri, cell.zero_state(N*M, 'float'))
-            ha = tf.reshape(ha, [N, M, d])
-            ha_tiled = tf.tile(tf.expand_dims(ha, 2), [1, 1, JX, 1])
+                _, (_, ha) = cell(hri, cell.zero_state(N, 'float'))
+            ha_tiled = tf.tile(tf.expand_dims(ha, 1), [1, JX, 1])
             f2 = tf.tanh(linear([hr, ha_tiled], d, True, scope='f2', wd=config.wd))
             dot2 = linear(f2, 1, True, squeeze=True, scope='dot2', wd=config.wd)
 
-        self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
-        self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
-        self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
-        self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
+        self.logits = exp_mask(dot, self.x_mask)  # [N, M, JX]
+        self.logits2 = exp_mask(dot2, self.x_mask)
+        self.yp = tf.nn.softmax(self.logits)
+        self.yp2 = tf.nn.softmax(self.logits2)
 
     def _build_loss(self):
         config = self.config
-        N, M, JX, JQ, VW, VC = \
-            config.batch_size, config.max_num_sents, config.max_sent_size, \
-            config.max_ques_size, config.word_vocab_size, config.char_vocab_size
         ce_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-            self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float')))
+            self.logits, tf.cast(self.y, 'float')))
         tf.add_to_collection('losses', ce_loss)
         ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-            self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
+            self.logits2, tf.cast(self.y2, 'float')))
         tf.add_to_collection("losses", ce_loss2)
 
         self.loss = tf.add_n(tf.get_collection('losses'), name='loss')
@@ -159,14 +155,14 @@ class Model(object):
     def get_feed_dict(self, batch, is_train, supervised=True):
         assert isinstance(batch, DataSet)
         config = self.config
-        N, M, JX, JQ, VW, VC, d, W = \
-            config.batch_size, config.max_num_sents, config.max_sent_size, \
+        N, JX, JQ, VW, VC, d, W = \
+            config.batch_size, config.max_para_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, config.max_word_size
         feed_dict = {}
 
-        x = np.zeros([N, M, JX], dtype='int32')
-        cx = np.zeros([N, M, JX, W], dtype='int32')
-        x_mask = np.zeros([N, M, JX], dtype='bool')
+        x = np.zeros([N, JX], dtype='int32')
+        cx = np.zeros([N, JX, W], dtype='int32')
+        x_mask = np.zeros([N, JX], dtype='bool')
         q = np.zeros([N, JQ], dtype='int32')
         cq = np.zeros([N, JQ, W], dtype='int32')
         q_mask = np.zeros([N, JQ], dtype='bool')
@@ -193,18 +189,22 @@ class Model(object):
             return 1
 
         for i, xi in enumerate(batch.data['x']):
+            cur_idx = 0
             for j, xij in enumerate(xi):
                 for k, xijk in enumerate(xij):
-                    x[i, j, k] = _get_word(xijk)
-                    x_mask[i, j, k] = True
+                    x[i, cur_idx] = _get_word(xijk)
+                    x_mask[i, cur_idx] = True
+                    cur_idx += 1
 
         for i, cxi in enumerate(batch.data['cx']):
+            cur_idx = 0
             for j, cxij in enumerate(cxi):
                 for k, cxijk in enumerate(cxij):
                     for l, cxijkl in enumerate(cxijk):
-                        cx[i, j, k, l] = _get_char(cxijkl)
+                        cx[i, cur_idx, l] = _get_char(cxijkl)
                         if l + 1 == config.max_word_size:
                             break
+                    cur_idx += 1
 
         for i, qi in enumerate(batch.data['q']):
             for j, qij in enumerate(qi):
@@ -219,15 +219,17 @@ class Model(object):
                         break
 
         if supervised:
-            y = np.zeros([N, M, JX], dtype='bool')
-            y2 = np.zeros([N, M, JX], dtype='bool')
+            y = np.zeros([N, JX], dtype='bool')
+            y2 = np.zeros([N, JX], dtype='bool')
             feed_dict[self.y] = y
             feed_dict[self.y2] = y2
-            for i, yi in enumerate(batch.data['y']):
+            for i, (xi, yi) in enumerate(zip(batch.data['x'], batch.data['y'])):
                 start_idx, stop_idx = random.choice(yi)
                 j, k = start_idx
-                y[i, j, k] = True
+                idx = sum(len(xi[jj]) for jj in range(j)) + k
+                y[i, idx] = True
                 j2, k2 = stop_idx
-                y2[i, j2, k2-1] = True
+                idx = sum(len(xi[jj2]) for jj2 in range(j2)) + k2 - 1
+                y2[i, idx] = True
 
         return feed_dict

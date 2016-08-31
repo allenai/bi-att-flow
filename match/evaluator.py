@@ -173,13 +173,22 @@ class TempEvaluation(AccuracyEvaluation):
         return "{} step {}: accuracy={:.4f}, f1={:.4f}, loss={:.4f}".format(self.data_type, self.global_step, self.acc, self.f1, self.loss)
 
 
+def flat(x, y):
+    start_idx, stop_idx = y
+    j, k = start_idx
+    idx1 = sum(len(x[jj]) for jj in range(j)) + k
+    j2, k2 = stop_idx
+    idx2 = sum(len(x[jj2]) for jj2 in range(j2)) + k2 - 1
+    return idx1, idx2
+
+
 class TempEvaluator(LabeledEvaluator):
     def get_evaluation(self, sess, batch):
         idxs, data_set = batch
         assert isinstance(data_set, DataSet)
         feed_dict = self.model.get_feed_dict(data_set, False)
         global_step, yp, yp2, loss = sess.run([self.model.global_step, self.model.yp, self.model.yp2, self.model.loss], feed_dict=feed_dict)
-        y = data_set.data['y']
+        y = [[flat(xi, yij) for yij in yi] for xi, yi in zip(data_set.data['x'], data_set.data['y'])]
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
         spans = [get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)]
         correct = [self.__class__.compare2(yi, span) for yi, span in zip(y, spans)]
@@ -189,53 +198,32 @@ class TempEvaluator(LabeledEvaluator):
         return e
 
     @staticmethod
-    def compare(yi, ypi, yp2i):
-        for start, stop in yi:
-            aypi = argmax(ypi)
-            mask = np.zeros(yp2i.shape)
-            mask[aypi[0], aypi[1]:] = np.ones([yp2i.shape[1] - aypi[1]])
-            if tuple(start) == aypi and (stop[0], stop[1]-1) == argmax(yp2i * mask):
-                return True
-        return False
-
-    @staticmethod
     def compare2(yi, span):
-        for start, stop in yi:
-            if tuple(start) == span[0] and tuple(stop) == span[1]:
+        for each in yi:
+            if tuple(each) == tuple(span):
                 return True
         return False
 
     @staticmethod
     def span_f1(yi, span):
-        max_f1 = 0
-        for start, stop in yi:
-            if start[0] == span[0][0]:
-                true_span = start[1], stop[1]
-                pred_span = span[0][1], span[1][1]
-                f1 = span_f1(true_span, pred_span)
-                max_f1 = max(f1, max_f1)
-        return max_f1
+        return max(span_f1(each, span) for each in yi)
 
 
 def get_best_span(ypi, yp2i):
-
     max_val = 0
     best_word_span = None
-    best_sent_idx = 0
-    for f, (ypif, yp2if) in enumerate(zip(ypi, yp2i)):
-        argmax_j1 = 0
-        for j in range(len(ypif)):
-            val1 = ypif[argmax_j1]
-            if val1 < ypif[j]:
-                val1 = ypif[j]
-                argmax_j1 = j
+    argmax_j1 = 0
+    for j in range(len(ypi)):
+        val1 = ypi[argmax_j1]
+        if val1 < ypi[j]:
+            val1 = ypi[j]
+            argmax_j1 = j
 
-            val2 = yp2if[j]
-            if val1 * val2 > max_val:
-                best_word_span = (argmax_j1, j)
-                best_sent_idx = f
-                max_val = val1 * val2
-    return (best_sent_idx, best_word_span[0]), (best_sent_idx, best_word_span[1] + 1)
+        val2 = yp2i[j]
+        if val1 * val2 > max_val:
+            best_word_span = (argmax_j1, j+1)
+            max_val = val1 * val2
+    return best_word_span
 
 
 
