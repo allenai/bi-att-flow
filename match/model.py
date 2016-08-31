@@ -97,17 +97,19 @@ class Model(object):
             h, _ = dynamic_rnn(cell, xx, x_len, dtype='float', scope='h')  # [N, JX, 2d]
 
         with tf.variable_scope("match"):
+            q_mask_tiled = tf.tile(tf.reshape(self.q, [N, 1, JQ]), [1, JX, 1])
             u_tiled = tf.tile(tf.reshape(u, [N, 1, JQ*d]), [1, JX, 1])
-            hu = tf.concat(2, [h, u_tiled])  # [N, JX, d + JQ*d]
+            hu = tf.concat(2, [h, tf.cast(q_mask_tiled, 'float'), u_tiled])  # [N, JX, d + JQ*d]
             (fw_hr, bw_hr), _ = bidirectional_dynamic_rnn(match_cell, match_cell, hu, x_len, dtype='float', scope='hr')
             hr = tf.concat(2, [fw_hr, bw_hr])  # [N, JX, 2*d]
 
         with tf.variable_scope("start"):
             f = tf.tanh(linear(hr, d, True, scope='f', wd=config.wd))
             dot = linear(f, 1, True, squeeze=True, scope='dot', wd=config.wd)  # [N, JX]
+            a = tf.nn.softmax(exp_mask(dot, self.x_mask))
 
         with tf.variable_scope("stop"):
-            hri = tf.reduce_sum(tf.expand_dims(dot, -1) * hr, 1)  # [N, 2*d]
+            hri = tf.reduce_sum(tf.expand_dims(a, -1) * hr, 1)  # [N, 2*d]
             with tf.variable_scope("cell"):
                 _, (_, ha) = cell(hri, cell.zero_state(N, 'float'))
             ha_tiled = tf.tile(tf.expand_dims(ha, 1), [1, JX, 1])
