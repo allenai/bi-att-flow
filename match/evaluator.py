@@ -178,7 +178,7 @@ def flat(x, y):
     j, k = start_idx
     idx1 = sum(len(x[jj]) for jj in range(j)) + k
     j2, k2 = stop_idx
-    idx2 = sum(len(x[jj2]) for jj2 in range(j2)) + k2 - 1
+    idx2 = sum(len(x[jj2]) for jj2 in range(j2)) + k2
     return idx1, idx2
 
 
