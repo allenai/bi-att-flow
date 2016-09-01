@@ -88,33 +88,28 @@ class Model(object):
 
         cell = BasicLSTMCell(d, state_is_tuple=True)
         cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
-        match_cell = MatchCell(cell, d, JQ)
         x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 1)  # [N]
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("prepro"):
-            u, _ = dynamic_rnn(cell, qq, q_len, dtype='float', scope='u')  # [N, J, d], [N, d]
-            h, _ = dynamic_rnn(cell, xx, x_len, dtype='float', scope='h')  # [N, JX, 2d]
+            (fw_u, bw_u), _ = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='u')  # [N, J, d], [N, d]
+            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='h')  # [N, JX, 2d]
+            u = tf.concat(2, [fw_u, bw_u])
+            h = tf.concat(2, [fw_h, bw_h])
 
-        with tf.variable_scope("match"):
+        with tf.variable_scope("start_match"):
+            match_cell = MatchCell(cell, 2*d, JQ)
             q_mask_tiled = tf.tile(tf.reshape(self.q_mask, [N, 1, JQ]), [1, JX, 1])
-            u_tiled = tf.tile(tf.reshape(u, [N, 1, JQ*d]), [1, JX, 1])
-            hu = tf.concat(2, [h, tf.cast(q_mask_tiled, 'float'), u_tiled])  # [N, JX, d + JQ + JQ*d]
+            u_tiled = tf.tile(tf.reshape(u, [N, 1, JQ*2*d]), [1, JX, 1])
+            hu = tf.concat(2, [h, tf.cast(q_mask_tiled, 'float'), u_tiled])  # [N, JX, 2d + JQ + JQ*d]
             (fw_hr, bw_hr), _ = bidirectional_dynamic_rnn(match_cell, match_cell, hu, x_len, dtype='float', scope='hr')
             hr = tf.concat(2, [fw_hr, bw_hr])  # [N, JX, 2*d]
+            dot = linear(hr, 1, True, squeeze=True, scope='dot', wd=config.wd)
 
-        with tf.variable_scope("start"):
-            f = tf.tanh(linear(hr, d, True, scope='f', wd=config.wd))
-            dot = linear(f, 1, True, squeeze=True, scope='dot', wd=config.wd)  # [N, JX]
-            a = tf.nn.softmax(exp_mask(dot, self.x_mask))
-
-        with tf.variable_scope("stop"):
-            hri = tf.reduce_sum(tf.expand_dims(a, -1) * hr, 1)  # [N, 2*d]
-            with tf.variable_scope("cell"):
-                _, (_, ha) = cell(hri, cell.zero_state(N, 'float'))
-            ha_tiled = tf.tile(tf.expand_dims(ha, 1), [1, JX, 1])
-            f2 = tf.tanh(linear([hr, ha_tiled], d, True, scope='f2', wd=config.wd))
-            dot2 = linear(f2, 1, True, squeeze=True, scope='dot2', wd=config.wd)
+        with tf.variable_scope("stop_match"):
+            (fw_hr2, bw_hr2), _ = bidirectional_dynamic_rnn(cell, cell, hr, x_len, dtype='float', scope='hr2')
+            hr2 = tf.concat(2, [fw_hr2, bw_hr2])
+            dot2 = linear(hr2, 1, True, squeeze=True, scope='dot2', wd=config.wd)
 
         self.logits = exp_mask(dot, self.x_mask)  # [N, M, JX]
         self.logits2 = exp_mask(dot2, self.x_mask)
@@ -122,7 +117,6 @@ class Model(object):
         self.yp2 = tf.nn.softmax(self.logits2)
 
     def _build_loss(self):
-        config = self.config
         ce_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
             self.logits, tf.cast(self.y, 'float')))
         tf.add_to_collection('losses', ce_loss)
