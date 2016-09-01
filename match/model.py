@@ -97,9 +97,9 @@ class Model(object):
             h, _ = dynamic_rnn(cell, xx, x_len, dtype='float', scope='h')  # [N, JX, 2d]
 
         with tf.variable_scope("match"):
-            q_mask_tiled = tf.tile(tf.reshape(self.q, [N, 1, JQ]), [1, JX, 1])
+            q_mask_tiled = tf.tile(tf.reshape(self.q_mask, [N, 1, JQ]), [1, JX, 1])
             u_tiled = tf.tile(tf.reshape(u, [N, 1, JQ*d]), [1, JX, 1])
-            hu = tf.concat(2, [h, tf.cast(q_mask_tiled, 'float'), u_tiled])  # [N, JX, d + JQ*d]
+            hu = tf.concat(2, [h, tf.cast(q_mask_tiled, 'float'), u_tiled])  # [N, JX, d + JQ + JQ*d]
             (fw_hr, bw_hr), _ = bidirectional_dynamic_rnn(match_cell, match_cell, hu, x_len, dtype='float', scope='hr')
             hr = tf.concat(2, [fw_hr, bw_hr])  # [N, JX, 2*d]
 
