@@ -54,7 +54,6 @@ class Model(object):
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, \
             config.char_emb_size, config.max_word_size
 
-        """
         with tf.variable_scope("char_emb"):
             char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
             Acx = tf.nn.embedding_lookup(char_emb_mat, self.cx)  # [N, JX, W, dc]
@@ -69,7 +68,6 @@ class Model(object):
             qqc = tf.nn.conv2d(Acq, filter, strides, "VALID") + bias  # [N, JQ, W/filter_stride, d]
             xxc = tf.reshape(tf.reduce_max(tf.nn.relu(xxc), 2), [-1, JX, d])
             qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, d])
-        """
 
         with tf.variable_scope("word_emb"):
             if config.mode == 'train':
@@ -81,10 +79,8 @@ class Model(object):
             # Ax = linear([Ax], d, False, scope='Ax_reshape')
             # Aq = linear([Aq], d, False, scope='Aq_reshape')
 
-        # xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, 2d]
-        # qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
-        xx = Ax
-        qq = Aq
+        xx = tf.concat(2, [xxc, Ax])  # [N, JX, 2d]
+        qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
 
         cell = BasicLSTMCell(d, state_is_tuple=True)
         cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
