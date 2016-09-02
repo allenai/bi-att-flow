@@ -70,17 +70,24 @@ class Model(object):
             qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, d])
 
         with tf.variable_scope("word_emb"):
-            if config.mode == 'train':
-                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
+            if config.finetune:
+                if config.mode == 'train':
+                    word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
+                else:
+                    word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
             else:
-                word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
+                word_emb_mat = config.emb_mat.astype('float32')
             Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
             Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
             # Ax = linear([Ax], d, False, scope='Ax_reshape')
             # Aq = linear([Aq], d, False, scope='Aq_reshape')
 
-        xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, 2d]
-        qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
+        if config.use_char:
+            xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, 2d]
+            qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
+        else:
+            xx = Ax
+            qq = Aq
 
         cell = BasicLSTMCell(d, state_is_tuple=True)
         cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)

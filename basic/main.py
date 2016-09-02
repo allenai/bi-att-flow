@@ -99,6 +99,8 @@ def _train(config):
                     break
             if config.dump_eval:
                 graph_handler.dump_eval(e)
+            if config.dump_answer:
+                graph_handler.dump_answer(e)
     if global_step % config.save_period != 0:
         graph_handler.save(sess, global_step=global_step)
 
@@ -125,6 +127,8 @@ def _test(config):
     print(e)
     if config.dump_eval:
         graph_handler.dump_eval(e)
+    if config.dump_answer:
+        graph_handler.dump_answer(e)
 
 
 def _forward(config):
@@ -159,12 +163,15 @@ def set_dirs(config):
     config.save_dir = os.path.join(config.out_dir, "save")
     config.log_dir = os.path.join(config.out_dir, "log")
     config.eval_dir = os.path.join(config.out_dir, "eval")
+    config.answer_dir = os.path.join(config.answer_dir, "answer")
     if not os.path.exists(config.out_dir):
         os.makedirs(config.out_dir)
     if not os.path.exists(config.save_dir):
         os.mkdir(config.save_dir)
     if not os.path.exists(config.log_dir):
         os.mkdir(config.eval_dir)
+    if not os.path.exists(config.answer_dir):
+        os.mkdir(config.answer_dir)
 
 
 def _get_args():

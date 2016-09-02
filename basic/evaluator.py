@@ -144,7 +144,7 @@ class AccuracyEvaluator2(AccuracyEvaluator):
 
 
 class TempEvaluation(AccuracyEvaluation):
-    def __init__(self, data_type, global_step, idxs, yp, yp2, y, correct, loss, f1s):
+    def __init__(self, data_type, global_step, idxs, yp, yp2, y, correct, loss, f1s, id2answer_dict):
         super(TempEvaluation, self).__init__(data_type, global_step, idxs, yp, y, correct, loss)
         self.yp2 = yp2
         self.f1s = f1s
@@ -152,6 +152,7 @@ class TempEvaluation(AccuracyEvaluation):
         self.dict['yp2'] = yp2
         self.dict['f1s'] = f1s
         self.dict['f1'] = self.f1
+        self.id2answer_dict = id2answer_dict
         f1_summary = tf.Summary(value=[tf.Summary.Value(tag='dev/f1', simple_value=self.f1)])
         self.summaries.append(f1_summary)
 
@@ -167,7 +168,8 @@ class TempEvaluation(AccuracyEvaluation):
         new_correct = self.correct + other.correct
         new_f1s = self.f1s + other.f1s
         new_loss = (self.loss * self.num_examples + other.loss * other.num_examples) / len(new_correct)
-        return TempEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_y, new_correct, new_loss, new_f1s)
+        new_id2answer_dict = dict(list(self.id2answer_dict.items()) + list(other.id2answer_dict.items()))
+        return TempEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_y, new_correct, new_loss, new_f1s, new_id2answer_dict)
 
     def __repr__(self):
         return "{} step {}: accuracy={:.4f}, f1={:.4f}, loss={:.4f}".format(self.data_type, self.global_step, self.acc, self.f1, self.loss)
@@ -182,10 +184,12 @@ class TempEvaluator(LabeledEvaluator):
         y = data_set.data['y']
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
         spans = [get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)]
+        id2answer_dict = {id_: " ".join(data_set.data['x'][int(ypi[0][0])][int(ypi[0][1]):int(yp2i[1][1])])
+                          for id_, ypi, yp2i in zip(data_set.data['ids'], yp, yp2)}
         correct = [self.__class__.compare2(yi, span) for yi, span in zip(y, spans)]
         f1s = [self.__class__.span_f1(yi, span) for yi, span in zip(y, spans)]
         e = TempEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), y,
-                           correct, float(loss), f1s)
+                           correct, float(loss), f1s, id2answer_dict)
         return e
 
     @staticmethod
