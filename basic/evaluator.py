@@ -184,8 +184,16 @@ class TempEvaluator(LabeledEvaluator):
         y = data_set.data['y']
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
         spans = [get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)]
-        id2answer_dict = {id_: " ".join(data_set.data['x'][int(ypi[0][0])][int(ypi[0][1]):int(yp2i[1][1])])
-                          for id_, ypi, yp2i in zip(data_set.data['ids'], yp, yp2)}
+
+        def _get(xi, span):
+            if len(xi) <= span[0][0]:
+                return [""]
+            if len(xi[span[0][0]]) <= span[1][1]:
+                return [""]
+            return xi[span[0][0]][span[0][1]:span[1][1]]
+
+        id2answer_dict = {id_: " ".join(_get(xi, span))
+                          for id_, xi, span in zip(data_set.data['ids'], data_set.data['x'], spans)}
         correct = [self.__class__.compare2(yi, span) for yi, span in zip(y, spans)]
         f1s = [self.__class__.span_f1(yi, span) for yi, span in zip(y, spans)]
         e = TempEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), y,

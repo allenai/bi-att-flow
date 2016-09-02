@@ -163,7 +163,7 @@ def set_dirs(config):
     config.save_dir = os.path.join(config.out_dir, "save")
     config.log_dir = os.path.join(config.out_dir, "log")
     config.eval_dir = os.path.join(config.out_dir, "eval")
-    config.answer_dir = os.path.join(config.answer_dir, "answer")
+    config.answer_dir = os.path.join(config.out_dir, "answer")
     if not os.path.exists(config.out_dir):
         os.makedirs(config.out_dir)
     if not os.path.exists(config.save_dir):
