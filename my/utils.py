@@ -55,3 +55,38 @@ def short_floats(o, precision):
 
 def argmax(x):
     return np.unravel_index(x.argmax(), x.shape)
+
+
+def get_spans(text, tokens):
+    """
+
+    :param text:
+    :param tokens:
+    :return: the start indices of tokens in text
+    """
+    spans = []
+    cur_idx = 0
+    for token in tokens:
+        if text.find(token, cur_idx) < 0:
+            print(tokens)
+            print("{} {} {}".format(token, cur_idx, text))
+            raise Exception()
+        cur_idx = text.find(token, cur_idx)
+        spans.append((cur_idx, cur_idx+len(token)))
+        cur_idx += len(token)
+    return spans
+
+
+def _find(token_spans, target_span):
+    """
+
+    :param token_spans: [ (0, 5), (6, 7), (9, 14), ... ]
+    :param target_span: [ (5, 13) ]
+    :return: (1, 3)
+    """
+    idxs = []
+    for i, span in enumerate(token_spans):
+        if not (target_span[1] <= span[0] or target_span[0] >= span[1]):
+            idxs.append(i)
+    return idxs[0], idxs[-1] + 1
+

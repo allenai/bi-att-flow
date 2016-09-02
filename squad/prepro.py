@@ -94,7 +94,6 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
     x, cx, tx, stx = [], [], [], []
     word_counter, char_counter, lower_word_counter = Counter(), Counter(), Counter()
     pos_counter = Counter()
-
     start_ai = int(round(len(source_data['data']) * start_ratio))
     stop_ai = int(round(len(source_data['data']) * stop_ratio))
     for ai, article in enumerate(tqdm(source_data['data'][start_ai:stop_ai])):
@@ -142,11 +141,11 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
                     assert len(xi[yi1[0]]) >= yi1[1]
                     yi.append([yi0, yi1])
 
-                    for qij in qi:
-                        word_counter[qij] += 1
-                        lower_word_counter[qij.lower()] += 1
-                        for qijk in qij:
-                            char_counter[qijk] += 1
+                for qij in qi:
+                    word_counter[qij] += 1
+                    lower_word_counter[qij.lower()] += 1
+                    for qijk in qij:
+                        char_counter[qijk] += 1
 
                 q.append(qi)
                 cq.append(cqi)
@@ -162,7 +161,8 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
     word2vec_dict = get_word2vec(args, word_counter)
     lower_word2vec_dict = get_word2vec(args, lower_word_counter)
 
-    data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, '*tx': rx, '*stx': rx, 'idxs': idxs, 'ids': ids}
+    data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, '*tx': rx, '*stx': rx,
+            'idxs': idxs, 'ids': ids}
     shared = {'x': x, 'cx': cx, 'tx': tx, 'stx': stx,
               'word_counter': word_counter, 'char_counter': char_counter, 'lower_word_counter': lower_word_counter,
               'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dict, 'pos_counter': pos_counter}

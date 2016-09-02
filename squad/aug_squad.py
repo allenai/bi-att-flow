@@ -93,6 +93,7 @@ for ai, article in enumerate(data['data']):
     for pi, para in enumerate(article['paragraphs']):
         context = para['context']
         sents = h.split_doc(context)
+        words = h.split_sent(context)
         sent_starts = []
         ref_idx = 0
         for sent in sents:
@@ -100,6 +101,7 @@ for ai, article in enumerate(data['data']):
             sent_starts.append(new_idx)
             ref_idx = new_idx + len(sent)
         para['sents'] = sents
+        para['words'] = words
         para['sent_starts'] = sent_starts
 
         consts = list(map(h.get_const, sents))
@@ -113,6 +115,7 @@ for ai, article in enumerate(data['data']):
             qa['const'] = question_const
             question_dep = h.get_dep(question)
             qa['dep'] = question_dep
+            qa['words'] = h.split_sent(question)
 
             for answer in qa['answers']:
                 answer_start = answer['answer_start']
