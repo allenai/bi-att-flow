@@ -112,12 +112,19 @@ def get_squad_data_filter(config):
         xi = x[rx[0]][rx[1]]
         if sum(map(len, xi)) > config.para_size_th:
             return False
+        """
+        for yi in y:
+            for yij in yi:
+                if len(xi[yij[0]]) > config.answer_sent_size_th:
+                    return False
+        """
         return True
     return data_filter
 
 
 def update_config(config, data_sets):
     config.max_para_size = 0
+    config.max_answer_sent_size = 0
     config.max_ques_size = 0
     config.max_word_size = 0
     for data_set in data_sets:
@@ -128,6 +135,9 @@ def update_config(config, data_sets):
             q = data['q'][idx]
             sents = shared['x'][rx[0]][rx[1]]
             config.max_para_size = max(config.max_para_size, sum(map(len, sents)))
+            for yi in data['y']:
+                for yij in yi:
+                    config.max_answer_sent_size = max(config.max_answer_sent_size, len(sents[yij[0]]))
             config.max_word_size = max(config.max_word_size, max(len(word) for sent in sents for word in sent))
             if len(q) > 0:
                 config.max_ques_size = max(config.max_ques_size, len(q))

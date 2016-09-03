@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.python.ops.rnn_cell import DropoutWrapper, RNNCell
+from tensorflow.python.ops.rnn_cell import DropoutWrapper, RNNCell, LSTMStateTuple
 
 from my.tensorflow import exp_mask
 from my.tensorflow.nn import linear
@@ -13,10 +13,12 @@ class SwitchableDropoutWrapper(DropoutWrapper):
         self.is_train = is_train
 
     def __call__(self, inputs, state, scope=None):
-        outputs_do, _ = super(SwitchableDropoutWrapper, self).__call__(inputs, state, scope=scope)
+        outputs_do, new_state_do = super(SwitchableDropoutWrapper, self).__call__(inputs, state, scope=scope)
         tf.get_variable_scope().reuse_variables()
         outputs, new_state = self._cell(inputs, state, scope)
         outputs = tf.cond(self.is_train, lambda: outputs_do, lambda: outputs)
+        new_state = LSTMStateTuple(*[tf.cond(self.is_train, lambda: new_state_do_i, lambda: new_state_i)
+                             for new_state_do_i, new_state_i in zip(new_state_do, new_state)])
         return outputs, new_state
 
 

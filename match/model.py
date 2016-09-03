@@ -82,8 +82,8 @@ class Model(object):
 
         xx = tf.concat(2, [xxc, Ax])  # [N, JX, 2d]
         qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
-        xx = Ax
-        qq = Aq
+        # xx = Ax
+        # qq = Aq
 
         cell = BasicLSTMCell(d, state_is_tuple=True)
         cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
@@ -91,13 +91,11 @@ class Model(object):
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("prepro"):
-            _, (_, (fw_ul, bw_ul)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='common')  # [N, J, d], [N, d]
+            _, (_, ul) = dynamic_rnn(cell, qq, q_len, dtype='float', scope='common')  # [N, J, d], [N, d]
             tf.get_variable_scope().reuse_variables()
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='common')  # [N, JX, 2d]
-            h = tf.concat(2, [fw_h, bw_h])
+            h, _ = dynamic_rnn(cell, xx, x_len, dtype='float', scope='common')  # [N, JX, 2d]
 
         with tf.variable_scope("inference"):
-            ul = tf.concat(1, [fw_ul, bw_ul])  # [N, d]
             ul = tf.tile(tf.expand_dims(ul, 1), [1, JX, 1])
             hul = tf.concat(2, [h, ul])
             (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, hul, x_len, dtype='float', scope='h12')  # [N, JX, 2d]

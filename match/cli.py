@@ -35,14 +35,16 @@ flags.DEFINE_integer("char_emb_size", 8, "Char emb size [8]")
 flags.DEFINE_integer("char_filter_height", 5, "Char filter height [5]")
 flags.DEFINE_float("wd", 0.0001, "Weight decay [0.001]")
 flags.DEFINE_bool("lower_word", True, "lower word [True]")
-flags.DEFINE_bool("dump_eval", True, "dump eval? [True]")
+flags.DEFINE_bool("dump_eval", False, "dump eval? [False]")
+flags.DEFINE_bool("dump_answer", True, "dump answer? [True]")
 flags.DEFINE_string("model", "1", "config 1 |2 [1]")
 
 flags.DEFINE_integer("word_count_th", 10, "word count th [50]")
 flags.DEFINE_integer("char_count_th", 50, "char count th [100]")
 flags.DEFINE_integer("para_size_th", 256, "para size th [256]")
-flags.DEFINE_integer("ques_size_th", 32, "ques size th [64]")
+flags.DEFINE_integer("ques_size_th", 32, "ques size th [32]")
 flags.DEFINE_integer("word_size_th", 16, "word size th [16]")
+flags.DEFINE_integer("answer_sent_size_th", 64, "answer sent size th [64]")
 
 
 def main(_):

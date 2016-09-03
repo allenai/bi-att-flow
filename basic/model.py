@@ -7,7 +7,7 @@ from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 from basic.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
 from my.tensorflow.nn import linear
-from my.tensorflow.rnn import bidirectional_dynamic_rnn
+from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper
 
 
@@ -94,36 +94,19 @@ class Model(object):
         x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
-        with tf.variable_scope("rnn1"):
-            (fw_us, bw_us), (_, (fw_u, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='u')  # [N, J, d], [N, d]
-            u = tf.concat(1, [fw_u, bw_u])
+        with tf.variable_scope("prepro"):
+            _, (_, u) = dynamic_rnn(cell, qq, q_len, dtype='float', scope='u')  # [N, J, d], [N, d]
+
+        with tf.variable_scope("main"):
             u = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1])
-
-            xx = tf.concat(3, [xx, u])
-
-            (fw_h, bw_h), (_, (fw_hl, bw_hl)) = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
+            xu = tf.concat(3, [xx, u])
+            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xu, x_len, dtype='float', scope='h')  # [N, M, JX, 2d]
             h = tf.concat(3, [fw_h, bw_h])
-            (fw_h, bw_h), (_, (fw_hl, bw_hl)) = bidirectional_dynamic_rnn(cell, cell, h, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
-            h = tf.concat(3, [fw_h, bw_h])
-            hl = tf.concat(1, [fw_hl, bw_hl])
-            hl = tf.reshape(hl, [N, M, 2*d])
-            (fw_h2, bw_h2), (_, (fw_hl2, bw_hl2)) = bidirectional_dynamic_rnn(cell, cell, h, x_len, dtype='float', scope='h3')  # [N, M, JX, 2d]
-            h2 = tf.concat(3, [fw_h2, bw_h2])
-            hl2 = tf.concat(1, [fw_hl2, bw_hl2])
-            hl2 = tf.reshape(hl2, [N, M, 2*d])
+            g1, _ = dynamic_rnn(cell, h, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
+            g2, _ = dynamic_rnn(cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
 
-        if config.model == '1':
-            z1 = linear(hl, d, True, scope='z1', wd=config.wd)
-            z2 = linear([z1, hl2], d, True, scope='z2', wd=config.wd)
-            z1 = tf.tile(tf.expand_dims(z1, 2), [1, 1, JX, 1])  # [N, M, JX, d]
-            z2 = tf.tile(tf.expand_dims(z2, 2), [1, 1, JX, 1])  # [N, M, JX, d]
-            dot = linear([h, z1], 1, True, squeeze=True, scope='dot', wd=config.wd)
-            dot2 = linear([h2, z2], 1, True, squeeze=True, scope='dot2', wd=config.wd)
-        elif config.model == '2':
-            dot = linear(h, 1, True, squeeze=True, scope='dot', wd=config.wd)
-            dot2 = linear(h2, 1, True, squeeze=True, scope='dot2', wd=config.wd)
-        else:
-            raise Exception()
+        dot = linear(g1, 1, True, squeeze=True, scope='dot', wd=config.wd)
+        dot2 = linear(g2, 1, True, squeeze=True, scope='dot2', wd=config.wd)
         self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
         self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
         self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
@@ -203,17 +186,25 @@ class Model(object):
 
         for i, xi in enumerate(batch.data['x']):
             for j, xij in enumerate(xi):
+                if j == config.max_num_sents:
+                    break
                 for k, xijk in enumerate(xij):
+                    if k == config.max_sent_size:
+                        break
                     x[i, j, k] = _get_word(xijk)
                     x_mask[i, j, k] = True
 
         for i, cxi in enumerate(batch.data['cx']):
             for j, cxij in enumerate(cxi):
+                if j == config.max_num_sents:
+                    break
                 for k, cxijk in enumerate(cxij):
+                    if k == config.max_sent_size:
+                        break
                     for l, cxijkl in enumerate(cxijk):
-                        cx[i, j, k, l] = _get_char(cxijkl)
-                        if l + 1 == config.max_word_size:
+                        if l == config.max_word_size:
                             break
+                        cx[i, j, k, l] = _get_char(cxijkl)
 
         for i, qi in enumerate(batch.data['q']):
             for j, qij in enumerate(qi):

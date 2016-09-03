@@ -110,10 +110,17 @@ def get_squad_data_filter(config):
         if len(q) > config.ques_size_th:
             return False
         xi = x[rx[0]][rx[1]]
+        """
         if len(xi) > config.num_sents_th:
             return False
         if any(len(xij) > config.sent_size_th for xij in xi):
             return False
+        """
+        for start, stop in y:
+            if stop[0] >= config.num_sents_th:
+                return False
+            if max(start[1], stop[1]) >= config.sent_size_th:
+                return False
         return True
     return data_filter
 
@@ -136,6 +143,9 @@ def update_config(config, data_sets):
             if len(q) > 0:
                 config.max_ques_size = max(config.max_ques_size, len(q))
                 config.max_word_size = max(config.max_word_size, max(len(word) for word in q))
+
+    config.max_num_sents = min(config.max_num_sents, config.num_sents_th)
+    config.max_sent_size = min(config.max_sent_size, config.sent_size_th)
 
     config.max_word_size = min(config.max_word_size, config.word_size_th)
 
