@@ -99,6 +99,8 @@ def _train(config):
                     break
             if config.dump_eval:
                 graph_handler.dump_eval(e)
+            if config.dump_answer:
+                graph_handler.dump_answer(e)
     if global_step % config.save_period != 0:
         graph_handler.save(sess, global_step=global_step)
 
@@ -125,6 +127,8 @@ def _test(config):
     print(e)
     if config.dump_eval:
         graph_handler.dump_eval(e)
+    if config.dump_answer:
+        graph_handler.dump_answer(e)
 
 
 def _forward(config):
