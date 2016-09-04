@@ -58,6 +58,8 @@ class Model(object):
             char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
             Acx = tf.nn.embedding_lookup(char_emb_mat, self.cx)  # [N, M, JX, W, dc]
             Acq = tf.nn.embedding_lookup(char_emb_mat, self.cq)  # [N, JQ, W, dc]
+            Acx = tf.nn.dropout(Acx, config.input_keep_prob)
+            Acq = tf.nn.dropout(Acq, config.input_keep_prob)
 
             filter = tf.get_variable("filter", shape=[1, config.char_filter_height, dc, d], dtype='float')
             bias = tf.get_variable("bias", shape=[d], dtype='float')
@@ -79,15 +81,13 @@ class Model(object):
                 word_emb_mat = config.emb_mat.astype('float32')
             Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
             Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
-            # Ax = linear([Ax], d, False, scope='Ax_reshape')
-            # Aq = linear([Aq], d, False, scope='Aq_reshape')
+            Ax = linear([Ax], d, False, scope='Ax_reshape', wd=config.wd, input_keep_prob=config.input_keep_prob,
+                        is_train=self.is_train)
+            Aq = linear([Aq], d, False, scope='Aq_reshape', wd=config.wd, input_keep_prob=config.input_keep_prob,
+                        is_train=self.is_train)
 
-        if config.use_char:
-            xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, 2d]
-            qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
-        else:
-            xx = Ax
-            qq = Aq
+        xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, 2d]
+        qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
 
         cell = BasicLSTMCell(d, state_is_tuple=True)
         cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
@@ -102,11 +102,15 @@ class Model(object):
             xu = tf.concat(3, [xx, u])
             (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xu, x_len, dtype='float', scope='h')  # [N, M, JX, 2d]
             h = tf.concat(3, [fw_h, bw_h])
-            g1, _ = dynamic_rnn(cell, h, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
-            g2, _ = dynamic_rnn(cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
+            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, h, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
+            g1 = tf.concat(3, [fw_g1, bw_g1])
+            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(cell, cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
+            g2 = tf.concat(3, [fw_g2, bw_g2])
 
-        dot = linear(g1, 1, True, squeeze=True, scope='dot', wd=config.wd)
-        dot2 = linear(g2, 1, True, squeeze=True, scope='dot2', wd=config.wd)
+        dot = linear(g1, 1, True, squeeze=True, scope='dot', wd=config.wd, input_keep_prob=config.input_keep_prob,
+                     is_train=self.is_train)
+        dot2 = linear(g2, 1, True, squeeze=True, scope='dot2', wd=config.wd, input_keep_prob=config.input_keep_prob,
+                      is_train=self.is_train)
         self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
         self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
         self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
