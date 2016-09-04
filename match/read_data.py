@@ -135,9 +135,6 @@ def update_config(config, data_sets):
             q = data['q'][idx]
             sents = shared['x'][rx[0]][rx[1]]
             config.max_para_size = max(config.max_para_size, sum(map(len, sents)))
-            for yi in data['y']:
-                for yij in yi:
-                    config.max_answer_sent_size = max(config.max_answer_sent_size, len(sents[yij[0]]))
             config.max_word_size = max(config.max_word_size, max(len(word) for sent in sents for word in sent))
             if len(q) > 0:
                 config.max_ques_size = max(config.max_ques_size, len(q))

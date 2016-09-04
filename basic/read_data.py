@@ -144,8 +144,9 @@ def update_config(config, data_sets):
                 config.max_ques_size = max(config.max_ques_size, len(q))
                 config.max_word_size = max(config.max_word_size, max(len(word) for word in q))
 
-    config.max_num_sents = min(config.max_num_sents, config.num_sents_th)
-    config.max_sent_size = min(config.max_sent_size, config.sent_size_th)
+    if config.mode == 'train':
+        config.max_num_sents = min(config.max_num_sents, config.num_sents_th)
+        config.max_sent_size = min(config.max_sent_size, config.sent_size_th)
 
     config.max_word_size = min(config.max_word_size, config.word_size_th)
 

@@ -8,7 +8,7 @@ class Trainer(object):
         assert isinstance(model, Model)
         self.config = config
         self.model = model
-        self.opt = tf.train.AdagradOptimizer(config.init_lr)
+        self.opt = tf.train.AdadeltaOptimizer(config.init_lr)
         self.loss = model.get_loss()
         self.var_list = model.get_var_list()
         self.global_step = model.get_global_step()
