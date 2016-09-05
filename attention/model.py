@@ -6,7 +6,7 @@ from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 
 from attention.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
-from my.tensorflow.nn import linear
+from my.tensorflow.nn import linear, softsel
 from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper
 
@@ -72,13 +72,10 @@ class Model(object):
             qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, d])
 
         with tf.variable_scope("word_emb"):
-            if config.finetune:
-                if config.mode == 'train':
-                    word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
-                else:
-                    word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
+            if config.mode == 'train':
+                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
             else:
-                word_emb_mat = config.emb_mat.astype('float32')
+                word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
             Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
             Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
             Ax = linear([Ax], d, False, scope='Ax_reshape', wd=config.wd, input_keep_prob=config.input_keep_prob,
@@ -115,8 +112,7 @@ class Model(object):
             # TODO : make this a util function
             null_mask = tf.constant(np.ones([N, 1], dtype='bool'), dtype='bool')
             mask = tf.expand_dims(tf.expand_dims(tf.concat(1, [self.q_mask, null_mask]), 1), 1)
-            a = tf.reshape(tf.nn.softmax(tf.reshape(exp_mask(logits, mask), [-1, JQ+1])), [-1, M, JX, JQ+1, 1])
-            u_a = tf.reduce_sum(a * u, 3)
+            u_a = softsel(u, logits, mask=mask)
 
         with tf.variable_scope("main"):
             xu = tf.concat(3, [xx, u_a])

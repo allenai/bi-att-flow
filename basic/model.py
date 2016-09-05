@@ -72,13 +72,10 @@ class Model(object):
             qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, d])
 
         with tf.variable_scope("word_emb"):
-            if config.finetune:
-                if config.mode == 'train':
-                    word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
-                else:
-                    word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
+            if config.mode == 'train':
+                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
             else:
-                word_emb_mat = config.emb_mat.astype('float32')
+                word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
             Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
             Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
             Ax = linear([Ax], d, False, scope='Ax_reshape', wd=config.wd, input_keep_prob=config.input_keep_prob,
@@ -95,14 +92,15 @@ class Model(object):
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("prepro"):
-            _, (_, u) = dynamic_rnn(cell, qq, q_len, dtype='float', scope='u')  # [N, J, d], [N, d]
+            _, (_, (fw_u, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='u')  # [N, J, d], [N, d]
+            u = tf.concat(1, [fw_u, bw_u])
+            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='h')  # [N, M, JX, 2d]
+            h = tf.concat(3, [fw_h, bw_h])
 
         with tf.variable_scope("main"):
             u = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1])
-            xu = tf.concat(3, [xx, u])
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xu, x_len, dtype='float', scope='h')  # [N, M, JX, 2d]
-            h = tf.concat(3, [fw_h, bw_h])
-            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, h, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
+            g0 = tf.concat(3, [h, u, h*u, tf.abs(h-u)])
+            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, g0, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
             g1 = tf.concat(3, [fw_g1, bw_g1])
             (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(cell, cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
             g2 = tf.concat(3, [fw_g2, bw_g2])

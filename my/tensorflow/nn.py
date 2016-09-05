@@ -2,7 +2,7 @@ from tensorflow.python.ops.rnn_cell import _linear
 from tensorflow.python.util import nest
 import tensorflow as tf
 
-from my.tensorflow import flatten, reconstruct, add_wd
+from my.tensorflow import flatten, reconstruct, add_wd, exp_mask
 
 
 def linear(args, output_size, bias, bias_start=0.0, scope=None, squeeze=False, wd=0.0, input_keep_prob=1.0,
@@ -26,3 +26,29 @@ def linear(args, output_size, bias, bias_start=0.0, scope=None, squeeze=False, w
 
     return out
 
+
+def softmax(logits, mask=None, scope=None):
+    with tf.name_scope(scope or "Softmax"):
+        if mask is not None:
+            logits = exp_mask(logits, mask)
+        flat_logits = flatten(logits, 1)
+        flat_out = tf.nn.softmax(flat_logits)
+        out = reconstruct(flat_out, logits, 1)
+
+        return out
+
+
+def softsel(target, logits, mask=None, scope=None):
+    """
+
+    :param target: [ ..., J, d] dtype=float
+    :param logits: [ ..., J], dtype=float
+    :param mask: [ ..., J], dtype=bool
+    :param scope:
+    :return: [..., d], dtype=float
+    """
+    with tf.name_scope(scope or "Softsel"):
+        a = softmax(logits, mask=mask)
+        target_rank = len(target.get_shape().as_list())
+        out = tf.reduce_sum(tf.expand_dims(a, -1) * target, target_rank - 2)
+        return out
