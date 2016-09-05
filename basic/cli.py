@@ -29,7 +29,7 @@ flags.DEFINE_float("decay", 0.9, "Exponential moving average decay [0.9]")
 
 flags.DEFINE_boolean("draft", False, "Draft for quick testing? [False]")
 
-flags.DEFINE_integer("hidden_size", 64, "Hidden size [64]")
+flags.DEFINE_integer("hidden_size", 128, "Hidden size [128]")
 flags.DEFINE_float("input_keep_prob", 0.8, "Input keep prob [0.8]")
 flags.DEFINE_integer("char_emb_size", 8, "Char emb size [8]")
 flags.DEFINE_integer("char_filter_height", 5, "Char filter height [5]")
@@ -38,8 +38,6 @@ flags.DEFINE_bool("lower_word", True, "lower word [True]")
 flags.DEFINE_bool("dump_eval", True, "dump eval? [True]")
 flags.DEFINE_bool("dump_answer", True, "dump answer? [True]")
 flags.DEFINE_string("model", "2", "config 1 |2 [2]")
-flags.DEFINE_bool("finetune", True, "finetune? [True]")
-flags.DEFINE_bool("use_char", True, "use char? [True]")
 
 flags.DEFINE_integer("word_count_th", 50, "word count th [100]")
 flags.DEFINE_integer("char_count_th", 100, "char count th [500]")

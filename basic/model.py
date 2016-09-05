@@ -6,7 +6,7 @@ from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 
 from basic.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
-from my.tensorflow.nn import linear
+from my.tensorflow.nn import linear, double_linear_logits
 from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper
 
@@ -102,15 +102,22 @@ class Model(object):
             g0 = tf.concat(3, [h, u, h*u, tf.abs(h-u)])
             (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, g0, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
             g1 = tf.concat(3, [fw_g1, bw_g1])
+            # g1 = tf.concat(3, [g1, u, g1*u, tf.abs(g1-u)])
             (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(cell, cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
             g2 = tf.concat(3, [fw_g2, bw_g2])
+            # g2 = tf.concat(3, [g2, u, g2*u, tf.abs(g2-u)])
 
         dot = linear(g1, 1, True, squeeze=True, scope='dot', wd=config.wd, input_keep_prob=config.input_keep_prob,
                      is_train=self.is_train)
         dot2 = linear(g2, 1, True, squeeze=True, scope='dot2', wd=config.wd, input_keep_prob=config.input_keep_prob,
                       is_train=self.is_train)
+        """
+        dot = double_linear_logits(g1, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, is_train=self.is_train, scope='logits1')
+        dot2 = double_linear_logits(g2, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, is_train=self.is_train, scope='logits2')
+        """
         self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
         self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
+
         self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
         self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
 

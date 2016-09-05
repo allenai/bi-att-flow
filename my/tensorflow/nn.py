@@ -54,10 +54,21 @@ def softsel(target, logits, mask=None, scope=None):
         return out
 
 
-def double_linear_logits(args, size, bias, bias_start=0.0, scope=None, wd=0.0, input_keep_prob=1.0, is_train=None):
+def double_linear_logits(args, size, bias, bias_start=0.0, scope=None, mask=None, wd=0.0, input_keep_prob=1.0, is_train=None):
     with tf.variable_scope(scope or "Double_Linear_Logits"):
-        first = linear(args, size, bias, bias_start=bias_start, scope='first',
-                       wd=wd, input_keep_prob=input_keep_prob, is_train=is_train)
-        second = linear(tf.tanh(first), 1, bias, bias_start=bias_start, squeeze=True, scope='second',
+        first = tf.tanh(linear(args, size, bias, bias_start=bias_start, scope='first',
+                               wd=wd, input_keep_prob=input_keep_prob, is_train=is_train))
+        second = linear(first, 1, bias, bias_start=bias_start, squeeze=True, scope='second',
                         wd=wd, input_keep_prob=input_keep_prob, is_train=is_train)
+        if mask is not None:
+            second = exp_mask(second, mask)
         return second
+
+
+def linear_logits(args, bias, bias_start=0.0, scope=None, mask=None, wd=0.0, input_keep_prob=1.0, is_train=None):
+    with tf.variable_scope(scope or "Linear_Logits"):
+        logits = linear(args, 1, bias, bias_start=bias_start, squeeze=True, scope='first',
+                        wd=wd, input_keep_prob=input_keep_prob, is_train=is_train)
+        if mask is not None:
+            logits = exp_mask(logits, mask)
+        return logits

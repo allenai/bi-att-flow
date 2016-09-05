@@ -6,8 +6,8 @@ from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 
 from attention.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
-from my.tensorflow.nn import linear, softsel
-from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
+from my.tensorflow.nn import linear, softsel, linear_logits
+from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn, bidirectional_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
 
 
@@ -92,10 +92,11 @@ class Model(object):
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("prepro"):
-            (fw_u, bw_u), _ = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float')  # [N, J, d], [N, d]
+            (fw_u, bw_u), _ = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float')
             u = tf.concat(2, [fw_u, bw_u])
             tf.get_variable_scope().reuse_variables()
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float')
+            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float',
+                                                        swap_memory=True)
             h = tf.concat(3, [fw_h, bw_h])
 
         with tf.variable_scope("attention"):
@@ -106,20 +107,18 @@ class Model(object):
             null_mask = tf.constant(np.ones([N, 1], dtype='bool'), dtype='bool')
             mask = tf.concat(1, [self.q_mask, null_mask])
             mask = tf.tile(tf.expand_dims(mask, 1), [1, M, 1])
-            controller = AttentionCell.get_double_linear_controller(d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
-                                                                    is_train=self.is_train)
-            att_cell = AttentionCell(cell, u, mask, controller)
+            att_cell = AttentionCell(cell, u, mask=mask)
             (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(att_cell, att_cell, h, x_len, dtype='float', scope='g1')
             g1 = tf.concat(3, [fw_g1, bw_g1])
             (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(att_cell, att_cell, g1, x_len, dtype='float', scope='g2')
             g2 = tf.concat(3, [fw_g2, bw_g2])
 
-        dot = linear(g1, 1, True, squeeze=True, scope='dot', wd=config.wd, input_keep_prob=config.input_keep_prob,
-                     is_train=self.is_train)
-        dot2 = linear(g2, 1, True, squeeze=True, scope='dot2', wd=config.wd, input_keep_prob=config.input_keep_prob,
-                      is_train=self.is_train)
-        self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
-        self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
+        logits = linear_logits(g1, True, scope='dot1', wd=config.wd, input_keep_prob=config.input_keep_prob,
+                               is_train=self.is_train)
+        logits2 = linear_logits(g2, True, scope='dot2', wd=config.wd, input_keep_prob=config.input_keep_prob,
+                                is_train=self.is_train)
+        self.logits = tf.reshape(logits, [-1, M * JX])  # [N, M, JX]
+        self.logits2 = tf.reshape(exp_mask(logits2, self.x_mask), [-1, M * JX])
         self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
         self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
 

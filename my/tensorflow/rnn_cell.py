@@ -111,10 +111,9 @@ class MatchCell(RNNCell):
 
 
 class AttentionCell(RNNCell):
-    def __init__(self, cell, memory, mask, controller):
+    def __init__(self, cell, memory, mask=None, controller=None, mapper=None, input_keep_prob=1.0, is_train=None):
         """
         Early fusion attention cell: uses the (inputs, state) to control the current attention.
-        This ain't working now because of the TensorFlow bug...
 
         :param cell:
         :param memory: [N, M, m]
@@ -124,7 +123,16 @@ class AttentionCell(RNNCell):
         self._cell = cell
         self._memory = memory
         self._mask = mask
+        self._flat_memory = flatten(memory, 2)
+        self._flat_mask = flatten(mask, 1)
+        if controller is None:
+            controller = AttentionCell.get_linear_controller(True, input_keep_prob=input_keep_prob, is_train=is_train)
         self._controller = controller
+        if mapper is None:
+            mapper = AttentionCell.get_concat_mapper()
+        elif mapper == 'sim':
+            mapper = AttentionCell.get_sim_mapper()
+        self._mapper = mapper
 
     @property
     def state_size(self):
@@ -136,15 +144,13 @@ class AttentionCell(RNNCell):
 
     def __call__(self, inputs, state, scope=None):
         with tf.variable_scope(scope or "AttentionCell"):
-            memory = flatten(self._memory, 2)
-            mask = flatten(self._mask, 1)
-            memory_logits = self._controller(inputs, state, memory)
-            sel_mem = softsel(memory, memory_logits, mask=mask)  # [N, m]
-            new_inputs = tf.concat(1, [inputs, sel_mem])
+            memory_logits = self._controller(inputs, state, self._flat_memory)
+            sel_mem = softsel(self._flat_memory, memory_logits, mask=self._flat_mask)  # [N, m]
+            new_inputs, new_state = self._mapper(inputs, state, sel_mem)
             return self._cell(new_inputs, state)
 
     @staticmethod
-    def get_double_linear_controller(size, bias, wd=0.0, input_keep_prob=1.0, is_train=None):
+    def get_double_linear_controller(size, bias, input_keep_prob=1.0, is_train=None):
         def double_linear_controller(inputs, state, memory):
             """
 
@@ -163,7 +169,50 @@ class AttentionCell(RNNCell):
 
             # [N, M, d]
             in_ = tf.concat(2, [tiled_inputs] + tiled_states + [memory])
-            out = double_linear_logits(in_, size, bias, wd=wd, input_keep_prob=input_keep_prob,
+            out = double_linear_logits(in_, size, bias, input_keep_prob=input_keep_prob,
                                        is_train=is_train)
             return out
         return double_linear_controller
+
+    @staticmethod
+    def get_linear_controller(bias, input_keep_prob=1.0, is_train=None):
+        def linear_controller(inputs, state, memory):
+            _memory_size = memory.get_shape().as_list()[-2]
+            tiled_inputs = tf.tile(tf.expand_dims(inputs, 1), [1, _memory_size, 1])
+            if isinstance(state, tuple):
+                tiled_states = [tf.tile(tf.expand_dims(each, 1), [1, _memory_size, 1])
+                                for each in state]
+            else:
+                tiled_states = [tf.tile(tf.expand_dims(state, 1), [1, _memory_size, 1])]
+
+            # [N, M, d]
+            in_ = tf.concat(2, [tiled_inputs] + tiled_states + [memory])
+            out = linear(in_, 1, bias, squeeze=True, input_keep_prob=input_keep_prob, is_train=is_train)
+            return out
+        return linear_controller
+
+    @staticmethod
+    def get_concat_mapper():
+        def concat_mapper(inputs, state, sel_mem):
+            """
+
+            :param inputs: [N, i]
+            :param state: [N, d]
+            :param sel_mem: [N, m]
+            :return: (new_inputs, new_state) tuple
+            """
+            return tf.concat(1, [inputs, sel_mem]), state
+        return concat_mapper
+
+    @staticmethod
+    def get_sim_mapper():
+        def sim_mapper(inputs, state, sel_mem):
+            """
+            Assume that inputs and sel_mem are the same size
+            :param inputs: [N, i]
+            :param state: [N, d]
+            :param sel_mem: [N, i]
+            :return: (new_inputs, new_state) tuple
+            """
+            return tf.concat(1, [inputs, sel_mem, inputs * sel_mem, tf.abs(inputs - sel_mem)]), state
+        return sim_mapper
