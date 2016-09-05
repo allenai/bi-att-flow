@@ -8,7 +8,7 @@ from attention.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
 from my.tensorflow.nn import linear, softsel
 from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
-from my.tensorflow.rnn_cell import SwitchableDropoutWrapper
+from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
 
 
 class Model(object):
@@ -21,14 +21,14 @@ class Model(object):
         N, M, JX, JQ, VW, VC, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.max_word_size
-        self.x = tf.placeholder('int32', [None, M, JX], name='x')
-        self.cx = tf.placeholder('int32', [None, M, JX, W], name='cx')
-        self.x_mask = tf.placeholder('bool', [None, M, JX], name='x_mask')
-        self.q = tf.placeholder('int32', [None, JQ], name='q')
-        self.cq = tf.placeholder('int32', [None, JQ, W], name='cq')
-        self.q_mask = tf.placeholder('bool', [None, JQ], name='q_mask')
-        self.y = tf.placeholder('bool', [None, M, JX], name='y')
-        self.y2 = tf.placeholder('bool', [None, M, JX], name='y2')
+        self.x = tf.placeholder('int32', [N, M, JX], name='x')
+        self.cx = tf.placeholder('int32', [N, M, JX, W], name='cx')
+        self.x_mask = tf.placeholder('bool', [N, M, JX], name='x_mask')
+        self.q = tf.placeholder('int32', [N, JQ], name='q')
+        self.cq = tf.placeholder('int32', [N, JQ, W], name='cq')
+        self.q_mask = tf.placeholder('bool', [N, JQ], name='q_mask')
+        self.y = tf.placeholder('bool', [N, M, JX], name='y')
+        self.y2 = tf.placeholder('bool', [N, M, JX], name='y2')
         self.is_train = tf.placeholder('bool', [], name='is_train')
 
         # Define misc
@@ -64,12 +64,12 @@ class Model(object):
             filter = tf.get_variable("filter", shape=[1, config.char_filter_height, dc, d], dtype='float')
             bias = tf.get_variable("bias", shape=[d], dtype='float')
             strides = [1, 1, 1, 1]
-            Acx = tf.reshape(Acx, [-1, JX, W, dc])
-            Acq = tf.reshape(Acq, [-1, JQ, W, dc])
+            Acx = tf.reshape(Acx, [N*M, JX, W, dc])
+            Acq = tf.reshape(Acq, [N, JQ, W, dc])
             xxc = tf.nn.conv2d(Acx, filter, strides, "VALID") + bias  # [N*M, JX, W/filter_stride, d]
             qqc = tf.nn.conv2d(Acq, filter, strides, "VALID") + bias  # [N, JQ, W/filter_stride, d]
-            xxc = tf.reshape(tf.reduce_max(tf.nn.relu(xxc), 2), [-1, M, JX, d])
-            qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, d])
+            xxc = tf.reshape(tf.reduce_max(tf.nn.relu(xxc), 2), [N, M, JX, d])
+            qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [N, JQ, d])
 
         with tf.variable_scope("word_emb"):
             if config.mode == 'train':
@@ -99,28 +99,19 @@ class Model(object):
             h = tf.concat(3, [fw_h, bw_h])
 
         with tf.variable_scope("attention"):
-            h_tiled = tf.tile(tf.expand_dims(h, 3), [1, 1, 1, JQ+1, 1])
             null_var = tf.get_variable('null_var', shape=[2*d], dtype='float')
-            null_var = tf.tile(tf.reshape(null_var, [1, 1, 1, 1, 2*d]), [N, M, JX, 1, 1])
-            u = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1, 1])
-            u = tf.concat(3, [u, null_var])
-            # [N, M, JX, JQ]
-            logits = linear(tf.tanh(linear([u, h_tiled], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
-                                           is_train=self.is_train, scope='l1')), 1, True,
-                            squeeze=True, wd=config.wd, input_keep_prob=config.input_keep_prob, is_train=self.is_train,
-                            scope='l2')
-            # TODO : make this a util function
+            null_var = tf.tile(tf.reshape(null_var, [1, 1, 2*d]), [N, 1, 1])
+            u = tf.concat(1, [u, null_var])
+            u = tf.tile(tf.expand_dims(u, 1), [1, M, 1, 1])
             null_mask = tf.constant(np.ones([N, 1], dtype='bool'), dtype='bool')
-            mask = tf.expand_dims(tf.expand_dims(tf.concat(1, [self.q_mask, null_mask]), 1), 1)
-            u_a = softsel(u, logits, mask=mask)
-
-        with tf.variable_scope("main"):
-            xu = tf.concat(3, [xx, u_a])
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xu, x_len, dtype='float', scope='h')  # [N, M, JX, 2d]
-            h = tf.concat(3, [fw_h, bw_h])
-            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, h, x_len, dtype='float', scope='g1')  # [N, M, JX, 2d]
+            mask = tf.concat(1, [self.q_mask, null_mask])
+            mask = tf.tile(tf.expand_dims(mask, 1), [1, M, 1])
+            controller = AttentionCell.get_double_linear_controller(d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
+                                                                    is_train=self.is_train)
+            att_cell = AttentionCell(cell, u, mask, controller)
+            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(att_cell, att_cell, h, x_len, dtype='float', scope='g1')
             g1 = tf.concat(3, [fw_g1, bw_g1])
-            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(cell, cell, g1, x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
+            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(att_cell, att_cell, g1, x_len, dtype='float', scope='g2')
             g2 = tf.concat(3, [fw_g2, bw_g2])
 
         dot = linear(g1, 1, True, squeeze=True, scope='dot', wd=config.wd, input_keep_prob=config.input_keep_prob,

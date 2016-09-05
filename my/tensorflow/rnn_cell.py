@@ -1,8 +1,8 @@
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import DropoutWrapper, RNNCell, LSTMStateTuple
 
-from my.tensorflow import exp_mask
-from my.tensorflow.nn import linear
+from my.tensorflow import exp_mask, flatten
+from my.tensorflow.nn import linear, softsel, double_linear_logits
 
 
 class SwitchableDropoutWrapper(DropoutWrapper):
@@ -110,3 +110,60 @@ class MatchCell(RNNCell):
             return self._cell(z, state)
 
 
+class AttentionCell(RNNCell):
+    def __init__(self, cell, memory, mask, controller):
+        """
+        Early fusion attention cell: uses the (inputs, state) to control the current attention.
+        This ain't working now because of the TensorFlow bug...
+
+        :param cell:
+        :param memory: [N, M, m]
+        :param mask:
+        :param controller: (inputs, prev_state, memory) -> memory_logits
+        """
+        self._cell = cell
+        self._memory = memory
+        self._mask = mask
+        self._controller = controller
+
+    @property
+    def state_size(self):
+        return self._cell.state_size
+
+    @property
+    def output_size(self):
+        return self._cell.output_size
+
+    def __call__(self, inputs, state, scope=None):
+        with tf.variable_scope(scope or "AttentionCell"):
+            memory = flatten(self._memory, 2)
+            mask = flatten(self._mask, 1)
+            memory_logits = self._controller(inputs, state, memory)
+            sel_mem = softsel(memory, memory_logits, mask=mask)  # [N, m]
+            new_inputs = tf.concat(1, [inputs, sel_mem])
+            return self._cell(new_inputs, state)
+
+    @staticmethod
+    def get_double_linear_controller(size, bias, wd=0.0, input_keep_prob=1.0, is_train=None):
+        def double_linear_controller(inputs, state, memory):
+            """
+
+            :param inputs: [N, i]
+            :param state: [N, d]
+            :param memory: [N, M, m]
+            :return: [N, M]
+            """
+            _memory_size = memory.get_shape().as_list()[-2]
+            tiled_inputs = tf.tile(tf.expand_dims(inputs, 1), [1, _memory_size, 1])
+            if isinstance(state, tuple):
+                tiled_states = [tf.tile(tf.expand_dims(each, 1), [1, _memory_size, 1])
+                                for each in state]
+            else:
+                tiled_states = [tf.tile(tf.expand_dims(state, 1), [1, _memory_size, 1])]
+
+            # [N, M, d]
+            in_ = tf.concat(2, [tiled_inputs] + tiled_states + [memory])
+            out = double_linear_logits(in_, size, bias, wd=wd, input_keep_prob=input_keep_prob,
+                                       is_train=is_train)
+            return out
+        return double_linear_controller

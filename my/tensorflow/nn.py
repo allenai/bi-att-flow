@@ -52,3 +52,12 @@ def softsel(target, logits, mask=None, scope=None):
         target_rank = len(target.get_shape().as_list())
         out = tf.reduce_sum(tf.expand_dims(a, -1) * target, target_rank - 2)
         return out
+
+
+def double_linear_logits(args, size, bias, bias_start=0.0, scope=None, wd=0.0, input_keep_prob=1.0, is_train=None):
+    with tf.variable_scope(scope or "Double_Linear_Logits"):
+        first = linear(args, size, bias, bias_start=bias_start, scope='first',
+                       wd=wd, input_keep_prob=input_keep_prob, is_train=is_train)
+        second = linear(tf.tanh(first), 1, bias, bias_start=bias_start, squeeze=True, scope='second',
+                        wd=wd, input_keep_prob=input_keep_prob, is_train=is_train)
+        return second

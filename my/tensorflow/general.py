@@ -10,7 +10,7 @@ VERY_NEGATIVE_NUMBER = -VERY_BIG_NUMBER
 
 
 def get_initializer(matrix):
-    def _initializer(shape, dtype=None): return matrix
+    def _initializer(shape, dtype=None, partition_info=None, **kwargs): return matrix
     return _initializer
 
 
