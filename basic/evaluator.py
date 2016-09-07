@@ -250,6 +250,12 @@ def get_best_span(ypi, yp2i):
     return (best_sent_idx, best_word_span[0]), (best_sent_idx, best_word_span[1] + 1)
 
 
-
-
-
+def get_span_score_pairs(ypi, yp2i):
+    span_score_pairs = []
+    for f, (ypif, yp2if) in enumerate(zip(ypi, yp2i)):
+        for j in range(len(ypif)):
+            for k in range(j, len(yp2if)):
+                span = ((f, j), (f, k+1))
+                score = ypif[j] * yp2if[k]
+                span_score_pairs.append((span, score))
+    return span_score_pairs

@@ -97,6 +97,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
 
     q, cq, y, rx, rcx, ids, idxs = [], [], [], [], [], [], []
     x, cx, tx, stx = [], [], [], []
+    answerss = []
     word_counter, char_counter, lower_word_counter = Counter(), Counter(), Counter()
     pos_counter = Counter()
     start_ai = int(round(len(source_data['data']) * start_ratio))
@@ -139,7 +140,9 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
                 qi = [] if dep is None else [node[0] for node in dep[0]]
                 cqi = [list(qij) for qij in qi]
                 yi = []
+                answers = []
                 for answer in qa['answers']:
+                    answers.append(answer['text'])
                     yi0 = answer['answer_word_start'] or [0, 0]
                     yi1 = answer['answer_word_stop'] or [0, 1]
                     assert len(xi[yi0[0]]) > yi0[1]
@@ -159,6 +162,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
                 rcx.append(rxi)
                 ids.append(qa['id'])
                 idxs.append(len(idxs))
+                answerss.append(answers)
 
             if args.debug:
                 break
@@ -167,7 +171,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
     lower_word2vec_dict = get_word2vec(args, lower_word_counter)
 
     data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, '*tx': rx, '*stx': rx,
-            'idxs': idxs, 'ids': ids}
+            'idxs': idxs, 'ids': ids, 'answerss': answerss}
     shared = {'x': x, 'cx': cx, 'tx': tx, 'stx': stx,
               'word_counter': word_counter, 'char_counter': char_counter, 'lower_word_counter': lower_word_counter,
               'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dict, 'pos_counter': pos_counter}

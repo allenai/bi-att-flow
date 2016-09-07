@@ -10,6 +10,8 @@ from tqdm import tqdm
 
 from jinja2 import Environment, FileSystemLoader
 
+from basic.evaluator import get_span_score_pairs, get_best_span
+
 
 def bool_(string):
     if string == 'True':
@@ -77,10 +79,14 @@ def accuracy2_visualizer(args):
 
     rows = []
     for i, (idx, yi, ypi, yp2i) in tqdm(enumerate(zip(*[eval_[key] for key in ('idxs', 'y', 'yp', 'yp2')])), total=len(eval_['idxs'])):
-        id_, q, rx = (data[key][idx] for key in ('ids', 'q', '*x'))
+        id_, q, rx, answers = (data[key][idx] for key in ('ids', 'q', '*x', 'answerss'))
         x = shared['x'][rx[0]][rx[1]]
         ques = [" ".join(q)]
         para = [[word for word in sent] for sent in x]
+        span = get_best_span(ypi, yp2i)
+        ap = get_segment(para, span)
+        score = "{:.3f}".format(ypi[span[0][0]][span[0][1]] * yp2i[span[1][0]][span[1][1]-1])
+
         row = {
             'id': id_,
             'title': "Hello world!",
@@ -90,7 +96,9 @@ def accuracy2_visualizer(args):
             'y2': yi[0][1],
             'yp': ypi,
             'yp2': yp2i,
-            'a': ""
+            'a': answers,
+            'ap': ap,
+            'score': score
                }
         rows.append(row)
 
@@ -118,6 +126,10 @@ def accuracy2_visualizer(args):
         os.system("open http://%s:%d" % (args.host, args.port))
     print("serving at %s:%d" % (host, port))
     httpd.serve_forever()
+
+
+def get_segment(para, span):
+    return " ".join(para[span[0][0]][span[0][1]:span[1][1]])
 
 
 if __name__ == "__main__":
