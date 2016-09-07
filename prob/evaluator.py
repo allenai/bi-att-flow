@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 import os
 
-from basic.read_data import DataSet
+from prob.read_data import DataSet
 from my.nltk_utils import span_f1
 from my.utils import argmax
 
@@ -180,7 +180,8 @@ class TempEvaluator(LabeledEvaluator):
         idxs, data_set = batch
         assert isinstance(data_set, DataSet)
         feed_dict = self.model.get_feed_dict(data_set, False)
-        global_step, yp, yp2, loss = sess.run([self.model.global_step, self.model.yp, self.model.yp2, self.model.loss], feed_dict=feed_dict)
+        # FIXME : this is temporary way to evaluate with hyp
+        global_step, yp, yp2, loss = sess.run([self.model.global_step, self.model.hyp1, self.model.hyp2, self.model.loss], feed_dict=feed_dict)
         y = data_set.data['y']
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
         spans = [get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)]
