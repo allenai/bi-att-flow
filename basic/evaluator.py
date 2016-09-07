@@ -180,7 +180,8 @@ class TempEvaluator(LabeledEvaluator):
         idxs, data_set = batch
         assert isinstance(data_set, DataSet)
         feed_dict = self.model.get_feed_dict(data_set, False)
-        global_step, yp, yp2, loss = sess.run([self.model.global_step, self.model.yp, self.model.yp2, self.model.loss], feed_dict=feed_dict)
+        # FIXME : this is temporary way to evaluate with hyp
+        global_step, yp, yp2, loss = sess.run([self.model.global_step, self.model.hyp1, self.model.hyp2, self.model.loss], feed_dict=feed_dict)
         y = data_set.data['y']
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
         spans = [get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)]
@@ -232,7 +233,7 @@ class TempEvaluator(LabeledEvaluator):
 def get_best_span(ypi, yp2i):
 
     max_val = 0
-    best_word_span = None
+    best_word_span = (0, 1)
     best_sent_idx = 0
     for f, (ypif, yp2if) in enumerate(zip(ypi, yp2i)):
         argmax_j1 = 0

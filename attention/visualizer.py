@@ -49,6 +49,7 @@ def accuracy2_visualizer(args):
     step = args.step
 
     eval_path =os.path.join("out", model_name, run_id, "eval", "{}-{}.json".format(data_type, str(step).zfill(6)))
+    print("loading {}".format(eval_path))
     eval_ = json.load(open(eval_path, 'r'))
 
     _id = 0

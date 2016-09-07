@@ -92,10 +92,10 @@ class Model(object):
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("prepro"):
-            (fw_u, bw_u), _ = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', swap_memory=True)
+            (fw_u, bw_u), _ = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', swap_memory=config.swap_memory)
             u = tf.concat(2, [fw_u, bw_u])
             tf.get_variable_scope().reuse_variables()
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', swap_memory=True)
+            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', swap_memory=config.swap_memory)
             h = tf.concat(3, [fw_h, bw_h])
 
         with tf.variable_scope("attention"):
@@ -107,9 +107,9 @@ class Model(object):
             mask = tf.concat(1, [self.q_mask, null_mask])
             mask = tf.tile(tf.expand_dims(mask, 1), [1, M, 1])
             att_cell = AttentionCell(cell, u, mask=mask, mapper='sim')
-            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(att_cell, att_cell, h, x_len, dtype='float', scope='g1', swap_memory=True)
+            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(att_cell, att_cell, h, x_len, dtype='float', scope='g1', swap_memory=config.swap_memory)
             g1 = tf.concat(3, [fw_g1, bw_g1])
-            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(att_cell, att_cell, g1, x_len, dtype='float', scope='g2', swap_memory=True)
+            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(att_cell, att_cell, g1, x_len, dtype='float', scope='g2', swap_memory=config.swap_memory)
             g2 = tf.concat(3, [fw_g2, bw_g2])
 
         logits = linear_logits(g1, True, scope='dot1', wd=config.wd, input_keep_prob=config.input_keep_prob,

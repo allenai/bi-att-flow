@@ -6,7 +6,8 @@ from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 
 from basic.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
-from my.tensorflow.nn import linear, double_linear_logits
+from my.tensorflow import mask
+from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel
 from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper
 
@@ -99,25 +100,35 @@ class Model(object):
 
         with tf.variable_scope("main"):
             u = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1])
-            g0 = tf.concat(3, [h, u, h*u, tf.abs(h-u)])
-            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, g0, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
+            p0 = tf.concat(3, [h, u, h*u, tf.abs(h-u)])
+            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, p0, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
             g1 = tf.concat(3, [fw_g1, bw_g1])
+            dot = double_linear_logits(g1, d, True, mask=self.x_mask, wd=config.wd, input_keep_prob=config.input_keep_prob, is_train=self.is_train, scope='logits1')
+            hyp1 = tf.reshape(tf.one_hot(tf.argmax(tf.reshape(dot, [N, M*JX]), 1), M*JX), [N, M, JX])
+            train_g1i = tf.reduce_sum(mask(g1, tf.expand_dims(self.y, -1)), [1, 2])
+            test_g1i = tf.reduce_sum(mask(g1, tf.expand_dims(hyp1, -1)), [1, 2])
+            # g1i = softsel(tf.reshape(g1, [N, M*JX, 2*d]), tf.reshape(dot, [N, M*JX]))
+            g1i = tf.cond(self.is_train, lambda: train_g1i, lambda: test_g1i)
+            g1i_tiled = tf.tile(tf.expand_dims(tf.expand_dims(g1i, 1), 1), [1, M, JX, 1])
+            p1 = tf.concat(3, [g1, g1i_tiled, g1 * g1i_tiled, tf.abs(g1 - g1i_tiled)])
             # g1 = tf.concat(3, [g1, u, g1*u, tf.abs(g1-u)])
-            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(cell, cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
+            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(cell, cell, p1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
             g2 = tf.concat(3, [fw_g2, bw_g2])
+            dot2 = double_linear_logits(g2, d, True, mask=self.x_mask, wd=config.wd, input_keep_prob=config.input_keep_prob, is_train=self.is_train, scope='logits2')
+            hyp2 = tf.reshape(tf.one_hot(tf.argmax(tf.reshape(dot2, [N, M*JX]), 1), M*JX), [N, M, JX])
             # g2 = tf.concat(3, [g2, u, g2*u, tf.abs(g2-u)])
 
-        dot = linear(g1, 1, True, squeeze=True, scope='dot', wd=config.wd, input_keep_prob=config.input_keep_prob,
-                     is_train=self.is_train)
-        dot2 = linear(g2, 1, True, squeeze=True, scope='dot2', wd=config.wd, input_keep_prob=config.input_keep_prob,
-                      is_train=self.is_train)
         """
-        dot = double_linear_logits(g1, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, is_train=self.is_train, scope='logits1')
-        dot2 = double_linear_logits(g2, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, is_train=self.is_train, scope='logits2')
+        dot = linear_logits(g1, True, scope='dot', wd=config.wd, input_keep_prob=config.input_keep_prob,
+                            is_train=self.is_train)
+        dot2 = linear_logits(g2, True, scope='dot2', wd=config.wd, input_keep_prob=config.input_keep_prob,
+                             is_train=self.is_train)
         """
-        self.logits = tf.reshape(exp_mask(dot, self.x_mask), [-1, M * JX])  # [N, M, JX]
-        self.logits2 = tf.reshape(exp_mask(dot2, self.x_mask), [-1, M * JX])
+        self.logits = tf.reshape(dot, [-1, M * JX])  # [N, M, JX]
+        self.logits2 = tf.reshape(dot2, [-1, M * JX])
 
+        self.hyp1 = hyp1
+        self.hyp2 = hyp2
         self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
         self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
 

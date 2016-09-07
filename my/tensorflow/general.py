@@ -93,6 +93,12 @@ def average_gradients(tower_grads):
     return average_grads
 
 
+def mask(val, mask, name=None):
+    if name is None:
+        name = 'mask'
+    return tf.mul(val, tf.cast(mask, 'float'), name=name)
+
+
 def exp_mask(val, mask, name=None):
     """Give very negative number to unmasked elements in val.
     For example, [-3, -2, 10], [True, True, False] -> [-3, -2, -1e9].

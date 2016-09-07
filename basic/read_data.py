@@ -110,17 +110,33 @@ def get_squad_data_filter(config):
         if len(q) > config.ques_size_th:
             return False
         xi = x[rx[0]][rx[1]]
-        """
-        if len(xi) > config.num_sents_th:
-            return False
-        if any(len(xij) > config.sent_size_th for xij in xi):
-            return False
-        """
-        for start, stop in y:
-            if stop[0] >= config.num_sents_th:
+        if config.data_filter == 'max':
+            for start, stop in y:
+                    if stop[0] >= config.num_sents_th:
+                        return False
+                    if start[0] != start[0]:
+                        return False
+                    if max(start[1], stop[1]) >= config.sent_size_th:
+                        return False
+        elif config.data_filter == 'valid':
+            if len(xi) > config.num_sents_th:
                 return False
-            if max(start[1], stop[1]) >= config.sent_size_th:
+            if any(len(xij) > config.sent_size_th for xij in xi):
                 return False
+        elif config.data_filter == 'semi':
+            """
+            Only answer sentence needs to be valid.
+            """
+            for start, stop in y:
+                if stop[0] >= config.num_sents_th:
+                    return False
+                if start[0] != start[0]:
+                    return False
+                if len(xi[start[0]]) > config.sent_size_th:
+                    return False
+        else:
+            raise Exception()
+
         return True
     return data_filter
 

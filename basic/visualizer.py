@@ -49,6 +49,7 @@ def accuracy2_visualizer(args):
     step = args.step
 
     eval_path =os.path.join("out", model_name, run_id, "eval", "{}-{}.json".format(data_type, str(step).zfill(6)))
+    print("loading {}".format(eval_path))
     eval_ = json.load(open(eval_path, 'r'))
 
     _id = 0
@@ -69,11 +70,13 @@ def accuracy2_visualizer(args):
 
     data_path = os.path.join(data_dir, "data_{}.json".format(data_type))
     shared_path = os.path.join(data_dir, "shared_{}.json".format(data_type))
+    print("loading {}".format(data_path))
     data = json.load(open(data_path, 'r'))
+    print("loading {}".format(shared_path))
     shared = json.load(open(shared_path, 'r'))
 
     rows = []
-    for i, (idx, yi, ypi) in enumerate(zip(*[eval_[key] for key in ('idxs', 'y', 'yp')])):
+    for i, (idx, yi, ypi, yp2i) in tqdm(enumerate(zip(*[eval_[key] for key in ('idxs', 'y', 'yp', 'yp2')])), total=len(eval_['idxs'])):
         id_, q, rx = (data[key][idx] for key in ('ids', 'q', '*x'))
         x = shared['x'][rx[0]][rx[1]]
         ques = [" ".join(q)]
@@ -83,10 +86,10 @@ def accuracy2_visualizer(args):
             'title': "Hello world!",
             'ques': ques,
             'para': para,
-            'y': yi,
-            'y2': yi,
+            'y': yi[0][0],
+            'y2': yi[0][1],
             'yp': ypi,
-            'yp2': ypi,
+            'yp2': yp2i,
             'a': ""
                }
         rows.append(row)
