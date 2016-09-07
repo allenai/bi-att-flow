@@ -38,6 +38,7 @@ def get_args():
     parser.add_argument("--glove_corpus", default="6B")
     parser.add_argument("--glove_dir", default=glove_dir)
     parser.add_argument("--glove_vec_size", default=100, type=int)
+    parser.add_argument("--full_train", default=False, type=bool_)
     # TODO : put more args here
     return parser.parse_args()
 
@@ -46,8 +47,12 @@ def prepro(args):
     if not os.path.exists(args.target_dir):
         os.makedirs(args.target_dir)
 
-    data_train, shared_train = prepro_each(args, 'train', 0.0, args.train_ratio)
-    data_dev, shared_dev = prepro_each(args, 'train', args.train_ratio, 1.0)
+    if args.full_train:
+        data_train, shared_train = prepro_each(args, 'train')
+        data_dev, shared_dev = prepro_each(args, 'dev')
+    else:
+        data_train, shared_train = prepro_each(args, 'train', 0.0, args.train_ratio)
+        data_dev, shared_dev = prepro_each(args, 'train', args.train_ratio, 1.0)
     data_test, shared_test = prepro_each(args, 'dev')
 
     print("saving ...")
