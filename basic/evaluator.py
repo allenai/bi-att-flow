@@ -182,6 +182,19 @@ class TempEvaluator(LabeledEvaluator):
         feed_dict = self.model.get_feed_dict(data_set, False)
         global_step, yp, yp2, loss = sess.run([self.model.global_step, self.model.yp, self.model.yp2, self.model.loss], feed_dict=feed_dict)
         y = data_set.data['y']
+        if self.config.squash:
+            new_y = []
+            for xi, yi in zip(data_set.data['x'], y):
+                new_yi = []
+                for start, stop in yi:
+                    start_offset = sum(map(len, xi[:start[0]]))
+                    stop_offset = sum(map(len, xi[:stop[0]]))
+                    new_start = 0, start_offset + start[1]
+                    new_stop = 0, stop_offset + stop[1]
+                    new_yi.append((new_start, new_stop))
+                new_y.append(new_yi)
+            y = new_y
+
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
         spans = [get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)]
 
