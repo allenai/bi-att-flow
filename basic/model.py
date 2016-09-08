@@ -1,5 +1,6 @@
 import random
 
+import itertools
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell
@@ -195,6 +196,8 @@ class Model(object):
             return 1
 
         for i, xi in enumerate(batch.data['x']):
+            if self.config.squash:
+                xi = [list(itertools.chain(*xi))]
             for j, xij in enumerate(xi):
                 if j == config.max_num_sents:
                     break
@@ -205,6 +208,8 @@ class Model(object):
                     x_mask[i, j, k] = True
 
         for i, cxi in enumerate(batch.data['cx']):
+            if self.config.squash:
+                cxi = [list(itertools.chain(*cxi))]
             for j, cxij in enumerate(cxi):
                 if j == config.max_num_sents:
                     break
@@ -233,11 +238,15 @@ class Model(object):
             y2 = np.zeros([N, M, JX], dtype='bool')
             feed_dict[self.y] = y
             feed_dict[self.y2] = y2
-            for i, yi in enumerate(batch.data['y']):
+            for i, (xi, yi) in enumerate(zip(batch.data['x'], batch.data['y'])):
                 start_idx, stop_idx = random.choice(yi)
                 j, k = start_idx
+                offset = sum(map(len, xi[:j]))
+                j, k = 0, k + offset
                 y[i, j, k] = True
                 j2, k2 = stop_idx
+                offset = sum(map(len, xi[:j2]))
+                j2, k2 = 0, k2 + offset
                 y2[i, j2, k2-1] = True
 
         return feed_dict

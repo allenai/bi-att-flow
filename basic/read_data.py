@@ -109,7 +109,17 @@ def get_squad_data_filter(config):
         x, cx = shared['x'], shared['cx']
         if len(q) > config.ques_size_th:
             return False
+
+        # x filter
         xi = x[rx[0]][rx[1]]
+        if config.squash:
+            for start, stop in y:
+                stop_offset = sum(map(len, xi[:stop[0]]))
+                if stop_offset + stop[1] > config.para_size_th:
+                    return False
+            return True
+
+
         if config.data_filter == 'max':
             for start, stop in y:
                     if stop[0] >= config.num_sents_th:
@@ -146,6 +156,7 @@ def update_config(config, data_sets):
     config.max_sent_size = 0
     config.max_ques_size = 0
     config.max_word_size = 0
+    config.max_para_size = 0
     for data_set in data_sets:
         data = data_set.data
         shared = data_set.shared
@@ -153,6 +164,7 @@ def update_config(config, data_sets):
             rx = data['*x'][idx]
             q = data['q'][idx]
             sents = shared['x'][rx[0]][rx[1]]
+            config.max_para_size = max(config.max_para_size, sum(map(len, sents)))
             config.max_num_sents = max(config.max_num_sents, len(sents))
             config.max_sent_size = max(config.max_sent_size, max(map(len, sents)))
             config.max_word_size = max(config.max_word_size, max(len(word) for sent in sents for word in sent))
@@ -163,9 +175,14 @@ def update_config(config, data_sets):
     if config.mode == 'train':
         config.max_num_sents = min(config.max_num_sents, config.num_sents_th)
         config.max_sent_size = min(config.max_sent_size, config.sent_size_th)
+        config.max_para_size = min(config.max_para_size, config.para_size_th)
 
     config.max_word_size = min(config.max_word_size, config.word_size_th)
 
     config.char_vocab_size = len(data_sets[0].shared['char2idx'])
     config.word_emb_size = len(next(iter(data_sets[0].shared['word2vec'].values())))
     config.word_vocab_size = len(data_sets[0].shared['word2idx'])
+
+    if config.squash:
+        config.max_sent_size = config.max_para_size
+        config.max_num_sents = 1
