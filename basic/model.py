@@ -92,13 +92,12 @@ class Model(object):
         qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
 
         cell = BasicLSTMCell(d, state_is_tuple=True)
-        # cell = GRUCell(d)
         cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
         x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("prepro"):
-            _, ((_, fw_u), (_, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='prepro')  # [N, J, d], [N, d]
+            _, (fw_u, bw_u) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='prepro')  # [N, J, d], [N, d]
             u = tf.concat(1, [fw_u, bw_u])
             tf.get_variable_scope().reuse_variables()
             (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='prepro')  # [N, M, JX, 2d]
