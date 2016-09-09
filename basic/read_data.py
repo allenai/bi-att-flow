@@ -62,6 +62,18 @@ def read_data(config, data_type, ref, data_filter=None):
     with open(shared_path, 'r') as fh:
         shared = json.load(fh)
 
+    if ref and not config.finetune:
+        shared_dev_path = os.path.join(config.data_dir, "shared_dev.json")
+        shared_test_path = os.path.join(config.data_dir, "shared_test.json")
+        shared_dev = json.load(open(shared_dev_path, 'r'))
+        shared_test = json.load(open(shared_test_path, 'r'))
+        shared['word_counter'] = dict(list(shared['word_counter'].items())
+                                      + list(shared_dev['word_counter'].items())
+                                      + list(shared_test['word_counter'].items()))
+        shared['lower_word_counter'] = dict(list(shared['lower_word_counter'].items())
+                                      + list(shared_dev['lower_word_counter'].items())
+                                      + list(shared_test['lower_word_counter'].items()))
+
     num_examples = len(next(iter(data.values())))
     if data_filter is None:
         valid_idxs = range(num_examples)
@@ -118,7 +130,6 @@ def get_squad_data_filter(config):
                 if stop_offset + stop[1] > config.para_size_th:
                     return False
             return True
-
 
         if config.data_filter == 'max':
             for start, stop in y:
@@ -183,6 +194,8 @@ def update_config(config, data_sets):
     config.word_emb_size = len(next(iter(data_sets[0].shared['word2vec'].values())))
     config.word_vocab_size = len(data_sets[0].shared['word2idx'])
 
+    if config.single:
+        config.max_num_sents = 1
     if config.squash:
         config.max_sent_size = config.max_para_size
         config.max_num_sents = 1

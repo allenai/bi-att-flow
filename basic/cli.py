@@ -39,18 +39,20 @@ flags.DEFINE_bool("dump_eval", True, "dump eval? [True]")
 flags.DEFINE_bool("dump_answer", True, "dump answer? [True]")
 flags.DEFINE_string("model", "2", "config 1 |2 [2]")
 flags.DEFINE_bool("squash", False, "squash the sentences into one? [False]")
+flags.DEFINE_bool("single", False, "supervise only the answer sentence? [False]")
 
 flags.DEFINE_integer("word_count_th", 50, "word count th [100]")
 flags.DEFINE_integer("char_count_th", 100, "char count th [500]")
 flags.DEFINE_integer("sent_size_th", 64, "sent size th [64]")
 flags.DEFINE_integer("num_sents_th", 8, "num sents th [8]")
-flags.DEFINE_integer("ques_size_th", 64, "ques size th [64]")
+flags.DEFINE_integer("ques_size_th", 32, "ques size th [32]")
 flags.DEFINE_integer("word_size_th", 16, "word size th [16]")
 flags.DEFINE_integer("para_size_th", 256, "para size th [256]")
 
 flags.DEFINE_bool("swap_memory", True, "swap memory? [True]")
 flags.DEFINE_string("logit", "2l", "1l, 2l [2l]")
 flags.DEFINE_string("data_filter", "max", "max | valid | semi [max]")
+flags.DEFINE_bool("finetune", True, "finetune? [False]")
 
 def main(_):
     config = flags.FLAGS

@@ -74,10 +74,13 @@ class Model(object):
             qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, d])
 
         with tf.variable_scope("word_emb"):
-            if config.mode == 'train':
-                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
+            if config.finetune:
+                if config.mode == 'train':
+                    word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
+                else:
+                    word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
             else:
-                word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
+                word_emb_mat = config.emb_mat.astype("float32")
             Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
             Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
             Ax = linear([Ax], d, False, scope='Ax_reshape', wd=config.wd, input_keep_prob=config.input_keep_prob,
@@ -182,6 +185,33 @@ class Model(object):
         feed_dict[self.q_mask] = q_mask
         feed_dict[self.is_train] = is_train
 
+        X = batch.data['x']
+        CX = batch.data['cx']
+
+        if supervised:
+            y = np.zeros([N, M, JX], dtype='bool')
+            y2 = np.zeros([N, M, JX], dtype='bool')
+            feed_dict[self.y] = y
+            feed_dict[self.y2] = y2
+
+            sent_idxs = []
+            for i, (xi, cxi, yi) in enumerate(zip(X, CX, batch.data['y'])):
+                start_idx, stop_idx = random.choice(yi)
+                j, k = start_idx
+                j2, k2 = stop_idx
+                sent_idxs.append(j)
+                if config.single:
+                    X[i] = [xi[j]]
+                    CX[i] = [cxi[j]]
+                    j, j2 = 0, 0
+                if config.squash:
+                    offset = sum(map(len, xi[:j]))
+                    j, k = 0, k + offset
+                    offset = sum(map(len, xi[:j2]))
+                    j2, k2 = 0, k2 + offset
+                y[i, j, k] = True
+                y2[i, j2, k2-1] = True
+
         def _get_word(word):
             d = batch.shared['word2idx']
             for each in (word, word.lower(), word.capitalize(), word.upper()):
@@ -195,7 +225,7 @@ class Model(object):
                 return d[char]
             return 1
 
-        for i, xi in enumerate(batch.data['x']):
+        for i, xi in enumerate(X):
             if self.config.squash:
                 xi = [list(itertools.chain(*xi))]
             for j, xij in enumerate(xi):
@@ -207,7 +237,7 @@ class Model(object):
                     x[i, j, k] = _get_word(xijk)
                     x_mask[i, j, k] = True
 
-        for i, cxi in enumerate(batch.data['cx']):
+        for i, cxi in enumerate(CX):
             if self.config.squash:
                 cxi = [list(itertools.chain(*cxi))]
             for j, cxij in enumerate(cxi):
@@ -233,20 +263,5 @@ class Model(object):
                     if k + 1 == config.max_word_size:
                         break
 
-        if supervised:
-            y = np.zeros([N, M, JX], dtype='bool')
-            y2 = np.zeros([N, M, JX], dtype='bool')
-            feed_dict[self.y] = y
-            feed_dict[self.y2] = y2
-            for i, (xi, yi) in enumerate(zip(batch.data['x'], batch.data['y'])):
-                start_idx, stop_idx = random.choice(yi)
-                j, k = start_idx
-                offset = sum(map(len, xi[:j]))
-                j, k = 0, k + offset
-                y[i, j, k] = True
-                j2, k2 = stop_idx
-                offset = sum(map(len, xi[:j2]))
-                j2, k2 = 0, k2 + offset
-                y2[i, j2, k2-1] = True
 
         return feed_dict
