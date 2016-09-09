@@ -62,6 +62,18 @@ def read_data(config, data_type, ref, data_filter=None):
     with open(shared_path, 'r') as fh:
         shared = json.load(fh)
 
+    if ref and not config.finetune:
+        shared_dev_path = os.path.join(config.data_dir, "shared_dev.json")
+        shared_test_path = os.path.join(config.data_dir, "shared_test.json")
+        shared_dev = json.load(open(shared_dev_path, 'r'))
+        shared_test = json.load(open(shared_test_path, 'r'))
+        shared['word_counter'] = dict(list(shared['word_counter'].items())
+                                      + list(shared_dev['word_counter'].items())
+                                      + list(shared_test['word_counter'].items()))
+        shared['lower_word_counter'] = dict(list(shared['lower_word_counter'].items())
+                                      + list(shared_dev['lower_word_counter'].items())
+                                      + list(shared_test['lower_word_counter'].items()))
+
     num_examples = len(next(iter(data.values())))
     if data_filter is None:
         valid_idxs = range(num_examples)
@@ -109,18 +121,48 @@ def get_squad_data_filter(config):
         x, cx = shared['x'], shared['cx']
         if len(q) > config.ques_size_th:
             return False
+
+        # x filter
         xi = x[rx[0]][rx[1]]
-        """
-        if len(xi) > config.num_sents_th:
-            return False
-        if any(len(xij) > config.sent_size_th for xij in xi):
-            return False
-        """
-        for start, stop in y:
-            if stop[0] >= config.num_sents_th:
+        if config.squash:
+            for start, stop in y:
+                stop_offset = sum(map(len, xi[:stop[0]]))
+                if stop_offset + stop[1] > config.para_size_th:
+                    return False
+            return True
+
+        if config.single:
+            for start, stop in y:
+                if start[0] != stop[0]:
+                    return False
+
+        if config.data_filter == 'max':
+            for start, stop in y:
+                    if stop[0] >= config.num_sents_th:
+                        return False
+                    if start[0] != start[0]:
+                        return False
+                    if max(start[1], stop[1]) >= config.sent_size_th:
+                        return False
+        elif config.data_filter == 'valid':
+            if len(xi) > config.num_sents_th:
                 return False
-            if max(start[1], stop[1]) >= config.sent_size_th:
+            if any(len(xij) > config.sent_size_th for xij in xi):
                 return False
+        elif config.data_filter == 'semi':
+            """
+            Only answer sentence needs to be valid.
+            """
+            for start, stop in y:
+                if stop[0] >= config.num_sents_th:
+                    return False
+                if start[0] != start[0]:
+                    return False
+                if len(xi[start[0]]) > config.sent_size_th:
+                    return False
+        else:
+            raise Exception()
+
         return True
     return data_filter
 
@@ -130,6 +172,7 @@ def update_config(config, data_sets):
     config.max_sent_size = 0
     config.max_ques_size = 0
     config.max_word_size = 0
+    config.max_para_size = 0
     for data_set in data_sets:
         data = data_set.data
         shared = data_set.shared
@@ -137,6 +180,7 @@ def update_config(config, data_sets):
             rx = data['*x'][idx]
             q = data['q'][idx]
             sents = shared['x'][rx[0]][rx[1]]
+            config.max_para_size = max(config.max_para_size, sum(map(len, sents)))
             config.max_num_sents = max(config.max_num_sents, len(sents))
             config.max_sent_size = max(config.max_sent_size, max(map(len, sents)))
             config.max_word_size = max(config.max_word_size, max(len(word) for sent in sents for word in sent))
@@ -147,9 +191,16 @@ def update_config(config, data_sets):
     if config.mode == 'train':
         config.max_num_sents = min(config.max_num_sents, config.num_sents_th)
         config.max_sent_size = min(config.max_sent_size, config.sent_size_th)
+        config.max_para_size = min(config.max_para_size, config.para_size_th)
 
     config.max_word_size = min(config.max_word_size, config.word_size_th)
 
     config.char_vocab_size = len(data_sets[0].shared['char2idx'])
     config.word_emb_size = len(next(iter(data_sets[0].shared['word2vec'].values())))
     config.word_vocab_size = len(data_sets[0].shared['word2idx'])
+
+    if config.single:
+        config.max_num_sents = 1
+    if config.squash:
+        config.max_sent_size = config.max_para_size
+        config.max_num_sents = 1

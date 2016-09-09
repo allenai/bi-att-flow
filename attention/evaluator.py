@@ -182,6 +182,29 @@ class TempEvaluator(LabeledEvaluator):
         feed_dict = self.model.get_feed_dict(data_set, False)
         global_step, yp, yp2, loss = sess.run([self.model.global_step, self.model.yp, self.model.yp2, self.model.loss], feed_dict=feed_dict)
         y = data_set.data['y']
+        if self.config.squash:
+            new_y = []
+            for xi, yi in zip(data_set.data['x'], y):
+                new_yi = []
+                for start, stop in yi:
+                    start_offset = sum(map(len, xi[:start[0]]))
+                    stop_offset = sum(map(len, xi[:stop[0]]))
+                    new_start = 0, start_offset + start[1]
+                    new_stop = 0, stop_offset + stop[1]
+                    new_yi.append((new_start, new_stop))
+                new_y.append(new_yi)
+            y = new_y
+        if self.config.single:
+            new_y = []
+            for yi in y:
+                new_yi = []
+                for start, stop in yi:
+                    new_start = 0, start[1]
+                    new_stop = 0, stop[1]
+                    new_yi.append((new_start, new_stop))
+                new_y.append(new_yi)
+            y = new_y
+
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
         spans = [get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)]
 
@@ -232,7 +255,7 @@ class TempEvaluator(LabeledEvaluator):
 def get_best_span(ypi, yp2i):
 
     max_val = 0
-    best_word_span = None
+    best_word_span = (0, 1)
     best_sent_idx = 0
     for f, (ypif, yp2if) in enumerate(zip(ypi, yp2i)):
         argmax_j1 = 0
@@ -250,6 +273,12 @@ def get_best_span(ypi, yp2i):
     return (best_sent_idx, best_word_span[0]), (best_sent_idx, best_word_span[1] + 1)
 
 
-
-
-
+def get_span_score_pairs(ypi, yp2i):
+    span_score_pairs = []
+    for f, (ypif, yp2if) in enumerate(zip(ypi, yp2i)):
+        for j in range(len(ypif)):
+            for k in range(j, len(yp2if)):
+                span = ((f, j), (f, k+1))
+                score = ypif[j] * yp2if[k]
+                span_score_pairs.append((span, score))
+    return span_score_pairs

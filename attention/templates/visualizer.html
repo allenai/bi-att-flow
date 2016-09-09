@@ -26,7 +26,9 @@
         <tr>
             <th>ID</th>
             <th>Question</th>
-            <th>Answer</th>
+            <th>Answers</th>
+            <th>Predicted</th>
+            <th>Score</th>
             <th>Paragraph</th>
         </tr>
         {% for row in rows %}
@@ -37,14 +39,21 @@
                         {{ qj }}
                     {% endfor %}
                 </td>
-                <td>{{ row.a }}</td>
+                <td>
+                    {% for aa in row.a %}
+                        <li>{{ aa }}</li>
+                    {% endfor %}
+                </td>
+                <td>{{ row.ap }}</td>
+                <td>{{ row.score }}</td>
                 <td>
                     <table>
-                    {% for xj, yj, y2j, ypj, yp2j in zip(row.para, row.y, row.y2, row.yp, row.yp2) %}
+                    {% for xj, ypj, yp2j in zip(row.para, row.yp, row.yp2) %}
                         <tr>
-                        {% for xjk, yjk, y2jk, ypjk in zip(xj, yj, y2j, ypj) %}
+                        {% set rowloop = loop %}
+                        {% for xjk, ypjk in zip(xj, ypj) %}
                             <td class="att" color="{{ ypjk }}">
-                            {% if yjk or y2jk %}
+                            {% if row.y[0][0] == rowloop.index0 and row.y[0][1] <= loop.index0 <= row.y[1][1] %}
                                 <b>{{ xjk }}</b>
                             {% else %}
                                 {{ xjk }}

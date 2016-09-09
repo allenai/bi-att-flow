@@ -1,13 +1,15 @@
 import random
 
+import itertools
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell
 
 from attention.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
-from my.tensorflow.nn import linear, softsel, linear_logits
-from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn, bidirectional_rnn
+from my.tensorflow import mask
+from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel
+from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
 
 
@@ -21,14 +23,14 @@ class Model(object):
         N, M, JX, JQ, VW, VC, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.max_word_size
-        self.x = tf.placeholder('int32', [N, M, JX], name='x')
-        self.cx = tf.placeholder('int32', [N, M, JX, W], name='cx')
-        self.x_mask = tf.placeholder('bool', [N, M, JX], name='x_mask')
-        self.q = tf.placeholder('int32', [N, JQ], name='q')
-        self.cq = tf.placeholder('int32', [N, JQ, W], name='cq')
-        self.q_mask = tf.placeholder('bool', [N, JQ], name='q_mask')
-        self.y = tf.placeholder('bool', [N, M, JX], name='y')
-        self.y2 = tf.placeholder('bool', [N, M, JX], name='y2')
+        self.x = tf.placeholder('int32', [None, M, JX], name='x')
+        self.cx = tf.placeholder('int32', [None, M, JX, W], name='cx')
+        self.x_mask = tf.placeholder('bool', [None, M, JX], name='x_mask')
+        self.q = tf.placeholder('int32', [None, JQ], name='q')
+        self.cq = tf.placeholder('int32', [None, JQ, W], name='cq')
+        self.q_mask = tf.placeholder('bool', [None, JQ], name='q_mask')
+        self.y = tf.placeholder('bool', [None, M, JX], name='y')
+        self.y2 = tf.placeholder('bool', [None, M, JX], name='y2')
         self.is_train = tf.placeholder('bool', [], name='is_train')
 
         # Define misc
@@ -64,18 +66,21 @@ class Model(object):
             filter = tf.get_variable("filter", shape=[1, config.char_filter_height, dc, d], dtype='float')
             bias = tf.get_variable("bias", shape=[d], dtype='float')
             strides = [1, 1, 1, 1]
-            Acx = tf.reshape(Acx, [N*M, JX, W, dc])
-            Acq = tf.reshape(Acq, [N, JQ, W, dc])
+            Acx = tf.reshape(Acx, [-1, JX, W, dc])
+            Acq = tf.reshape(Acq, [-1, JQ, W, dc])
             xxc = tf.nn.conv2d(Acx, filter, strides, "VALID") + bias  # [N*M, JX, W/filter_stride, d]
             qqc = tf.nn.conv2d(Acq, filter, strides, "VALID") + bias  # [N, JQ, W/filter_stride, d]
-            xxc = tf.reshape(tf.reduce_max(tf.nn.relu(xxc), 2), [N, M, JX, d])
-            qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [N, JQ, d])
+            xxc = tf.reshape(tf.reduce_max(tf.nn.relu(xxc), 2), [-1, M, JX, d])
+            qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, d])
 
         with tf.variable_scope("word_emb"):
-            if config.mode == 'train':
-                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
+            if config.finetune:
+                if config.mode == 'train':
+                    word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
+                else:
+                    word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
             else:
-                word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
+                word_emb_mat = config.emb_mat.astype("float32")
             Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
             Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
             Ax = linear([Ax], d, False, scope='Ax_reshape', wd=config.wd, input_keep_prob=config.input_keep_prob,
@@ -92,32 +97,32 @@ class Model(object):
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("prepro"):
-            (fw_u, bw_u), _ = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', swap_memory=config.swap_memory)
+            (fw_u, bw_u), _ = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='u')  # [N, J, d], [N, d]
             u = tf.concat(2, [fw_u, bw_u])
-            tf.get_variable_scope().reuse_variables()
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', swap_memory=config.swap_memory)
+            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='h')  # [N, M, JX, 2d]
             h = tf.concat(3, [fw_h, bw_h])
 
-        with tf.variable_scope("attention"):
-            null_var = tf.get_variable('null_var', shape=[2*d], dtype='float')
-            null_var = tf.tile(tf.reshape(null_var, [1, 1, 2*d]), [N, 1, 1])
-            u = tf.concat(1, [u, null_var])
-            u = tf.tile(tf.expand_dims(u, 1), [1, M, 1, 1])
-            null_mask = tf.constant(np.ones([N, 1], dtype='bool'), dtype='bool')
-            mask = tf.concat(1, [self.q_mask, null_mask])
-            mask = tf.tile(tf.expand_dims(mask, 1), [1, M, 1])
-            att_cell = AttentionCell(cell, u, mask=mask, mapper='sim')
-            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(att_cell, att_cell, h, x_len, dtype='float', scope='g1', swap_memory=config.swap_memory)
+        with tf.variable_scope("main"):
+            att_cell = AttentionCell(cell, u, mask=self.q_mask, mapper='sim',
+                                     input_keep_prob=self.config.input_keep_prob, is_train=self.is_train)
+            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(att_cell, att_cell, h, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
             g1 = tf.concat(3, [fw_g1, bw_g1])
-            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(att_cell, att_cell, g1, x_len, dtype='float', scope='g2', swap_memory=config.swap_memory)
+            # g1 = tf.concat(3, [g1, u, g1*u, tf.abs(g1-u)])
+            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(att_cell, att_cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
             g2 = tf.concat(3, [fw_g2, bw_g2])
+            # g2 = tf.concat(3, [g2, u, g2*u, tf.abs(g2-u)])
 
-        logits = linear_logits(g1, True, scope='dot1', wd=config.wd, input_keep_prob=config.input_keep_prob,
-                               is_train=self.is_train)
-        logits2 = linear_logits(g2, True, scope='dot2', wd=config.wd, input_keep_prob=config.input_keep_prob,
-                                is_train=self.is_train)
-        self.logits = tf.reshape(logits, [-1, M * JX])  # [N, M, JX]
-        self.logits2 = tf.reshape(exp_mask(logits2, self.x_mask), [-1, M * JX])
+        dot = double_linear_logits(g1, d, True, mask=self.x_mask, is_train=self.is_train, scope='logits1')
+        dot2 = double_linear_logits(g2, d, True, mask=self.x_mask, is_train=self.is_train, scope='logits2')
+        """
+        dot = linear_logits(g1, True, scope='dot', wd=config.wd, input_keep_prob=config.input_keep_prob,
+                            is_train=self.is_train)
+        dot2 = linear_logits(g2, True, scope='dot2', wd=config.wd, input_keep_prob=config.input_keep_prob,
+                             is_train=self.is_train)
+        """
+        self.logits = tf.reshape(dot, [-1, M * JX])  # [N, M, JX]
+        self.logits2 = tf.reshape(dot2, [-1, M * JX])
+
         self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
         self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
 
@@ -180,6 +185,31 @@ class Model(object):
         feed_dict[self.q_mask] = q_mask
         feed_dict[self.is_train] = is_train
 
+        X = batch.data['x']
+        CX = batch.data['cx']
+
+        if supervised:
+            y = np.zeros([N, M, JX], dtype='bool')
+            y2 = np.zeros([N, M, JX], dtype='bool')
+            feed_dict[self.y] = y
+            feed_dict[self.y2] = y2
+
+            for i, (xi, cxi, yi) in enumerate(zip(X, CX, batch.data['y'])):
+                start_idx, stop_idx = random.choice(yi)
+                j, k = start_idx
+                j2, k2 = stop_idx
+                if config.single:
+                    X[i] = [xi[j]]
+                    CX[i] = [cxi[j]]
+                    j, j2 = 0, 0
+                if config.squash:
+                    offset = sum(map(len, xi[:j]))
+                    j, k = 0, k + offset
+                    offset = sum(map(len, xi[:j2]))
+                    j2, k2 = 0, k2 + offset
+                y[i, j, k] = True
+                y2[i, j2, k2-1] = True
+
         def _get_word(word):
             d = batch.shared['word2idx']
             for each in (word, word.lower(), word.capitalize(), word.upper()):
@@ -193,7 +223,9 @@ class Model(object):
                 return d[char]
             return 1
 
-        for i, xi in enumerate(batch.data['x']):
+        for i, xi in enumerate(X):
+            if self.config.squash:
+                xi = [list(itertools.chain(*xi))]
             for j, xij in enumerate(xi):
                 if j == config.max_num_sents:
                     break
@@ -203,7 +235,9 @@ class Model(object):
                     x[i, j, k] = _get_word(xijk)
                     x_mask[i, j, k] = True
 
-        for i, cxi in enumerate(batch.data['cx']):
+        for i, cxi in enumerate(CX):
+            if self.config.squash:
+                cxi = [list(itertools.chain(*cxi))]
             for j, cxij in enumerate(cxi):
                 if j == config.max_num_sents:
                     break
@@ -227,16 +261,5 @@ class Model(object):
                     if k + 1 == config.max_word_size:
                         break
 
-        if supervised:
-            y = np.zeros([N, M, JX], dtype='bool')
-            y2 = np.zeros([N, M, JX], dtype='bool')
-            feed_dict[self.y] = y
-            feed_dict[self.y2] = y2
-            for i, yi in enumerate(batch.data['y']):
-                start_idx, stop_idx = random.choice(yi)
-                j, k = start_idx
-                y[i, j, k] = True
-                j2, k2 = stop_idx
-                y2[i, j2, k2-1] = True
 
         return feed_dict

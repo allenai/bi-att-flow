@@ -112,8 +112,8 @@ class Model(object):
             g2 = tf.concat(3, [fw_g2, bw_g2])
             # g2 = tf.concat(3, [g2, u, g2*u, tf.abs(g2-u)])
 
-        dot = double_linear_logits(g1, d, True, mask=self.x_mask, wd=config.wd, input_keep_prob=config.input_keep_prob, is_train=self.is_train, scope='logits1')
-        dot2 = double_linear_logits(g2, d, True, mask=self.x_mask, wd=config.wd, input_keep_prob=config.input_keep_prob, is_train=self.is_train, scope='logits2')
+        dot = double_linear_logits(g1, d, True, mask=self.x_mask, is_train=self.is_train, scope='logits1')
+        dot2 = double_linear_logits(g2, d, True, mask=self.x_mask, is_train=self.is_train, scope='logits2')
         """
         dot = linear_logits(g1, True, scope='dot', wd=config.wd, input_keep_prob=config.input_keep_prob,
                             is_train=self.is_train)
