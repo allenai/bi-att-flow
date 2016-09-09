@@ -194,12 +194,10 @@ class Model(object):
             feed_dict[self.y] = y
             feed_dict[self.y2] = y2
 
-            sent_idxs = []
             for i, (xi, cxi, yi) in enumerate(zip(X, CX, batch.data['y'])):
                 start_idx, stop_idx = random.choice(yi)
                 j, k = start_idx
                 j2, k2 = stop_idx
-                sent_idxs.append(j)
                 if config.single:
                     X[i] = [xi[j]]
                     CX[i] = [cxi[j]]

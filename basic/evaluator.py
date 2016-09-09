@@ -194,6 +194,16 @@ class TempEvaluator(LabeledEvaluator):
                     new_yi.append((new_start, new_stop))
                 new_y.append(new_yi)
             y = new_y
+        if self.config.single:
+            new_y = []
+            for yi in y:
+                new_yi = []
+                for start, stop in yi:
+                    new_start = 0, start[1]
+                    new_stop = 0, stop[1]
+                    new_yi.append((new_start, new_stop))
+                new_y.append(new_yi)
+            y = new_y
 
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
         spans = [get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)]

@@ -131,6 +131,11 @@ def get_squad_data_filter(config):
                     return False
             return True
 
+        if config.single:
+            for start, stop in y:
+                if start[0] != stop[0]:
+                    return False
+
         if config.data_filter == 'max':
             for start, stop in y:
                     if stop[0] >= config.num_sents_th:
