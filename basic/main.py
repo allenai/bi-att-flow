@@ -88,20 +88,24 @@ def _train(config):
             num_batches = math.ceil(dev_data.num_examples / config.batch_size)
             if 0 < config.eval_num_batches < num_batches:
                 num_batches = config.eval_num_batches
-            e = evaluator.get_evaluation_from_batches(
+            e_train = evaluator.get_evaluation_from_batches(
+                sess, tqdm(train_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches)
+            )
+            graph_handler.add_summaries(e_train.summaries, global_step)
+            e_dev = evaluator.get_evaluation_from_batches(
                 sess, tqdm(dev_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
-            graph_handler.add_summaries(e.summaries, global_step)
-            if e.acc > max_acc:
-                max_acc = e.acc
+            graph_handler.add_summaries(e_dev.summaries, global_step)
+            if e_dev.acc > max_acc:
+                max_acc = e_dev.acc
                 noupdate_count = 0
             else:
                 noupdate_count += 1
                 if noupdate_count == config.early_stop:
                     break
             if config.dump_eval:
-                graph_handler.dump_eval(e)
+                graph_handler.dump_eval(e_dev)
             if config.dump_answer:
-                graph_handler.dump_answer(e)
+                graph_handler.dump_answer(e_dev)
     if global_step % config.save_period != 0:
         graph_handler.save(sess, global_step=global_step)
 

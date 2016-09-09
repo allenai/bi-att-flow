@@ -8,7 +8,7 @@ from basic.main import main as m
 flags = tf.app.flags
 
 flags.DEFINE_string("model_name", "basic", "Model name [basic]")
-flags.DEFINE_string("data_dir", "data/squad", "Data dir [data/squad]")
+flags.DEFINE_string("data_dir", "data/squad_full", "Data dir [data/squad_full]")
 flags.DEFINE_integer("run_id", 0, "Run ID [0]")
 
 flags.DEFINE_integer("batch_size", 128, "Batch size [128]")

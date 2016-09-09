@@ -103,7 +103,9 @@ class Model(object):
             h = tf.concat(3, [fw_h, bw_h])
 
         with tf.variable_scope("main"):
-            att_cell = AttentionCell(cell, u, mask=self.q_mask, mapper='sim',
+            u = tf.reshape(tf.tile(tf.expand_dims(u, 1), [1, M, 1, 1]), [N*M, JQ, 2*d])
+            q_mask = tf.reshape(tf.tile(tf.expand_dims(self.q_mask, 1), [1, M, 1]), [N*M, JQ])
+            att_cell = AttentionCell(cell, u, mask=q_mask, mapper='sim',
                                      input_keep_prob=self.config.input_keep_prob, is_train=self.is_train)
             (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(att_cell, att_cell, h, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
             g1 = tf.concat(3, [fw_g1, bw_g1])

@@ -17,8 +17,11 @@ class SwitchableDropoutWrapper(DropoutWrapper):
         tf.get_variable_scope().reuse_variables()
         outputs, new_state = self._cell(inputs, state, scope)
         outputs = tf.cond(self.is_train, lambda: outputs_do, lambda: outputs)
-        new_state = LSTMStateTuple(*[tf.cond(self.is_train, lambda: new_state_do_i, lambda: new_state_i)
-                             for new_state_do_i, new_state_i in zip(new_state_do, new_state)])
+        if isinstance(state, tuple):
+            new_state = state.__class__(*[tf.cond(self.is_train, lambda: new_state_do_i, lambda: new_state_i)
+                                       for new_state_do_i, new_state_i in zip(new_state_do, new_state)])
+        else:
+            new_state = tf.cond(self.is_train, lambda: new_state_do, lambda: new_state)
         return outputs, new_state
 
 

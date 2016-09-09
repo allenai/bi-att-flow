@@ -3,7 +3,7 @@ import random
 import itertools
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.ops.rnn_cell import BasicLSTMCell
+from tensorflow.python.ops.rnn_cell import BasicLSTMCell, GRUCell
 
 from basic.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
@@ -92,28 +92,30 @@ class Model(object):
         qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
 
         cell = BasicLSTMCell(d, state_is_tuple=True)
+        # cell = GRUCell(d)
         cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
         x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("prepro"):
-            _, (_, (fw_u, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='u')  # [N, J, d], [N, d]
+            _, ((_, fw_u), (_, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='prepro')  # [N, J, d], [N, d]
             u = tf.concat(1, [fw_u, bw_u])
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='h')  # [N, M, JX, 2d]
+            tf.get_variable_scope().reuse_variables()
+            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='prepro')  # [N, M, JX, 2d]
             h = tf.concat(3, [fw_h, bw_h])
 
         with tf.variable_scope("main"):
             u = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1])
             p0 = tf.concat(3, [h, u, h*u, tf.abs(h-u)])
             (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, p0, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
-            g1 = tf.concat(3, [fw_g1, bw_g1])
+            g1 = tf.concat(3, [xx, fw_g1, bw_g1])
             # g1 = tf.concat(3, [g1, u, g1*u, tf.abs(g1-u)])
             (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(cell, cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
-            g2 = tf.concat(3, [fw_g2, bw_g2])
+            g2 = tf.concat(3, [xx, fw_g2, bw_g2])
             # g2 = tf.concat(3, [g2, u, g2*u, tf.abs(g2-u)])
 
-        dot = double_linear_logits(g1, d, True, mask=self.x_mask, is_train=self.is_train, scope='logits1')
-        dot2 = double_linear_logits(g2, d, True, mask=self.x_mask, is_train=self.is_train, scope='logits2')
+        dot = double_linear_logits(g1, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='logits1')
+        dot2 = double_linear_logits(g2, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='logits2')
         """
         dot = linear_logits(g1, True, scope='dot', wd=config.wd, input_keep_prob=config.input_keep_prob,
                             is_train=self.is_train)
