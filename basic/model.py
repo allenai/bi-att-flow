@@ -97,7 +97,7 @@ class Model(object):
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("prepro"):
-            _, (fw_u, bw_u) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='prepro')  # [N, J, d], [N, d]
+            _, ((_, fw_u), (_, bw_u)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='prepro')  # [N, J, d], [N, d]
             u = tf.concat(1, [fw_u, bw_u])
             tf.get_variable_scope().reuse_variables()
             (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='prepro')  # [N, M, JX, 2d]
@@ -108,9 +108,16 @@ class Model(object):
             p0 = tf.concat(3, [h, u, h*u, tf.abs(h-u)])
             (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, p0, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
             g1 = tf.concat(3, [xx, fw_g1, bw_g1])
+            if config.two_layers:
+                (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, g1, x_len, dtype='float', scope='h12')  # [N, M, JX, 2d]
+                g1 = tf.concat(3, [fw_g1, bw_g1])
             # g1 = tf.concat(3, [g1, u, g1*u, tf.abs(g1-u)])
             (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(cell, cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
             g2 = tf.concat(3, [xx, fw_g2, bw_g2])
+            if config.two_layers:
+                (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(cell, cell, g2, x_len, dtype='float', scope='h22')  # [N, M, JX, 2d]
+                g2 = tf.concat(3, [fw_g2, bw_g2])
+
             # g2 = tf.concat(3, [g2, u, g2*u, tf.abs(g2-u)])
 
         dot = double_linear_logits(g1, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='logits1')

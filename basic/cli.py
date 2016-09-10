@@ -53,6 +53,7 @@ flags.DEFINE_bool("swap_memory", True, "swap memory? [True]")
 flags.DEFINE_string("logit", "2l", "1l, 2l [2l]")
 flags.DEFINE_string("data_filter", "max", "max | valid | semi [max]")
 flags.DEFINE_bool("finetune", True, "finetune? [False]")
+flags.DEFINE_bool("two_layers", False, "two layers [False]")
 
 def main(_):
     config = flags.FLAGS

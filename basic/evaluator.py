@@ -63,8 +63,8 @@ class AccuracyEvaluation(LabeledEvaluation):
         self.dict['loss'] = loss
         self.dict['correct'] = correct
         self.dict['acc'] = self.acc
-        loss_summary = tf.Summary(value=[tf.Summary.Value(tag='dev/loss', simple_value=self.loss)])
-        acc_summary = tf.Summary(value=[tf.Summary.Value(tag='dev/acc', simple_value=self.acc)])
+        loss_summary = tf.Summary(value=[tf.Summary.Value(tag='{}/loss'.format(data_type), simple_value=self.loss)])
+        acc_summary = tf.Summary(value=[tf.Summary.Value(tag='{}/acc'.format(data_type), simple_value=self.acc)])
         self.summaries = [loss_summary, acc_summary]
 
     def __repr__(self):
@@ -153,7 +153,7 @@ class TempEvaluation(AccuracyEvaluation):
         self.dict['f1s'] = f1s
         self.dict['f1'] = self.f1
         self.id2answer_dict = id2answer_dict
-        f1_summary = tf.Summary(value=[tf.Summary.Value(tag='dev/f1', simple_value=self.f1)])
+        f1_summary = tf.Summary(value=[tf.Summary.Value(tag='{}/f1'.format(data_type), simple_value=self.f1)])
         self.summaries.append(f1_summary)
 
     def __add__(self, other):
