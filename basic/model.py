@@ -8,7 +8,7 @@ from tensorflow.python.ops.rnn_cell import BasicLSTMCell, GRUCell
 from basic.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
 from my.tensorflow import mask
-from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel
+from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel, dropout
 from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper
 
@@ -60,8 +60,8 @@ class Model(object):
             char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
             Acx = tf.nn.embedding_lookup(char_emb_mat, self.cx)  # [N, M, JX, W, dc]
             Acq = tf.nn.embedding_lookup(char_emb_mat, self.cq)  # [N, JQ, W, dc]
-            Acx = tf.nn.dropout(Acx, config.input_keep_prob)
-            Acq = tf.nn.dropout(Acq, config.input_keep_prob)
+            Acx = dropout(Acx, config.input_keep_prob, self.is_train)
+            Acq = dropout(Acq, config.input_keep_prob, self.is_train)
 
             filter = tf.get_variable("filter", shape=[1, config.char_filter_height, dc, d], dtype='float')
             bias = tf.get_variable("bias", shape=[d], dtype='float')

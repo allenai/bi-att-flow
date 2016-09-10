@@ -130,10 +130,12 @@ def _test(config):
         num_batches = config.eval_num_batches
     e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
     print(e)
-    if config.dump_eval:
-        graph_handler.dump_eval(e)
     if config.dump_answer:
+        print("dumping answer ...")
         graph_handler.dump_answer(e)
+    if config.dump_eval:
+        print("dumping eval ...")
+        graph_handler.dump_eval(e)
 
 
 def _forward(config):
