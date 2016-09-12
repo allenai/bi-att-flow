@@ -51,10 +51,12 @@ class Model(object):
 
     def _build_forward(self):
         config = self.config
-        N, M, JX, JQ, VW, VC, d, dc, W = \
+        N, M, JX, JQ, VW, VC, d, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, \
-            config.char_emb_size, config.max_word_size
+            config.max_word_size
+        dc, dw, dco = config.char_emb_size, config.word_emb_size, config.char_out_size
+        di = dw + dco
 
         with tf.variable_scope("char_emb"):
             char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
@@ -63,33 +65,35 @@ class Model(object):
             Acx = dropout(Acx, config.input_keep_prob, self.is_train)
             Acq = dropout(Acq, config.input_keep_prob, self.is_train)
 
-            filter = tf.get_variable("filter", shape=[1, config.char_filter_height, dc, d], dtype='float')
-            bias = tf.get_variable("bias", shape=[d], dtype='float')
+            filter = tf.get_variable("filter", shape=[1, config.char_filter_height, dc, dco], dtype='float')
+            bias = tf.get_variable("bias", shape=[dco], dtype='float')
             strides = [1, 1, 1, 1]
             Acx = tf.reshape(Acx, [-1, JX, W, dc])
             Acq = tf.reshape(Acq, [-1, JQ, W, dc])
             xxc = tf.nn.conv2d(Acx, filter, strides, "VALID") + bias  # [N*M, JX, W/filter_stride, d]
             qqc = tf.nn.conv2d(Acq, filter, strides, "VALID") + bias  # [N, JQ, W/filter_stride, d]
-            xxc = tf.reshape(tf.reduce_max(tf.nn.relu(xxc), 2), [-1, M, JX, d])
-            qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, d])
+            xxc = tf.reshape(tf.reduce_max(tf.nn.relu(xxc), 2), [-1, M, JX, dco])
+            qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, dco])
 
         with tf.variable_scope("word_emb"):
             if config.finetune:
                 if config.mode == 'train':
-                    word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, config.word_emb_size], initializer=get_initializer(config.emb_mat))
+                    word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, dw], initializer=get_initializer(config.emb_mat))
                 else:
-                    word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, config.word_emb_size], dtype='float')
+                    word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, dw], dtype='float')
             else:
                 word_emb_mat = config.emb_mat.astype("float32")
             Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
             Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
+            """
             Ax = linear([Ax], d, False, scope='Ax_reshape', wd=config.wd, input_keep_prob=config.input_keep_prob,
                         is_train=self.is_train)
             Aq = linear([Aq], d, False, scope='Aq_reshape', wd=config.wd, input_keep_prob=config.input_keep_prob,
                         is_train=self.is_train)
+            """
 
-        xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, 2d]
-        qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
+        xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, di]
+        qq = tf.concat(2, [qqc, Aq])  # [N, JQ, di]
 
         cell = BasicLSTMCell(d, state_is_tuple=True)
         cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
@@ -111,17 +115,20 @@ class Model(object):
             if config.two_layers:
                 (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, g1, x_len, dtype='float', scope='h12')  # [N, M, JX, 2d]
                 g1 = tf.concat(3, [fw_g1, bw_g1])
+            dot = double_linear_logits(g1, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='logits1')
+            # g1i = softsel(tf.reshape(g1, [N, M*JX, 4*d]), tf.reshape(dot, [N, M*JX]))
+            # g1i = tf.tile(tf.expand_dims(tf.expand_dims(g1i, 1), 1), [1, M, JX, 1])
+            # g1 = tf.concat(3, [g1, g1i])
             # g1 = tf.concat(3, [g1, u, g1*u, tf.abs(g1-u)])
             (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(cell, cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
             g2 = tf.concat(3, [xx, fw_g2, bw_g2])
             if config.two_layers:
                 (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(cell, cell, g2, x_len, dtype='float', scope='h22')  # [N, M, JX, 2d]
                 g2 = tf.concat(3, [fw_g2, bw_g2])
+            dot2 = double_linear_logits(g2, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='logits2')
 
             # g2 = tf.concat(3, [g2, u, g2*u, tf.abs(g2-u)])
 
-        dot = double_linear_logits(g1, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='logits1')
-        dot2 = double_linear_logits(g2, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='logits2')
         """
         dot = linear_logits(g1, True, scope='dot', wd=config.wd, input_keep_prob=config.input_keep_prob,
                             is_train=self.is_train)
