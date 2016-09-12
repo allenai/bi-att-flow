@@ -29,8 +29,8 @@ flags.DEFINE_float("decay", 0.9, "Exponential moving average decay [0.9]")
 
 flags.DEFINE_boolean("draft", False, "Draft for quick testing? [False]")
 
-flags.DEFINE_integer("hidden_size", 128, "Hidden size [128]")
-flags.DEFINE_integer("char_out_size", 128, "Char out size [128]")
+flags.DEFINE_integer("hidden_size", 100, "Hidden size [100]")
+flags.DEFINE_integer("char_out_size", 100, "Char out size [100]")
 flags.DEFINE_float("input_keep_prob", 0.8, "Input keep prob [0.8]")
 flags.DEFINE_integer("char_emb_size", 8, "Char emb size [8]")
 flags.DEFINE_integer("char_filter_height", 5, "Char filter height [5]")
@@ -55,6 +55,7 @@ flags.DEFINE_string("logit", "2l", "1l, 2l [2l]")
 flags.DEFINE_string("data_filter", "max", "max | valid | semi [max]")
 flags.DEFINE_bool("finetune", True, "finetune? [False]")
 flags.DEFINE_bool("two_layers", False, "two layers [False]")
+flags.DEFINE_bool("attention", False, "attention [False]")
 
 def main(_):
     config = flags.FLAGS
