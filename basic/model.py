@@ -76,13 +76,14 @@ class Model(object):
             qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, dco])
 
         with tf.variable_scope("word_emb"):
-            if config.finetune:
-                if config.mode == 'train':
-                    word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, dw], initializer=get_initializer(config.emb_mat))
-                else:
-                    word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, dw], dtype='float')
+            if config.mode == 'train':
+                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, dw], initializer=get_initializer(config.emb_mat))
             else:
-                word_emb_mat = config.emb_mat.astype("float32")
+                word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, dw], dtype='float')
+            if config.use_glove_for_unk:
+                new_word_emb_mat = tf.concat(0, [word_emb_mat, tf.constant(config.new_emb_mat, dtype='float32')])
+                word_emb_mat = tf.cond(self.is_train, lambda: word_emb_mat, lambda: new_word_emb_mat)
+
             Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
             Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
 
@@ -251,6 +252,11 @@ class Model(object):
             for each in (word, word.lower(), word.capitalize(), word.upper()):
                 if each in d:
                     return d[each]
+            if batch.data_type != 'train' and config.use_glove_for_unk:
+                d2 = batch.shared['new_word2idx']
+                for each in (word, word.lower(), word.capitalize(), word.upper()):
+                    if each in d2:
+                        return d2[each] + len(d)
             return 1
 
         def _get_char(char):
