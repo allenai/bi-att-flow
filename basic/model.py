@@ -10,7 +10,7 @@ from my.tensorflow import exp_mask, get_initializer
 from my.tensorflow import mask
 from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel, dropout
 from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
-from my.tensorflow.rnn_cell import SwitchableDropoutWrapper
+from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
 
 
 class Model(object):
@@ -91,6 +91,8 @@ class Model(object):
 
         cell = BasicLSTMCell(d, state_is_tuple=True)
         cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
+        first_cell = cell
+        second_cell = cell
         x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
@@ -118,17 +120,23 @@ class Model(object):
                     h_a = softsel(h, h_logits)
                     h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
                     p0 = tf.concat(3, [p0, u_a, h_a])
+            if config.internal_attention:
+                with tf.variable_scope("internal_attention"):
+                    u = tf.reshape(tf.tile(tf.expand_dims(u, 1), [1, M, 1, 1]), [N*M, JQ, 2*d])
+                    q_mask = tf.reshape(tf.tile(tf.expand_dims(self.q_mask, 1), [1, M, 1]), [N*M, JQ])
+                    first_cell = AttentionCell(cell, u, mask=q_mask, mapper='sim', input_keep_prob=self.config.input_keep_prob, is_train=self.is_train)
+                    p0 = h
 
-            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, p0, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
+            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(first_cell, first_cell, p0, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
             g1 = tf.concat(3, [xx, fw_g1, bw_g1])
             if config.two_layers:
-                (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(cell, cell, g1, x_len, dtype='float', scope='h12')  # [N, M, JX, 2d]
+                (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(first_cell, first_cell, g1, x_len, dtype='float', scope='h12')  # [N, M, JX, 2d]
                 g1 = tf.concat(3, [fw_g1, bw_g1])
             # g1 = tf.concat(3, [g1, u, g1*u, tf.abs(g1-u)])
-            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(cell, cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
+            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(second_cell, second_cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
             g2 = tf.concat(3, [xx, fw_g2, bw_g2])
             if config.two_layers:
-                (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(cell, cell, g2, x_len, dtype='float', scope='h22')  # [N, M, JX, 2d]
+                (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(second_cell, second_cell, g2, x_len, dtype='float', scope='h22')  # [N, M, JX, 2d]
                 g2 = tf.concat(3, [fw_g2, bw_g2])
             dot = double_linear_logits(g2, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='logits1')
             g2i = softsel(tf.reshape(g2, [N, M*JX, 2*d + di]), tf.reshape(dot, [N, M*JX]))

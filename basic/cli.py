@@ -57,6 +57,7 @@ flags.DEFINE_bool("finetune", True, "finetune? [False]")
 flags.DEFINE_bool("two_layers", False, "two layers [False]")
 flags.DEFINE_bool("attention", False, "attention [False]")
 flags.DEFINE_bool("greedy", False, "greedy [False]")
+flags.DEFINE_bool("internal_attention", False, "internal attention [False]")
 
 def main(_):
     config = flags.FLAGS
