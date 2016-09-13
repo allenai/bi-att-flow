@@ -95,7 +95,7 @@ def read_data(config, data_type, ref, data_filter=None):
         char_counter = shared['char_counter']
         shared['word2idx'] = {word: idx + 2 for idx, word in
                               enumerate(word for word, count in word_counter.items()
-                                        if count > config.word_count_th or word in word2vec_dict)}
+                                        if count > config.word_count_th or (config.known_if_glove and word in word2vec_dict))}
         shared['char2idx'] = {char: idx + 2 for idx, char in
                               enumerate(char for char, count in char_counter.items()
                                         if count > config.char_count_th)}
