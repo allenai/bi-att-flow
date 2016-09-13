@@ -58,6 +58,7 @@ flags.DEFINE_bool("two_layers", False, "two layers [False]")
 flags.DEFINE_bool("attention", False, "attention [False]")
 flags.DEFINE_bool("greedy", False, "greedy [False]")
 flags.DEFINE_bool("internal_attention", False, "internal attention [False]")
+flags.DEFINE_bool("use_glove_for_unk", False, "use glove for unk [False]")
 
 def main(_):
     config = flags.FLAGS

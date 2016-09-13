@@ -44,7 +44,7 @@ def _train(config):
     data_filter = get_squad_data_filter(config)
     train_data = read_data(config, 'train', config.load, data_filter=data_filter)
     dev_data = read_data(config, 'dev', True, data_filter=data_filter)
-    test_data = read_data(config, 'test', True, data_filter=data_filter)
+    # test_data = read_data(config, 'test', True, data_filter=data_filter)
     update_config(config, [train_data, dev_data])
 
     _config_draft(config)
@@ -57,6 +57,15 @@ def _train(config):
                         else np.random.multivariate_normal(np.zeros(config.word_emb_size), np.eye(config.word_emb_size))
                         for idx in range(config.word_vocab_size)])
     config.emb_mat = emb_mat
+
+    if config.use_glove_for_unk:
+        word2vec_dict = dev_data.shared['lower_word2vec'] if config.lower_word else dev_data.shared['word2vec']
+        new_word2idx_dict = dev_data.shared['new_word2idx']
+        idx2vec_dict = {idx: word2vec_dict[word] for word, idx in new_word2idx_dict.items()}
+        # print("{}/{} unique words have corresponding glove vectors.".format(len(idx2vec_dict), len(word2idx_dict)))
+        new_emb_mat = np.array([idx2vec_dict[idx] for idx in range(len(idx2vec_dict))], dtype='float32')
+        print(len(new_emb_mat))
+        config.new_emb_mat = new_emb_mat
 
     # construct model graph and variables (using default graph)
     pprint(config.__flags, indent=2)
@@ -116,6 +125,14 @@ def _test(config):
     update_config(config, [test_data])
 
     _config_draft(config)
+
+    if config.use_glove_for_unk:
+        word2vec_dict = test_data.shared['lower_word2vec'] if config.lower_word else test_data.shared['word2vec']
+        new_word2idx_dict = test_data.shared['new_word2idx']
+        idx2vec_dict = {idx: word2vec_dict[word] for word, idx in new_word2idx_dict.items()}
+        # print("{}/{} unique words have corresponding glove vectors.".format(len(idx2vec_dict), len(word2idx_dict)))
+        new_emb_mat = np.array([idx2vec_dict[idx] for idx in range(len(idx2vec_dict))], dtype='float32')
+        config.new_emb_mat = new_emb_mat
 
     pprint(config.__flags, indent=2)
     model = Model(config)
