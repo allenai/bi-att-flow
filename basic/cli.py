@@ -56,6 +56,7 @@ flags.DEFINE_string("data_filter", "max", "max | valid | semi [max]")
 flags.DEFINE_bool("finetune", True, "finetune? [False]")
 flags.DEFINE_bool("two_layers", False, "two layers [False]")
 flags.DEFINE_bool("attention", False, "attention [False]")
+flags.DEFINE_bool("greedy", False, "greedy [False]")
 
 def main(_):
     config = flags.FLAGS

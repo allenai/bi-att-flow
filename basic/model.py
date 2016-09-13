@@ -111,8 +111,8 @@ class Model(object):
                     h_aug = tf.tile(tf.expand_dims(h, 3), [1, 1, 1, JQ, 1])
                     u_mask = tf.tile(tf.expand_dims(tf.expand_dims(self.q_mask, 1), 1), [1, M, JX, 1])
                     h_mask = tf.tile(tf.expand_dims(self.x_mask, -1), [1, 1, 1, JQ])
-                    mask = u_mask & h_mask
-                    u_logits = linear_logits(u_aug * h_aug, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=mask, is_train=self.is_train, scope='u')
+                    cur_mask = u_mask & h_mask
+                    u_logits = linear_logits(u_aug * h_aug, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=cur_mask, is_train=self.is_train, scope='u')
                     u_a = softsel(u_aug, u_logits)
                     h_logits = linear_logits(u_f * h, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='h')
                     h_a = softsel(h, h_logits)
@@ -132,6 +132,10 @@ class Model(object):
                 g2 = tf.concat(3, [fw_g2, bw_g2])
             dot = double_linear_logits(g2, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='logits1')
             g2i = softsel(tf.reshape(g2, [N, M*JX, 2*d + di]), tf.reshape(dot, [N, M*JX]))
+            if config.greedy:
+                hyp1 = tf.reshape(tf.one_hot(tf.argmax(tf.reshape(dot, [N, M*JX]), 1), M*JX), [N, M, JX])
+                g2i_test = tf.reduce_sum(mask(g2, tf.expand_dims(hyp1, -1)), [1, 2])
+                g2i = tf.cond(self.is_train, lambda: g2i, lambda: g2i_test)
             g2i = tf.tile(tf.expand_dims(tf.expand_dims(g2i, 1), 1), [1, M, JX, 1])
             g2 = tf.concat(3, [g2, g2i])
             dot2 = double_linear_logits(g2, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='logits2')
