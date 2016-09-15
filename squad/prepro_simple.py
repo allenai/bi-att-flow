@@ -40,6 +40,7 @@ def get_args():
     parser.add_argument("--glove_dir", default=glove_dir)
     parser.add_argument("--glove_vec_size", default=100, type=int)
     parser.add_argument("--mode", default="full", type=str)
+    parser.add_argument("--single_path", default="", type=str)
     # TODO : put more args here
     return parser.parse_args()
 
@@ -70,6 +71,9 @@ def prepro(args):
         prepro_each(args, 'dev', 0.0, 0.0, out_name='dev')
         prepro_each(args, 'dev', 0.0, 0.0, out_name='test')
         prepro_each(args, 'all', out_name='train')
+    elif args.mode == 'single':
+        assert len(args.single_path) > 0
+        prepro_each(args, "NULL", out_name="single", in_path=args.single_path)
     else:
         prepro_each(args, 'train', 0.0, args.train_ratio, out_name='train')
         prepro_each(args, 'train', args.train_ratio, 1.0, out_name='dev')
@@ -106,8 +110,8 @@ def get_word2vec(args, word_counter):
     return word2vec_dict
 
 
-def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="default"):
-    source_path = os.path.join(args.source_dir, "{}-v1.1.json".format(data_type))
+def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="default", in_path=None):
+    source_path = in_path or os.path.join(args.source_dir, "{}-v1.1.json".format(data_type))
     source_data = json.load(open(source_path, 'r'))
 
     q, cq, y, rx, rcx, ids, idxs = [], [], [], [], [], [], []
