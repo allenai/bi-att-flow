@@ -143,6 +143,31 @@ class AccuracyEvaluator2(AccuracyEvaluator):
         return False
 
 
+class ForwardEvaluation(Evaluation):
+    def __init__(self, data_type, global_step, idxs, yp, yp2, loss, id2answer_dict):
+        super(ForwardEvaluation, self).__init__(data_type, global_step, idxs, yp)
+        self.yp2 = yp2
+        self.loss = loss
+        self.dict['loss'] = loss
+        self.dict['yp2'] = yp2
+        self.id2answer_dict = id2answer_dict
+
+    def __add__(self, other):
+        if other == 0:
+            return self
+        assert self.data_type == other.data_type
+        assert self.global_step == other.global_step
+        new_idxs = self.idxs + other.idxs
+        new_yp = self.yp + other.yp
+        new_yp2 = self.yp2 + other.yp2
+        new_loss = (self.loss * self.num_examples + other.loss * other.num_examples) / len(new_yp)
+        new_id2answer_dict = dict(list(self.id2answer_dict.items()) + list(other.id2answer_dict.items()))
+        return F1Evaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_loss, new_id2answer_dict)
+
+    def __repr__(self):
+        return "{} step {}: loss={:.4f}".format(self.data_type, self.global_step, self.loss)
+
+
 class F1Evaluation(AccuracyEvaluation):
     def __init__(self, data_type, global_step, idxs, yp, yp2, y, correct, loss, f1s, id2answer_dict):
         super(F1Evaluation, self).__init__(data_type, global_step, idxs, yp, y, correct, loss)
@@ -221,6 +246,57 @@ class F1Evaluator(LabeledEvaluator):
         f1s = [self.__class__.span_f1(yi, span) for yi, span in zip(y, spans)]
         e = F1Evaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), y,
                          correct, float(loss), f1s, id2answer_dict)
+        return e
+
+    @staticmethod
+    def compare(yi, ypi, yp2i):
+        for start, stop in yi:
+            aypi = argmax(ypi)
+            mask = np.zeros(yp2i.shape)
+            mask[aypi[0], aypi[1]:] = np.ones([yp2i.shape[1] - aypi[1]])
+            if tuple(start) == aypi and (stop[0], stop[1]-1) == argmax(yp2i * mask):
+                return True
+        return False
+
+    @staticmethod
+    def compare2(yi, span):
+        for start, stop in yi:
+            if tuple(start) == span[0] and tuple(stop) == span[1]:
+                return True
+        return False
+
+    @staticmethod
+    def span_f1(yi, span):
+        max_f1 = 0
+        for start, stop in yi:
+            if start[0] == span[0][0]:
+                true_span = start[1], stop[1]
+                pred_span = span[0][1], span[1][1]
+                f1 = span_f1(true_span, pred_span)
+                max_f1 = max(f1, max_f1)
+        return max_f1
+
+
+class ForwardEvaluator(Evaluator):
+    def get_evaluation(self, sess, batch):
+        idxs, data_set = batch
+        assert isinstance(data_set, DataSet)
+        feed_dict = self.model.get_feed_dict(data_set, False)
+        global_step, yp, yp2, loss = sess.run([self.model.global_step, self.model.yp, self.model.yp2, self.model.loss], feed_dict=feed_dict)
+
+        yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
+        spans = [get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)]
+
+        def _get(xi, span):
+            if len(xi) <= span[0][0]:
+                return [""]
+            if len(xi[span[0][0]]) <= span[1][1]:
+                return [""]
+            return xi[span[0][0]][span[0][1]:span[1][1]]
+
+        id2answer_dict = {id_: " ".join(_get(xi, span))
+                          for id_, xi, span in zip(data_set.data['ids'], data_set.data['x'], spans)}
+        e = ForwardEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), float(loss), id2answer_dict)
         return e
 
     @staticmethod

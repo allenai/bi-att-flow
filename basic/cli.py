@@ -62,6 +62,8 @@ flags.DEFINE_bool("use_glove_for_unk", False, "use glove for unk [False]")
 flags.DEFINE_bool("known_if_glove", False, "consider as known if present in glove [False]")
 flags.DEFINE_bool("eval", True, "eval? [True]")
 
+flags.DEFINE_string("forward_name", "single", "Forward name [single]")
+
 def main(_):
     config = flags.FLAGS
 

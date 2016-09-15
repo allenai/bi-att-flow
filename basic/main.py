@@ -9,7 +9,7 @@ import tensorflow as tf
 from tqdm import tqdm
 import numpy as np
 
-from basic.evaluator import F1Evaluator, Evaluator
+from basic.evaluator import F1Evaluator, Evaluator, ForwardEvaluator
 from basic.graph_handler import GraphHandler
 from basic.model import Model
 from basic.trainer import Trainer
@@ -90,11 +90,13 @@ def _train(config):
         if get_summary:
             graph_handler.add_summary(summary, global_step)
 
-        if not config.eval:
-            continue
-        # Occasional evaluation and saving
+        # occasional saving
         if global_step % config.save_period == 0:
             graph_handler.save(sess, global_step=global_step)
+
+        if not config.eval:
+            continue
+        # Occasional evaluation
         if global_step % config.eval_period == 0:
             num_batches = math.ceil(dev_data.num_examples / config.batch_size)
             if 0 < config.eval_num_batches < num_batches:
@@ -159,25 +161,37 @@ def _test(config):
 
 def _forward(config):
     assert config.load
-
-    forward_data = read_data(config, 'forward', True)
+    test_data = read_data(config, config.forward_name, True)
+    update_config(config, [test_data])
 
     _config_draft(config)
 
-    pprint(config.__flag, indent=2)
+    if config.use_glove_for_unk:
+        word2vec_dict = test_data.shared['lower_word2vec'] if config.lower_word else test_data.shared['word2vec']
+        new_word2idx_dict = test_data.shared['new_word2idx']
+        idx2vec_dict = {idx: word2vec_dict[word] for word, idx in new_word2idx_dict.items()}
+        # print("{}/{} unique words have corresponding glove vectors.".format(len(idx2vec_dict), len(word2idx_dict)))
+        new_emb_mat = np.array([idx2vec_dict[idx] for idx in range(len(idx2vec_dict))], dtype='float32')
+        config.new_emb_mat = new_emb_mat
+
+    pprint(config.__flags, indent=2)
     model = Model(config)
-    evaluator = Evaluator(config, model)
+    evaluator = ForwardEvaluator(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     sess = tf.Session()
     graph_handler.initialize(sess)
 
-    num_batches = math.ceil(forward_data.num_examples / config.batch_size)
+    num_batches = math.ceil(test_data.num_examples / config.batch_size)
     if 0 < config.eval_num_batches < num_batches:
         num_batches = config.eval_num_batches
-    e = evaluator.get_evaluation_from_batches(sess, tqdm(forward_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
+    e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
     print(e)
+    if config.dump_answer:
+        print("dumping answer ...")
+        graph_handler.dump_answer(e)
     if config.dump_eval:
+        print("dumping eval ...")
         graph_handler.dump_eval(e)
 
 
