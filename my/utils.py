@@ -120,8 +120,7 @@ def get_word_span(context, wordss, start, stop):
     return idxs[0], (idxs[-1][0], idxs[-1][1] + 1)
 
 
-def word_tokenize(text):
-    temp_tokens = nltk.word_tokenize(text)
+def process_tokens(temp_tokens):
     tokens = []
     for token in temp_tokens:
         if token in ("``", "''"):

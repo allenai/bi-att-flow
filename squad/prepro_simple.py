@@ -9,8 +9,9 @@ from collections import Counter
 import nltk
 from tqdm import tqdm
 
+from my.corenlp_interface import CoreNLPInterface
 from my.nltk_utils import load_compressed_tree
-from my.utils import get_word_span, word_tokenize
+from my.utils import get_word_span, process_tokens
 
 
 def bool_(arg):
@@ -41,6 +42,10 @@ def get_args():
     parser.add_argument("--glove_vec_size", default=100, type=int)
     parser.add_argument("--mode", default="full", type=str)
     parser.add_argument("--single_path", default="", type=str)
+    parser.add_argument("--tokenizer", default="PTB", type=str)
+    parser.add_argument("--process_tokens", default=True, type=bool_)
+    parser.add_argument("--url", default="vision-server2.corp.ai2", type=str)
+    parser.add_argument("--port", default=8000, type=int)
     # TODO : put more args here
     return parser.parse_args()
 
@@ -111,6 +116,16 @@ def get_word2vec(args, word_counter):
 
 
 def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="default", in_path=None):
+    if args.tokenizer == "PTB":
+        sent_tokenize = nltk.sent_tokenize
+        word_tokenize = nltk.word_tokenize
+    elif args.tokenizer == 'Stanford':
+        interface = CoreNLPInterface(args.url, args.port)
+        sent_tokenize = interface.split_doc
+        word_tokenize = interface.split_sent
+    else:
+        raise Exception()
+
     source_path = in_path or os.path.join(args.source_dir, "{}-v1.1.json".format(data_type))
     source_data = json.load(open(source_path, 'r'))
 
@@ -128,7 +143,9 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
             # wordss
             context = para['context']
             context = context.replace("''", '" ')
-            xi = list(map(word_tokenize, nltk.sent_tokenize(context)))
+            xi = list(map(word_tokenize, sent_tokenize(context)))
+            if args.process_tokens:
+                xi = [process_tokens(tokens) for tokens in xi]
             # given xi, add chars
             cxi = [[list(xijk) for xijk in xij] for xij in xi]
             xp.append(xi)
