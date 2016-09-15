@@ -80,7 +80,7 @@ class Model(object):
                 word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, dw], initializer=get_initializer(config.emb_mat))
             else:
                 word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, dw], dtype='float')
-            if config.use_glove_for_unk:
+            if config.eval and config.use_glove_for_unk:
                 new_word_emb_mat = tf.concat(0, [word_emb_mat, tf.constant(config.new_emb_mat, dtype='float32')])
                 word_emb_mat = tf.cond(self.is_train, lambda: word_emb_mat, lambda: new_word_emb_mat)
 

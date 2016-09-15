@@ -148,9 +148,9 @@ def get_squad_data_filter(config):
             for start, stop in y:
                     if stop[0] >= config.num_sents_th:
                         return False
-                    if start[0] != start[0]:
+                    if start[0] != stop[0]:
                         return False
-                    if max(start[1], stop[1]) >= config.sent_size_th:
+                    if stop[1] >= config.sent_size_th:
                         return False
         elif config.data_filter == 'valid':
             if len(xi) > config.num_sents_th:

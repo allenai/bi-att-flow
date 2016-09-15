@@ -90,6 +90,8 @@ def _train(config):
         if get_summary:
             graph_handler.add_summary(summary, global_step)
 
+        if not config.eval:
+            continue
         # Occasional evaluation and saving
         if global_step % config.save_period == 0:
             graph_handler.save(sess, global_step=global_step)

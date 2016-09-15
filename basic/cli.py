@@ -60,6 +60,7 @@ flags.DEFINE_bool("greedy", False, "greedy [False]")
 flags.DEFINE_bool("internal_attention", False, "internal attention [False]")
 flags.DEFINE_bool("use_glove_for_unk", False, "use glove for unk [False]")
 flags.DEFINE_bool("known_if_glove", False, "consider as known if present in glove [False]")
+flags.DEFINE_bool("eval", True, "eval? [True]")
 
 def main(_):
     config = flags.FLAGS
