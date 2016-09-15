@@ -143,9 +143,9 @@ class AccuracyEvaluator2(AccuracyEvaluator):
         return False
 
 
-class TempEvaluation(AccuracyEvaluation):
+class F1Evaluation(AccuracyEvaluation):
     def __init__(self, data_type, global_step, idxs, yp, yp2, y, correct, loss, f1s, id2answer_dict):
-        super(TempEvaluation, self).__init__(data_type, global_step, idxs, yp, y, correct, loss)
+        super(F1Evaluation, self).__init__(data_type, global_step, idxs, yp, y, correct, loss)
         self.yp2 = yp2
         self.f1s = f1s
         self.f1 = float(np.mean(f1s))
@@ -169,13 +169,13 @@ class TempEvaluation(AccuracyEvaluation):
         new_f1s = self.f1s + other.f1s
         new_loss = (self.loss * self.num_examples + other.loss * other.num_examples) / len(new_correct)
         new_id2answer_dict = dict(list(self.id2answer_dict.items()) + list(other.id2answer_dict.items()))
-        return TempEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_y, new_correct, new_loss, new_f1s, new_id2answer_dict)
+        return F1Evaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_y, new_correct, new_loss, new_f1s, new_id2answer_dict)
 
     def __repr__(self):
         return "{} step {}: accuracy={:.4f}, f1={:.4f}, loss={:.4f}".format(self.data_type, self.global_step, self.acc, self.f1, self.loss)
 
 
-class TempEvaluator(LabeledEvaluator):
+class F1Evaluator(LabeledEvaluator):
     def get_evaluation(self, sess, batch):
         idxs, data_set = batch
         assert isinstance(data_set, DataSet)
@@ -219,8 +219,8 @@ class TempEvaluator(LabeledEvaluator):
                           for id_, xi, span in zip(data_set.data['ids'], data_set.data['x'], spans)}
         correct = [self.__class__.compare2(yi, span) for yi, span in zip(y, spans)]
         f1s = [self.__class__.span_f1(yi, span) for yi, span in zip(y, spans)]
-        e = TempEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), y,
-                           correct, float(loss), f1s, id2answer_dict)
+        e = F1Evaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), y,
+                         correct, float(loss), f1s, id2answer_dict)
         return e
 
     @staticmethod

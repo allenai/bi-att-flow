@@ -4,7 +4,7 @@ import os
 
 import tensorflow as tf
 
-from basic.evaluator import Evaluation, TempEvaluation
+from basic.evaluator import Evaluation, F1Evaluation
 from my.utils import short_floats
 
 
@@ -53,7 +53,7 @@ class GraphHandler(object):
             json.dump(short_floats(e.dict, precision), fh)
 
     def dump_answer(self, e):
-        assert isinstance(e, TempEvaluation)
+        assert isinstance(e, F1Evaluation)
         path = os.path.join(self.config.answer_dir, "{}-{}.json".format(e.data_type, str(e.global_step).zfill(6)))
         with open(path, 'w') as fh:
             json.dump(e.id2answer_dict, fh)
