@@ -8,7 +8,7 @@ from tensorflow.python.ops.rnn_cell import BasicLSTMCell, GRUCell
 from basic.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
 from my.tensorflow import mask
-from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel, dropout
+from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel, dropout, get_logits, softmax
 from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
 
@@ -115,9 +115,9 @@ class Model(object):
                     u_mask = tf.tile(tf.expand_dims(tf.expand_dims(self.q_mask, 1), 1), [1, M, JX, 1])
                     h_mask = tf.tile(tf.expand_dims(self.x_mask, -1), [1, 1, 1, JQ])
                     cur_mask = u_mask & h_mask
-                    u_logits = linear_logits(u_aug * h_aug, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=cur_mask, is_train=self.is_train, scope='u')
+                    u_logits = get_logits([u_aug, h_aug, u_aug * h_aug], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=cur_mask, is_train=self.is_train, func=config.logit_func, scope='u')
+                    h_logits = get_logits([u_f, h, u_f * h], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.logit_func, scope='h')
                     u_a = softsel(u_aug, u_logits)
-                    h_logits = linear_logits(u_f * h, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='h')
                     h_a = softsel(h, h_logits)
                     h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
                     p0 = tf.concat(3, [p0, u_a, h_a])
@@ -129,34 +129,22 @@ class Model(object):
                     p0 = h
 
             (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(first_cell, first_cell, p0, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
-            g1 = tf.concat(3, [xx, fw_g1, bw_g1])
-            if config.two_layers:
-                (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(first_cell, first_cell, g1, x_len, dtype='float', scope='h12')  # [N, M, JX, 2d]
-                g1 = tf.concat(3, [fw_g1, bw_g1])
+            g1 = tf.concat(3, [fw_g1, bw_g1])
             # g1 = tf.concat(3, [g1, u, g1*u, tf.abs(g1-u)])
+            a1 = g1
+            dot = get_logits([h, a1, h * a1], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.logit_func, scope='logits1')
+            a1i = softmax(tf.reshape(dot, [N, M*JX]))
+            a1i = tf.reshape(a1i, [N, M, JX, 1])
+            # a1i = softsel(tf.reshape(a1, [N, M*JX, 2*d]), tf.reshape(dot, [N, M*JX]))
+            # a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
+            g1 = tf.concat(3, [g1, a1i])
             (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(second_cell, second_cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
-            g2 = tf.concat(3, [xx, fw_g2, bw_g2])
-            if config.two_layers:
-                (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(second_cell, second_cell, g2, x_len, dtype='float', scope='h22')  # [N, M, JX, 2d]
-                g2 = tf.concat(3, [fw_g2, bw_g2])
-            dot = double_linear_logits(g2, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='logits1')
-            g2i = softsel(tf.reshape(g2, [N, M*JX, 2*d + di]), tf.reshape(dot, [N, M*JX]))
-            if config.greedy:
-                hyp1 = tf.reshape(tf.one_hot(tf.argmax(tf.reshape(dot, [N, M*JX]), 1), M*JX), [N, M, JX])
-                g2i_test = tf.reduce_sum(mask(g2, tf.expand_dims(hyp1, -1)), [1, 2])
-                g2i = tf.cond(self.is_train, lambda: g2i, lambda: g2i_test)
-            g2i = tf.tile(tf.expand_dims(tf.expand_dims(g2i, 1), 1), [1, M, JX, 1])
-            g2 = tf.concat(3, [g2, g2i])
-            dot2 = double_linear_logits(g2, d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, scope='logits2')
+            g2 = tf.concat(3, [fw_g2, bw_g2])
+            a2 = g2
+            dot2 = get_logits([h, a2, h * a2], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.logit_func, scope='logits2')
 
             # g2 = tf.concat(3, [g2, u, g2*u, tf.abs(g2-u)])
 
-        """
-        dot = linear_logits(g1, True, scope='dot', wd=config.wd, input_keep_prob=config.input_keep_prob,
-                            is_train=self.is_train)
-        dot2 = linear_logits(g2, True, scope='dot2', wd=config.wd, input_keep_prob=config.input_keep_prob,
-                             is_train=self.is_train)
-        """
         self.logits = tf.reshape(dot, [-1, M * JX])  # [N, M, JX]
         self.logits2 = tf.reshape(dot2, [-1, M * JX])
 

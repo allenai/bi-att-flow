@@ -79,3 +79,31 @@ def linear_logits(args, bias, bias_start=0.0, scope=None, mask=None, wd=0.0, inp
         if mask is not None:
             logits = exp_mask(logits, mask)
         return logits
+
+
+def sum_logits(args, mask=None, name=None):
+    with tf.name_scope(name or "sum_logits"):
+        if args is None or (nest.is_sequence(args) and not args):
+            raise ValueError("`args` must be specified")
+        if not nest.is_sequence(args):
+            args = [args]
+        rank = len(args[0].get_shape())
+        logits = sum(tf.reduce_sum(arg, rank-1) for arg in args)
+        if mask is not None:
+            logits = exp_mask(logits, mask)
+        return logits
+
+
+def get_logits(args, size, bias, bias_start=0.0, scope=None, mask=None, wd=0.0, input_keep_prob=1.0, is_train=None, func=None):
+    if func is None:
+        func = "sum"
+    if func == 'sum':
+        return sum_logits(args, mask=mask, name=scope)
+    elif func == 'linear':
+        return linear_logits(args, bias, bias_start=bias_start, scope=scope, mask=mask, wd=wd, input_keep_prob=input_keep_prob,
+                             is_train=is_train)
+    elif func == 'double':
+        return double_linear_logits(args, size, bias, bias_start=bias_start, scope=scope, mask=mask, wd=wd, input_keep_prob=input_keep_prob,
+                                    is_train=is_train)
+    else:
+        raise Exception()
