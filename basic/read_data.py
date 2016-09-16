@@ -93,9 +93,16 @@ def read_data(config, data_type, ref, data_filter=None):
         word2vec_dict = shared['lower_word2vec'] if config.lower_word else shared['word2vec']
         word_counter = shared['lower_word_counter'] if config.lower_word else shared['word_counter']
         char_counter = shared['char_counter']
-        shared['word2idx'] = {word: idx + 2 for idx, word in
-                              enumerate(word for word, count in word_counter.items()
-                                        if count > config.word_count_th or (config.known_if_glove and word in word2vec_dict))}
+        if config.finetune:
+            shared['word2idx'] = {word: idx + 2 for idx, word in
+                                  enumerate(word for word, count in word_counter.items()
+                                            if count > config.word_count_th or (config.known_if_glove and word in word2vec_dict))}
+        else:
+            assert config.known_if_glove
+            assert config.use_glove_for_unk
+            shared['word2idx'] = {word: idx + 2 for idx, word in
+                                  enumerate(word for word, count in word_counter.items()
+                                            if count > config.word_count_th and word not in word2vec_dict)}
         shared['char2idx'] = {char: idx + 2 for idx, char in
                               enumerate(char for char, count in char_counter.items()
                                         if count > config.char_count_th)}
@@ -111,12 +118,12 @@ def read_data(config, data_type, ref, data_filter=None):
         for key, val in new_shared.items():
             shared[key] = val
 
-        if config.use_glove_for_unk:
-            # create new word2idx and word2vec
-            word2vec_dict = shared['lower_word2vec'] if config.lower_word else shared['word2vec']
-            new_word2idx_dict = {word: idx for idx, word in enumerate(word for word in word2vec_dict.keys() if word not in shared['word2idx'])}
-            shared['new_word2idx'] = new_word2idx_dict
-            offset = len(shared['word2idx'])
+    if config.use_glove_for_unk:
+        # create new word2idx and word2vec
+        word2vec_dict = shared['lower_word2vec'] if config.lower_word else shared['word2vec']
+        new_word2idx_dict = {word: idx for idx, word in enumerate(word for word in word2vec_dict.keys() if word not in shared['word2idx'])}
+        shared['new_word2idx'] = new_word2idx_dict
+        offset = len(shared['word2idx'])
 
     data_set = DataSet(data, data_type, shared=shared, valid_idxs=valid_idxs)
     return data_set

@@ -77,13 +77,10 @@ class Model(object):
 
         with tf.variable_scope("word_emb"):
             if config.mode == 'train':
-                if config.finetune:
-                    word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, dw], initializer=get_initializer(config.emb_mat))
-                else:
-                    word_emb_mat = tf.constant(config.emb_mat, dtype='float')
+                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, dw], initializer=get_initializer(config.emb_mat))
             else:
                 word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, dw], dtype='float')
-            if config.eval and config.use_glove_for_unk:
+            if config.use_glove_for_unk and len(config.new_emb_mat) > 0:
                 new_word_emb_mat = tf.concat(0, [word_emb_mat, tf.constant(config.new_emb_mat, dtype='float32')])
                 word_emb_mat = tf.cond(self.is_train, lambda: word_emb_mat, lambda: new_word_emb_mat)
 
