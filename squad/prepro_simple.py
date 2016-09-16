@@ -118,7 +118,8 @@ def get_word2vec(args, word_counter):
 def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="default", in_path=None):
     if args.tokenizer == "PTB":
         sent_tokenize = nltk.sent_tokenize
-        word_tokenize = nltk.word_tokenize
+        def word_tokenize(tokens):
+            return [token.replace("''", '"').replace("``", '"') for token in nltk.word_tokenize(tokens)]
     elif args.tokenizer == 'Stanford':
         interface = CoreNLPInterface(args.url, args.port)
         sent_tokenize = interface.split_doc
