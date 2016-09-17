@@ -209,7 +209,8 @@ class Model(object):
         feed_dict[self.cq] = cq
         feed_dict[self.q_mask] = q_mask
         feed_dict[self.is_train] = is_train
-        feed_dict[self.new_emb_mat] = batch.shared['new_emb_mat']
+        if config.use_glove_for_unk:
+            feed_dict[self.new_emb_mat] = batch.shared['new_emb_mat']
 
         X = batch.data['x']
         CX = batch.data['cx']
