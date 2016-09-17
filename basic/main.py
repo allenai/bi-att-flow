@@ -49,6 +49,7 @@ def _train(config):
 
     _config_draft(config)
 
+
     word2vec_dict = train_data.shared['lower_word2vec'] if config.lower_word else train_data.shared['word2vec']
     word2idx_dict = train_data.shared['word2idx']
     idx2vec_dict = {word2idx_dict[word]: vec for word, vec in word2vec_dict.items() if word in word2idx_dict}
@@ -57,15 +58,6 @@ def _train(config):
                         else np.random.multivariate_normal(np.zeros(config.word_emb_size), np.eye(config.word_emb_size))
                         for idx in range(config.word_vocab_size)])
     config.emb_mat = emb_mat
-
-    if config.use_glove_for_unk:
-        word2vec_dict = dev_data.shared['lower_word2vec'] if config.lower_word else dev_data.shared['word2vec']
-        new_word2idx_dict = dev_data.shared['new_word2idx']
-        idx2vec_dict = {idx: word2vec_dict[word] for word, idx in new_word2idx_dict.items()}
-        # print("{}/{} unique words have corresponding glove vectors.".format(len(idx2vec_dict), len(word2idx_dict)))
-        new_emb_mat = np.array([idx2vec_dict[idx] for idx in range(len(idx2vec_dict))], dtype='float32')
-        print(len(new_emb_mat))
-        config.new_emb_mat = new_emb_mat
 
     # construct model graph and variables (using default graph)
     pprint(config.__flags, indent=2)

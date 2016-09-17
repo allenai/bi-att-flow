@@ -32,6 +32,7 @@ class Model(object):
         self.y = tf.placeholder('bool', [None, M, JX], name='y')
         self.y2 = tf.placeholder('bool', [None, M, JX], name='y2')
         self.is_train = tf.placeholder('bool', [], name='is_train')
+        self.new_emb_mat = tf.placeholder('float', [None, config.word_emb_size], name='new_emb_mat')
 
         # Define misc
 
@@ -58,8 +59,16 @@ class Model(object):
         dc, dw, dco = config.char_emb_size, config.word_emb_size, config.char_out_size
         di = dw + dco
 
-        with tf.variable_scope("char_emb"):
+        with tf.variable_scope("emb"), tf.device("/cpu:0"):
             char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
+            if config.mode == 'train':
+                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, dw], initializer=get_initializer(config.emb_mat))
+            else:
+                word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, dw], dtype='float')
+            if config.use_glove_for_unk:
+                word_emb_mat = tf.concat(0, [word_emb_mat, self.new_emb_mat])
+
+        with tf.variable_scope("char"):
             Acx = tf.nn.embedding_lookup(char_emb_mat, self.cx)  # [N, M, JX, W, dc]
             Acq = tf.nn.embedding_lookup(char_emb_mat, self.cq)  # [N, JQ, W, dc]
             Acx = dropout(Acx, config.input_keep_prob, self.is_train)
@@ -75,17 +84,8 @@ class Model(object):
             xxc = tf.reshape(tf.reduce_max(tf.nn.relu(xxc), 2), [-1, M, JX, dco])
             qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, dco])
 
-        with tf.variable_scope("word_emb"):
-            if config.mode == 'train':
-                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, dw], initializer=get_initializer(config.emb_mat))
-            else:
-                word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, dw], dtype='float')
-            if config.use_glove_for_unk and len(config.new_emb_mat) > 0:
-                new_word_emb_mat = tf.concat(0, [word_emb_mat, tf.constant(config.new_emb_mat, dtype='float32')])
-                word_emb_mat = tf.cond(self.is_train, lambda: word_emb_mat, lambda: new_word_emb_mat)
-
-            Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
-            Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
+        Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
+        Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
 
         xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, di]
         qq = tf.concat(2, [qqc, Aq])  # [N, JQ, di]
@@ -115,8 +115,8 @@ class Model(object):
                     u_mask = tf.tile(tf.expand_dims(tf.expand_dims(self.q_mask, 1), 1), [1, M, JX, 1])
                     h_mask = tf.tile(tf.expand_dims(self.x_mask, -1), [1, 1, 1, JQ])
                     cur_mask = u_mask & h_mask
-                    u_logits = get_logits([u_aug, h_aug, u_aug * h_aug], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=cur_mask, is_train=self.is_train, func=config.logit_func, scope='u')
-                    h_logits = get_logits([u_f, h, u_f * h], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.logit_func, scope='h')
+                    u_logits = get_logits([u_aug * h_aug], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=cur_mask, is_train=self.is_train, func=config.logit_func, scope='u')
+                    h_logits = get_logits([u_f * h], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.logit_func, scope='h')
                     u_a = softsel(u_aug, u_logits)
                     h_a = softsel(h, h_logits)
                     h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
@@ -209,6 +209,7 @@ class Model(object):
         feed_dict[self.cq] = cq
         feed_dict[self.q_mask] = q_mask
         feed_dict[self.is_train] = is_train
+        feed_dict[self.new_emb_mat] = batch.shared['new_emb_mat']
 
         X = batch.data['x']
         CX = batch.data['cx']
@@ -240,7 +241,7 @@ class Model(object):
             for each in (word, word.lower(), word.capitalize(), word.upper()):
                 if each in d:
                     return d[each]
-            if batch.data_type != 'train' and config.use_glove_for_unk:
+            if config.use_glove_for_unk:
                 d2 = batch.shared['new_word2idx']
                 for each in (word, word.lower(), word.capitalize(), word.upper()):
                     if each in d2:
