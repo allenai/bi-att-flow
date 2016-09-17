@@ -162,7 +162,7 @@ class ForwardEvaluation(Evaluation):
         new_yp2 = self.yp2 + other.yp2
         new_loss = (self.loss * self.num_examples + other.loss * other.num_examples) / len(new_yp)
         new_id2answer_dict = dict(list(self.id2answer_dict.items()) + list(other.id2answer_dict.items()))
-        return F1Evaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_loss, new_id2answer_dict)
+        return ForwardEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_loss, new_id2answer_dict)
 
     def __repr__(self):
         return "{} step {}: loss={:.4f}".format(self.data_type, self.global_step, self.loss)
