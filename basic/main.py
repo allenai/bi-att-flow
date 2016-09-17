@@ -201,9 +201,11 @@ def set_dirs(config):
     if not os.path.exists(config.save_dir):
         os.mkdir(config.save_dir)
     if not os.path.exists(config.log_dir):
-        os.mkdir(config.eval_dir)
+        os.mkdir(config.log_dir)
     if not os.path.exists(config.answer_dir):
         os.mkdir(config.answer_dir)
+    if not os.path.exists(config.eval_dir):
+        os.mkdir(config.eval_dir)
 
 
 def _get_args():
