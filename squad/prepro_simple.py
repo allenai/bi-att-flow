@@ -97,7 +97,7 @@ def get_word2vec(args, word_counter):
     sizes = {'6B': int(4e5), '42B': int(1.9e6), '840B': int(2.2e6), '2B': int(1.2e6)}
     total = sizes[args.glove_corpus]
     word2vec_dict = {}
-    with open(glove_path, 'r') as fh:
+    with open(glove_path, 'r', encoding='utf-8') as fh:
         for line in tqdm(fh, total=total):
             array = line.lstrip().rstrip().split(" ")
             word = array[0]
