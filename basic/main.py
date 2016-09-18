@@ -181,7 +181,7 @@ def _forward(config):
     print(e)
     if config.dump_answer:
         print("dumping answer ...")
-        graph_handler.dump_answer(e)
+        graph_handler.dump_answer(e, path=config.answer_path)
     if config.dump_eval:
         print("dumping eval ...")
         graph_handler.dump_eval(e)

@@ -29,7 +29,9 @@ class GraphHandler(object):
 
     def _load(self, sess):
         config = self.config
-        if config.load_step > 0:
+        if config.load_path is not None:
+            save_path = config.load_path
+        elif config.load_step > 0:
             save_path = os.path.join(config.save_dir, "{}-{}".format(config.model_name, config.load_step))
         else:
             save_dir = config.save_dir
@@ -52,9 +54,9 @@ class GraphHandler(object):
         with open(path, 'w') as fh:
             json.dump(short_floats(e.dict, precision), fh)
 
-    def dump_answer(self, e):
+    def dump_answer(self, e, path=None):
         assert isinstance(e, Evaluation)
-        path = os.path.join(self.config.answer_dir, "{}-{}.json".format(e.data_type, str(e.global_step).zfill(6)))
+        path = path or os.path.join(self.config.answer_dir, "{}-{}.json".format(e.data_type, str(e.global_step).zfill(6)))
         with open(path, 'w') as fh:
             json.dump(e.id2answer_dict, fh)
 
