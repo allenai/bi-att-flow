@@ -68,6 +68,7 @@ flags.DEFINE_bool("traditional", True, "trad [True]")
 flags.DEFINE_string("forward_name", "single", "Forward name [single]")
 flags.DEFINE_string("answer_path", "", "Answer path []")
 flags.DEFINE_string("load_path", "", "Load path []")
+flags.DEFINE_string("shared_path", "", "Shared path []")
 
 def main(_):
     config = flags.FLAGS
