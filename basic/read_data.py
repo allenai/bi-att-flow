@@ -64,18 +64,6 @@ def read_data(config, data_type, ref, data_filter=None):
     with open(shared_path, 'r') as fh:
         shared = json.load(fh)
 
-    if ref and not config.finetune:
-        shared_dev_path = os.path.join(config.data_dir, "shared_dev.json")
-        shared_test_path = os.path.join(config.data_dir, "shared_test.json")
-        shared_dev = json.load(open(shared_dev_path, 'r'))
-        shared_test = json.load(open(shared_test_path, 'r'))
-        shared['word_counter'] = dict(list(shared['word_counter'].items())
-                                      + list(shared_dev['word_counter'].items())
-                                      + list(shared_test['word_counter'].items()))
-        shared['lower_word_counter'] = dict(list(shared['lower_word_counter'].items())
-                                      + list(shared_dev['lower_word_counter'].items())
-                                      + list(shared_test['lower_word_counter'].items()))
-
     num_examples = len(next(iter(data.values())))
     if data_filter is None:
         valid_idxs = range(num_examples)
