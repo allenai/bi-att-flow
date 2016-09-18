@@ -43,7 +43,7 @@ def get_args():
     parser.add_argument("--mode", default="full", type=str)
     parser.add_argument("--single_path", default="", type=str)
     parser.add_argument("--tokenizer", default="PTB", type=str)
-    parser.add_argument("--process_tokens", default=True, type=bool_)
+    parser.add_argument("--process_tokens", default=False, type=bool_)
     parser.add_argument("--url", default="vision-server2.corp.ai2", type=str)
     parser.add_argument("--port", default=8000, type=int)
     # TODO : put more args here
