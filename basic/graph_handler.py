@@ -29,7 +29,7 @@ class GraphHandler(object):
 
     def _load(self, sess):
         config = self.config
-        if config.load_path is not None:
+        if config.load_path:
             save_path = config.load_path
         elif config.load_step > 0:
             save_path = os.path.join(config.save_dir, "{}-{}".format(config.model_name, config.load_step))
