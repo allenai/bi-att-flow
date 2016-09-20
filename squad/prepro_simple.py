@@ -14,12 +14,13 @@ from my.nltk_utils import load_compressed_tree
 from my.utils import get_word_span, process_tokens
 
 
+
 def bool_(arg):
     if arg == 'True':
         return True
     elif arg == 'False':
         return False
-    raise Exception()
+    raise Exception(arg)
 
 
 def main():
@@ -144,6 +145,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
             # wordss
             context = para['context']
             context = context.replace("''", '" ')
+            context = context.replace("``", '" ')
             xi = list(map(word_tokenize, sent_tokenize(context)))
             if args.process_tokens:
                 xi = [process_tokens(tokens) for tokens in xi]
