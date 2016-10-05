@@ -1,25 +1,9 @@
 import tensorflow as tf
-from tensorflow.models.image.cifar10.cifar10_multi_gpu_train import average_gradients
 
 from basic.model import Model
 
 
 class Trainer(object):
-    @staticmethod
-    def get_multi_gpu_trainer(config, models):
-        model = models[0]
-        trainer = Trainer(config, model)
-        losses = [model.get_loss() for model in models]
-        grads_list = [trainer.opt.compute_gradients(loss, var_list=trainer.var_list) for loss in losses]
-        with tf.name_scope("average"), tf.device("/cpu:0"):
-            trainer.loss = tf.add_n(losses)/len(losses)
-            trainer.grads = average_gradients(grads_list)
-        opt_op = trainer.opt.apply_gradients(trainer.grads, global_step=self.global_step)
-
-        # Define train op
-        with tf.control_dependencies([opt_op]):
-            trainer.train_op = tf.group(trainer.ema_op)
-
     def __init__(self, config, model):
         assert isinstance(model, Model)
         self.config = config

@@ -215,3 +215,13 @@ def update_config(config, data_sets):
     if config.squash:
         config.max_sent_size = config.max_para_size
         config.max_num_sents = 1
+
+    if config.mode == 'train':
+        word2vec_dict = data_sets[0].shared['lower_word2vec'] if config.lower_word else data_sets[0].shared['word2vec']
+        word2idx_dict = data_sets[0].shared['word2idx']
+        idx2vec_dict = {word2idx_dict[word]: vec for word, vec in word2vec_dict.items() if word in word2idx_dict}
+        print("{}/{} unique words have corresponding glove vectors.".format(len(idx2vec_dict), len(word2idx_dict)))
+        emb_mat = np.array([idx2vec_dict[idx] if idx in idx2vec_dict
+                            else np.random.multivariate_normal(np.zeros(config.word_emb_size), np.eye(config.word_emb_size))
+                            for idx in range(len(word2idx_dict))])
+        config.emb_mat = emb_mat
