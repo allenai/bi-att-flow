@@ -14,6 +14,17 @@ from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
 
 
 class Model(object):
+    @staticmethod
+    def get_multi_gpu_models(config):
+        models = []
+        with tf.variable_scope("models", caching_device="/cpu:0"):
+            for gpu_idx in config.num_gpus:
+                with tf.device("/gpu:{}".format(gpu_idx)), tf.name_scope("gpu_{}".format(gpu_idx)):
+                    model = Model(config)
+                    models.append(model)
+                    tf.get_variable_scope().reuse_variables()
+        return models
+
     def __init__(self, config):
         self.config = config
         self.global_step = tf.get_variable('global_step', shape=[], dtype='int32',
