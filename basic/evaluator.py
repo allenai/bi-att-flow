@@ -216,10 +216,16 @@ class F1Evaluator(LabeledEvaluator):
         self.loss = model.loss
         self.yp2 = model.yp2
 
+    def _split_batch(self, batch):
+        return batch
+
+    def _get_feed_dict(self, batch):
+        return self.model.get_feed_dict(batch[1], False)
+
     def get_evaluation(self, sess, batch):
-        idxs, data_set = batch
+        idxs, data_set = self._split_batch(batch)
         assert isinstance(data_set, DataSet)
-        feed_dict = self.model.get_feed_dict(data_set, False)
+        feed_dict = self._get_feed_dict(batch)
         global_step, yp, yp2, loss = sess.run([self.global_step, self.yp, self.yp2, self.loss], feed_dict=feed_dict)
         y = data_set.data['y']
         if self.config.squash:
