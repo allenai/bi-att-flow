@@ -38,3 +38,39 @@ class Trainer(object):
     def _get_feed_dict(self, batch):
         _, data_set = batch
         return self.model.get_feed_dict(data_set, True)
+
+
+class MultiGPUTrainer(Trainer):
+    def __init__(self, config, models):
+        self.models = models
+        super(MultiGPUTrainer, self).__init__(config, models[0])
+        losses = [model.get_loss() for model in models]
+        grads_list = [self.opt.compute_gradients(loss, var_list=self.var_list) for loss in losses]
+        with tf.name_scope("average"), tf.device("/cpu:0"):
+            self.loss = tf.add_n(losses)/len(losses)
+            self.grads = average_gradients(grads_list)
+        opt_op = self.opt.apply_gradients(self.grads, global_step=self.global_step)
+
+        # Define train op
+        with tf.control_dependencies([opt_op]):
+            self.train_op = tf.group(self.ema_op)
+
+    def step(self, sess, batches, get_summary=False):
+        assert isinstance(sess, tf.Session)
+        feed_dict = {}
+        for model, batch in zip(self.models, batches):
+            feed_dict.update(model.get_feed_dict(batch, True))
+        if get_summary:
+            loss, summary, train_op = \
+                sess.run([self.loss, self.summary, self.train_op], feed_dict=feed_dict)
+        else:
+            loss, train_op = sess.run([self.loss, self.train_op], feed_dict=feed_dict)
+            summary = None
+        return loss, summary, train_op
+
+    def _get_feed_dict(self, batches):
+        feed_dict = {}
+        for model, (_, data_set) in zip(self.models, batches):
+            feed_dict.update(model.get_feed_dict(data_set, True))
+        return feed_dict
+

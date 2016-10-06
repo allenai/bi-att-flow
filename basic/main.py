@@ -9,10 +9,10 @@ import tensorflow as tf
 from tqdm import tqdm
 import numpy as np
 
-from basic.evaluator import F1Evaluator, Evaluator, ForwardEvaluator
+from basic.evaluator import F1Evaluator, ForwardEvaluator, MultiGPUF1Evaluator
 from basic.graph_handler import GraphHandler
-from basic.model import Model
-from basic.trainer import Trainer
+from basic.model import Model, get_multi_gpu_models
+from basic.trainer import Trainer, MultiGPUTrainer
 
 from basic.read_data import load_metadata, read_data, get_squad_data_filter, update_config
 
@@ -51,9 +51,15 @@ def _train(config):
 
     # construct model graph and variables (using default graph)
     pprint(config.__flags, indent=2)
-    model = Model(config)
-    trainer = Trainer(config, model)
-    evaluator = F1Evaluator(config, model)
+    if config.num_gpus == 1:
+        model = Model(config)
+        trainer = Trainer(config, model)
+        evaluator = F1Evaluator(config, model)
+    else:
+        models = get_multi_gpu_models(config)
+        model = models[0]
+        trainer = MultiGPUTrainer(config, models)
+        evaluator = MultiGPUF1Evaluator(config, models)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     # Variables

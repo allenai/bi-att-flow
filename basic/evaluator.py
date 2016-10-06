@@ -384,3 +384,26 @@ def get_span_score_pairs(ypi, yp2i):
                 score = ypif[j] * yp2if[k]
                 span_score_pairs.append((span, score))
     return span_score_pairs
+
+
+class MultiGPUF1Evaluator(F1Evaluator):
+    def __init__(self, config, models):
+        self.models = models
+        super(MultiGPUF1Evaluator, self).__init__(config, models[0])
+        with tf.name_scope("concat"), tf.device("/cpu:0"):
+            self.yp = tf.concat(0, [model.yp for model in self.models])
+            self.yp2 = tf.concat(0, [model.yp2 for model in self.models])
+            # FIXME : incorrect loss calculation, due to smaller / empty batches
+            self.loss = tf.add_n([model.loss for model in self.models])/len(self.models)
+
+    def _split_batch(self, batches):
+        idxs_list, data_sets = zip(*batches)
+        idxs = sum(idxs_list, [])
+        data_set = sum(data_sets, start=data_sets[0].get_empty())
+        return idxs, data_set
+
+    def _get_feed_dict(self, batches):
+        feed_dict = {}
+        for model, (_, data_set) in zip(self.models, batches):
+            feed_dict.update(model.get_feed_dict(data_set, True))
+        return feed_dict

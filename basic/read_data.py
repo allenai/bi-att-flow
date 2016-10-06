@@ -51,6 +51,17 @@ class DataSet(object):
         return DataSet(data, self.data_type, shared=self.shared, valid_idxs=valid_idxs)
 
 
+class MultiGPUDataSet(DataSet):
+    def __init__(self, data, data_type, num_gpus, shared=None, valid_idxs=None):
+        super(MultiGPUDataSet, self).__init__(data, data_type, shared=shared, valid_idxs=valid_idxs)
+        self.num_gpus = num_gpus
+
+    def get_batches(self, batch_size, num_batches=None, shuffle=False):
+        flat_batches = super(MultiGPUDataSet, self).get_batches(batch_size, num_batches=num_batches*self.num_gpus, shuffle=shuffle)
+        batches = grouper(flat_batches, self.num_gpus, fillvalue=self.get_empty())
+        return batches
+
+
 def load_metadata(config, data_type):
     metadata_path = os.path.join(config.data_dir, "metadata_{}.json".format(data_type))
     with open(metadata_path, 'r') as fh:
@@ -125,7 +136,10 @@ def read_data(config, data_type, ref, data_filter=None):
         new_emb_mat = np.array([idx2vec_dict[idx] for idx in range(len(idx2vec_dict))], dtype='float32')
         shared['new_emb_mat'] = new_emb_mat
 
-    data_set = DataSet(data, data_type, shared=shared, valid_idxs=valid_idxs)
+    if config.num_gpus == 1:
+        data_set = DataSet(data, data_type, shared=shared, valid_idxs=valid_idxs)
+    else:
+        data_set = MultiGPUDataSet(data, data_type, config.num_gpus, shared=shared, valid_idxs=valid_idxs)
     return data_set
 
 

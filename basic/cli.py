@@ -64,6 +64,7 @@ flags.DEFINE_bool("known_if_glove", False, "consider as known if present in glov
 flags.DEFINE_bool("eval", True, "eval? [True]")
 flags.DEFINE_string("logit_func", "linear", "logit func [linear]")
 flags.DEFINE_bool("traditional", True, "trad [True]")
+flags.DEFINE_integer("num_gpus", 1, "num gpus to use [1]")
 
 flags.DEFINE_string("forward_name", "single", "Forward name [single]")
 flags.DEFINE_string("answer_path", "", "Answer path []")
