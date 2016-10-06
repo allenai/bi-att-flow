@@ -26,7 +26,6 @@ class Trainer(object):
 
     def step(self, sess, batch, get_summary=False):
         assert isinstance(sess, tf.Session)
-        _, data_set = self._split_batch(batch)
         feed_dict = self._get_feed_dict(batch)
         if get_summary:
             loss, summary, train_op = \
@@ -36,9 +35,6 @@ class Trainer(object):
             summary = None
         return loss, summary, train_op
 
-    def _split_batch(self, batch):
-        return batch
-
     def _get_feed_dict(self, batch):
-        _, data_set = self._split_batch(batch)
+        _, data_set = batch
         return self.model.get_feed_dict(data_set, True)

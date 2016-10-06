@@ -41,10 +41,14 @@ class DataSet(object):
             batch_ds = DataSet(batch_data, self.data_type, shared=self.shared)
             yield batch_idxs, batch_ds
 
+    def get_empty(self):
+        data = {key: [] for key in self.data}
+        return DataSet(data, self.data_type, shared=self.shared)
 
-class SquadDataSet(DataSet):
-    def __init__(self, data, data_type, shared=None, valid_idxs=None):
-        super(SquadDataSet, self).__init__(data, data_type, shared=shared, valid_idxs=valid_idxs)
+    def __add__(self, other):
+        data = {key: val + other.data[key] for key, val in zip(self.data.items())}
+        valid_idxs = self.valid_idxs + [valid_idx + self.num_examples for valid_idx in other.valid_idxs]
+        return DataSet(data, self.data_type, shared=self.shared, valid_idxs=valid_idxs)
 
 
 def load_metadata(config, data_type):

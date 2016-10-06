@@ -1,5 +1,6 @@
 from collections import deque
 import json
+from itertools import zip_longest
 
 import nltk
 import re
@@ -136,3 +137,9 @@ def process_tokens(temp_tokens):
             if not flag:
                 tokens.append(token)
     return tokens
+
+
+def grouper(iterable, n, fillvalue=None):
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
+
