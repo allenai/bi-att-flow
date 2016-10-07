@@ -18,6 +18,7 @@ class Model(object):
         self.config = config
         self.global_step = tf.get_variable('global_step', shape=[], dtype='int32',
                                            initializer=tf.constant_initializer(0), trainable=False)
+        self.scope = tf.get_variable_scope()
 
         # Define forward inputs here
         N, M, JX, JQ, VW, VC, W = \
@@ -48,7 +49,7 @@ class Model(object):
         self._build_loss()
 
         self.ema_op = self._get_ema_op()
-        self.summary = tf.merge_all_summaries()
+        self.summary = tf.merge_summary(tf.get_collection("summaries", scope=self.scope.name))
 
     def _build_forward(self):
         config = self.config
@@ -176,19 +177,19 @@ class Model(object):
             self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
         tf.add_to_collection("losses", ce_loss2)
 
-        self.loss = tf.add_n(tf.get_collection('losses'), name='loss')
-        tf.scalar_summary(self.loss.op.name, self.loss)
-        tf.add_to_collection('ema/scalar', self.loss)
+        self.loss = tf.add_n(tf.get_collection('losses', self.scope.name), name='loss')
+        tf.scalar_summary(self.loss.op.name, self.loss, name="loss")
+        # tf.add_to_collection('ema/scalar', self.loss)
 
     def _get_ema_op(self):
         ema = tf.train.ExponentialMovingAverage(self.config.decay)
-        ema_op = ema.apply(tf.get_collection("ema/scalar") + tf.get_collection("ema/histogram"))
-        for var in tf.get_collection("ema/scalar"):
+        ema_op = ema.apply(tf.get_collection("ema/scalar", scope=self.scope.name) + tf.get_collection("ema/histogram", scope=self.scope.name))
+        for var in tf.get_collection("ema/scalar", scope=self.scope.name):
             ema_var = ema.average(var)
-            tf.scalar_summary(ema_var.op.name, ema_var)
-        for var in tf.get_collection("ema/histogram"):
+            tf.scalar_summary(ema_var.op.name, ema_var, name="{}/scalar".format(var.op.name))
+        for var in tf.get_collection("ema/histogram", scope=self.scope.name):
             ema_var = ema.average(var)
-            tf.histogram_summary(ema_var.op.name, ema_var)
+            tf.histogram_summary(ema_var.op.name, ema_var, name="{}/histogram".format(var.op.name))
         return ema_op
 
     def get_loss(self):
@@ -201,7 +202,6 @@ class Model(object):
         return self.var_list
 
     def get_feed_dict(self, batch, is_train, supervised=True):
-        assert isinstance(batch, DataSet)
         config = self.config
         N, M, JX, JQ, VW, VC, d, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
@@ -313,9 +313,9 @@ class Model(object):
 def get_multi_gpu_models(config):
     models = []
     with tf.variable_scope("models", caching_device="/cpu:0"):
-        for gpu_idx in config.num_gpus:
+        for gpu_idx in range(config.num_gpus):
             with tf.device("/gpu:{}".format(gpu_idx)), tf.name_scope("gpu_{}".format(gpu_idx)):
                 model = Model(config)
-                models.append(model)
-                tf.get_variable_scope().reuse_variables()
+            models.append(model)
+            tf.get_variable_scope().reuse_variables()
     return models

@@ -63,7 +63,7 @@ def _train(config):
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     # Variables
-    sess = tf.Session()
+    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     graph_handler.initialize(sess)
 
     # begin training
@@ -123,7 +123,7 @@ def _test(config):
     evaluator = F1Evaluator(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
-    sess = tf.Session()
+    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, log_device_placement=True))
     graph_handler.initialize(sess)
 
     num_batches = math.ceil(test_data.num_examples / config.batch_size)
@@ -151,7 +151,7 @@ def _forward(config):
     evaluator = ForwardEvaluator(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
-    sess = tf.Session()
+    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     graph_handler.initialize(sess)
 
     num_batches = math.ceil(test_data.num_examples / config.batch_size)

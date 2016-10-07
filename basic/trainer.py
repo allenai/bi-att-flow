@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 from basic.model import Model
+from my.tensorflow import average_gradients
 
 
 class Trainer(object):
@@ -45,7 +46,12 @@ class MultiGPUTrainer(Trainer):
         self.models = models
         super(MultiGPUTrainer, self).__init__(config, models[0])
         losses = [model.get_loss() for model in models]
-        grads_list = [self.opt.compute_gradients(loss, var_list=self.var_list) for loss in losses]
+        grads_list = []
+        for gpu_idx, loss in enumerate(losses):
+            with tf.name_scope("gpu_{}".format(gpu_idx)), tf.device("/gpu:{}".format(gpu_idx)):
+                grads = self.opt.compute_gradients(loss, var_list=self.var_list)
+            grads_list.append(grads)
+
         with tf.name_scope("average"), tf.device("/cpu:0"):
             self.loss = tf.add_n(losses)/len(losses)
             self.grads = average_gradients(grads_list)
@@ -58,8 +64,8 @@ class MultiGPUTrainer(Trainer):
     def step(self, sess, batches, get_summary=False):
         assert isinstance(sess, tf.Session)
         feed_dict = {}
-        for model, batch in zip(self.models, batches):
-            feed_dict.update(model.get_feed_dict(batch, True))
+        for model, (_, data_set) in zip(self.models, batches):
+            feed_dict.update(model.get_feed_dict(data_set, True))
         if get_summary:
             loss, summary, train_op = \
                 sess.run([self.loss, self.summary, self.train_op], feed_dict=feed_dict)

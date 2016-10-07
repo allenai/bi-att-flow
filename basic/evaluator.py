@@ -398,8 +398,8 @@ class MultiGPUF1Evaluator(F1Evaluator):
 
     def _split_batch(self, batches):
         idxs_list, data_sets = zip(*batches)
-        idxs = sum(idxs_list, [])
-        data_set = sum(data_sets, start=data_sets[0].get_empty())
+        idxs = sum(idxs_list, ())
+        data_set = sum(data_sets, data_sets[0].get_empty())
         return idxs, data_set
 
     def _get_feed_dict(self, batches):

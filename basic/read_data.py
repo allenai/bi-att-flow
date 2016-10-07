@@ -6,7 +6,7 @@ import math
 
 import numpy as np
 
-from my.utils import index
+from my.utils import index, grouper
 
 
 class DataSet(object):
@@ -46,8 +46,8 @@ class DataSet(object):
         return DataSet(data, self.data_type, shared=self.shared)
 
     def __add__(self, other):
-        data = {key: val + other.data[key] for key, val in zip(self.data.items())}
-        valid_idxs = self.valid_idxs + [valid_idx + self.num_examples for valid_idx in other.valid_idxs]
+        data = {key: val + other.data[key] for key, val in self.data.items()}
+        valid_idxs = list(self.valid_idxs) + [valid_idx + self.num_examples for valid_idx in other.valid_idxs]
         return DataSet(data, self.data_type, shared=self.shared, valid_idxs=valid_idxs)
 
 
@@ -57,8 +57,9 @@ class MultiGPUDataSet(DataSet):
         self.num_gpus = num_gpus
 
     def get_batches(self, batch_size, num_batches=None, shuffle=False):
-        flat_batches = super(MultiGPUDataSet, self).get_batches(batch_size, num_batches=num_batches*self.num_gpus, shuffle=shuffle)
-        batches = grouper(flat_batches, self.num_gpus, fillvalue=self.get_empty())
+        flat_batches = super(MultiGPUDataSet, self).get_batches(batch_size, num_batches=num_batches, shuffle=shuffle)
+        empty = next(super(MultiGPUDataSet, self).get_batches(batch_size, num_batches=1))[1].get_empty()
+        batches = grouper(flat_batches, self.num_gpus, fillvalue=((), empty))
         return batches
 
 
