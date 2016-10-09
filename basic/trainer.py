@@ -44,11 +44,19 @@ class Trainer(object):
 class MultiGPUTrainer(Trainer):
     def __init__(self, config, models):
         self.models = models
-        super(MultiGPUTrainer, self).__init__(config, models[0])
+        model = models[0]
+        self.config = config
+        self.model = model
+        self.opt = tf.train.AdadeltaOptimizer(config.init_lr)
+        self.var_list = model.get_var_list()
+        self.global_step = model.get_global_step()
+        self.ema_op = model.ema_op
+        self.summary = model.summary
+
         losses = [model.get_loss() for model in models]
         grads_list = []
         for gpu_idx, loss in enumerate(losses):
-            with tf.name_scope("gpu_{}".format(gpu_idx)), tf.device("/gpu:{}".format(gpu_idx)):
+            with tf.device("/gpu:{}".format(gpu_idx)), tf.name_scope("trainer_{}".format(gpu_idx)):
                 grads = self.opt.compute_gradients(loss, var_list=self.var_list)
             grads_list.append(grads)
 

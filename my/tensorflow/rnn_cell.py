@@ -1,8 +1,8 @@
 import tensorflow as tf
-from tensorflow.python.ops.rnn_cell import DropoutWrapper, RNNCell, LSTMStateTuple
+from tensorflow.python.ops.rnn_cell import DropoutWrapper, RNNCell, LSTMStateTuple, BasicLSTMCell
 
 from my.tensorflow import exp_mask, flatten
-from my.tensorflow.nn import linear, softsel, double_linear_logits
+from my.tensorflow.nn import linear, softsel, double_linear_logits, _linear_cpu
 
 
 class SwitchableDropoutWrapper(DropoutWrapper):
@@ -219,3 +219,28 @@ class AttentionCell(RNNCell):
             """
             return tf.concat(1, [inputs, sel_mem, inputs * sel_mem, tf.abs(inputs - sel_mem)]), state
         return sim_mapper
+
+
+class CPUBasicLSTMCell(BasicLSTMCell):
+    def __call__(self, inputs, state, scope=None):
+        """Long short-term memory cell (LSTM)."""
+        with tf.variable_scope(scope or type(self).__name__):  # "BasicLSTMCell"
+            # Parameters of gates are concatenated into one multiply for efficiency.
+            if self._state_is_tuple:
+                c, h = state
+            else:
+                c, h = tf.split(1, 2, state)
+            concat = _linear_cpu([inputs, h], 4 * self._num_units, True)
+
+            # i = input_gate, j = new_input, f = forget_gate, o = output_gate
+            i, j, f, o = tf.split(1, 4, concat)
+
+            new_c = (c * tf.sigmoid(f + self._forget_bias) + tf.sigmoid(i) *
+                     self._activation(j))
+            new_h = self._activation(new_c) * tf.sigmoid(o)
+
+            if self._state_is_tuple:
+                new_state = LSTMStateTuple(new_c, new_h)
+            else:
+                new_state = tf.concat(1, [new_c, new_h])
+            return new_h, new_state

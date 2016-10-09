@@ -10,15 +10,16 @@ from my.tensorflow import exp_mask, get_initializer
 from my.tensorflow import mask
 from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel, dropout, get_logits, softmax
 from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
-from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
+from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell, CPUBasicLSTMCell
 
 
 class Model(object):
-    def __init__(self, config):
+    def __init__(self, config, scope):
         self.config = config
-        self.global_step = tf.get_variable('global_step', shape=[], dtype='int32',
-                                           initializer=tf.constant_initializer(0), trainable=False)
-        self.scope = tf.get_variable_scope()
+        with tf.device("/cpu:0"):
+            self.global_step = tf.get_variable('global_step', shape=[], dtype='int32',
+                                               initializer=tf.constant_initializer(0), trainable=False)
+        self.scope = scope
 
         # Define forward inputs here
         N, M, JX, JQ, VW, VC, W = \
@@ -49,7 +50,7 @@ class Model(object):
         self._build_loss()
 
         self.ema_op = self._get_ema_op()
-        self.summary = tf.merge_summary(tf.get_collection("summaries", scope=self.scope.name))
+        self.summary = tf.merge_summary(tf.get_collection("summaries", scope=self.scope))
 
     def _build_forward(self):
         config = self.config
@@ -60,14 +61,17 @@ class Model(object):
         dc, dw, dco = config.char_emb_size, config.word_emb_size, config.char_out_size
         di = dw + dco
 
-        with tf.variable_scope("emb"), tf.device("/cpu:0"):
-            char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
-            if config.mode == 'train':
-                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, dw], initializer=get_initializer(config.emb_mat))
-            else:
-                word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, dw], dtype='float')
+        with tf.variable_scope("emb"):
+            with tf.device("/cpu:0"):
+                char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
+                if config.mode == 'train':
+                    word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, dw], initializer=get_initializer(config.emb_mat))
+                else:
+                    word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, dw], dtype='float')
             if config.use_glove_for_unk:
                 word_emb_mat = tf.concat(0, [word_emb_mat, self.new_emb_mat])
+            Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
+            Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
 
         with tf.variable_scope("char"):
             Acx = tf.nn.embedding_lookup(char_emb_mat, self.cx)  # [N, M, JX, W, dc]
@@ -75,8 +79,9 @@ class Model(object):
             Acx = dropout(Acx, config.input_keep_prob, self.is_train)
             Acq = dropout(Acq, config.input_keep_prob, self.is_train)
 
-            filter = tf.get_variable("filter", shape=[1, config.char_filter_height, dc, dco], dtype='float')
-            bias = tf.get_variable("bias", shape=[dco], dtype='float')
+            with tf.device("/cpu:0"):
+                filter = tf.get_variable("filter", shape=[1, config.char_filter_height, dc, dco], dtype='float')
+                bias = tf.get_variable("bias", shape=[dco], dtype='float')
             strides = [1, 1, 1, 1]
             Acx = tf.reshape(Acx, [-1, JX, W, dc])
             Acq = tf.reshape(Acq, [-1, JQ, W, dc])
@@ -85,20 +90,18 @@ class Model(object):
             xxc = tf.reshape(tf.reduce_max(tf.nn.relu(xxc), 2), [-1, M, JX, dco])
             qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, dco])
 
-        Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
-        Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
 
-        xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, di]
-        qq = tf.concat(2, [qqc, Aq])  # [N, JQ, di]
-
-        cell = BasicLSTMCell(d, state_is_tuple=True)
-        cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
-        first_cell = cell
-        second_cell = cell
-        x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
-        q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
+        with tf.variable_scope("concat"):
+            xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, di]
+            qq = tf.concat(2, [qqc, Aq])  # [N, JQ, di]
 
         with tf.variable_scope("prepro"):
+            cell = CPUBasicLSTMCell(d, state_is_tuple=True)
+            cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
+            first_cell = cell
+            second_cell = cell
+            x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
+            q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
             (fw_u, bw_u), ((_, fw_u_f), (_, bw_u_f)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='prepro')  # [N, J, d], [N, d]
             u = tf.concat(2, [fw_u, bw_u])
             u_f = tf.concat(1, [fw_u_f, bw_u_f])
@@ -159,35 +162,38 @@ class Model(object):
 
             # g2 = tf.concat(3, [g2, u, g2*u, tf.abs(g2-u)])
 
-        self.logits = tf.reshape(dot, [-1, M * JX])  # [N, M, JX]
-        self.logits2 = tf.reshape(dot2, [-1, M * JX])
+        with tf.name_scope("out"):
+            self.logits = tf.reshape(dot, [-1, M * JX])  # [N, M, JX]
+            self.logits2 = tf.reshape(dot2, [-1, M * JX])
 
-        self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
-        self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
+            self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
+            self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
 
     def _build_loss(self):
         config = self.config
         N, M, JX, JQ, VW, VC = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size
-        ce_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-            self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float')))
-        tf.add_to_collection('losses', ce_loss)
-        ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-            self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
-        tf.add_to_collection("losses", ce_loss2)
 
-        self.loss = tf.add_n(tf.get_collection('losses', self.scope.name), name='loss')
-        tf.scalar_summary(self.loss.op.name, self.loss, name="loss")
-        # tf.add_to_collection('ema/scalar', self.loss)
+        with tf.name_scope("loss"):
+            ce_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
+                self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float')))
+            tf.add_to_collection('losses', ce_loss)
+            ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
+                self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
+            tf.add_to_collection("losses", ce_loss2)
+
+            self.loss = tf.add_n(tf.get_collection('losses', self.scope), name='loss')
+            tf.scalar_summary(self.loss.op.name, self.loss, name="loss")
+            # tf.add_to_collection('ema/scalar', self.loss)
 
     def _get_ema_op(self):
         ema = tf.train.ExponentialMovingAverage(self.config.decay)
-        ema_op = ema.apply(tf.get_collection("ema/scalar", scope=self.scope.name) + tf.get_collection("ema/histogram", scope=self.scope.name))
-        for var in tf.get_collection("ema/scalar", scope=self.scope.name):
+        ema_op = ema.apply(tf.get_collection("ema/scalar", scope=self.scope) + tf.get_collection("ema/histogram", scope=self.scope))
+        for var in tf.get_collection("ema/scalar", scope=self.scope):
             ema_var = ema.average(var)
             tf.scalar_summary(ema_var.op.name, ema_var, name="{}/scalar".format(var.op.name))
-        for var in tf.get_collection("ema/histogram", scope=self.scope.name):
+        for var in tf.get_collection("ema/histogram", scope=self.scope):
             ema_var = ema.average(var)
             tf.histogram_summary(ema_var.op.name, ema_var, name="{}/histogram".format(var.op.name))
         return ema_op
@@ -312,10 +318,10 @@ class Model(object):
 
 def get_multi_gpu_models(config):
     models = []
-    with tf.variable_scope("models", caching_device="/cpu:0"):
-        for gpu_idx in range(config.num_gpus):
-            with tf.device("/gpu:{}".format(gpu_idx)), tf.name_scope("gpu_{}".format(gpu_idx)):
-                model = Model(config)
+    for gpu_idx in range(config.num_gpus):
+        # with tf.variable_scope("models", caching_device="/gpu:{}".format(gpu_idx)):
+        with tf.device("/gpu:{}".format(gpu_idx)), tf.name_scope("model_{}".format(gpu_idx)) as scope:
+            model = Model(config, scope)
             models.append(model)
             tf.get_variable_scope().reuse_variables()
     return models

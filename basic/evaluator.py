@@ -390,7 +390,7 @@ class MultiGPUF1Evaluator(F1Evaluator):
     def __init__(self, config, models):
         self.models = models
         super(MultiGPUF1Evaluator, self).__init__(config, models[0])
-        with tf.name_scope("concat"), tf.device("/cpu:0"):
+        with tf.name_scope("eval_concat"), tf.device("/cpu:0"):
             self.yp = tf.concat(0, [model.yp for model in self.models])
             self.yp2 = tf.concat(0, [model.yp2 for model in self.models])
             # FIXME : incorrect loss calculation, due to smaller / empty batches
