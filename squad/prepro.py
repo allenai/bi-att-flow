@@ -38,22 +38,40 @@ def get_args():
     parser.add_argument("--glove_corpus", default="6B")
     parser.add_argument("--glove_dir", default=glove_dir)
     parser.add_argument("--glove_vec_size", default=100, type=int)
-    parser.add_argument("--full_train", default=False, type=bool_)
+    parser.add_argument("--mode", default="full", type=str)
     # TODO : put more args here
     return parser.parse_args()
 
+def create_all(args):
+    out_path = os.path.join(args.source_dir, "all-v1.1-aug.json")
+    if os.path.exists(out_path):
+        return
+    train_path = os.path.join(args.source_dir, "train-v1.1-aug.json")
+    train_data = json.load(open(train_path, 'r'))
+    dev_path = os.path.join(args.source_dir, "dev-v1.1-aug.json")
+    dev_data = json.load(open(dev_path, 'r'))
+    train_data['data'].extend(dev_data['data'])
+    print("dumping all data ...")
+    with open(out_path, 'w') as fh:
+        json.dump(train_data, fh)
 
 def prepro(args):
     if not os.path.exists(args.target_dir):
         os.makedirs(args.target_dir)
 
-    if args.full_train:
+    if args.mode == 'all':
+        create_all(args)
+        data_train, shared_train = prepro_each(args, 'all')
+        data_dev, shared_dev = prepro_each(args, 'dev', 0.0, 0.0)
+        data_test, shared_test = prepro_each(args, 'dev', 0.0, 0.0)
+    elif args.mode == 'full':
         data_train, shared_train = prepro_each(args, 'train')
         data_dev, shared_dev = prepro_each(args, 'dev')
+        data_test, shared_test = prepro_each(args, 'dev')
     else:
         data_train, shared_train = prepro_each(args, 'train', 0.0, args.train_ratio)
         data_dev, shared_dev = prepro_each(args, 'train', args.train_ratio, 1.0)
-    data_test, shared_test = prepro_each(args, 'dev')
+        data_test, shared_test = prepro_each(args, 'dev')
 
     print("saving ...")
     save(args, data_train, shared_train, 'train')
@@ -92,7 +110,7 @@ def get_word2vec(args, word_counter):
 
 
 def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
-    source_path = os.path.join(args.source_dir, "{}-v1.0-aug.json".format(data_type))
+    source_path = os.path.join(args.source_dir, "{}-v1.1-aug.json".format(data_type))
     source_data = json.load(open(source_path, 'r'))
 
     q, cq, y, rx, rcx, ids, idxs = [], [], [], [], [], [], []
