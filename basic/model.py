@@ -10,13 +10,13 @@ from my.tensorflow import exp_mask, get_initializer
 from my.tensorflow import mask
 from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel, dropout, get_logits, softmax
 from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
-from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell, CPUBasicLSTMCell
+from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell, MyBasicLSTMCell
 
 
 class Model(object):
     def __init__(self, config, scope):
         self.config = config
-        with tf.device("/cpu:0"):
+        with tf.device(config.device):
             self.global_step = tf.get_variable('global_step', shape=[], dtype='int32',
                                                initializer=tf.constant_initializer(0), trainable=False)
         self.scope = scope
@@ -62,7 +62,7 @@ class Model(object):
         di = dw + dco
 
         with tf.variable_scope("emb"):
-            with tf.device("/cpu:0"):
+            with tf.device(config.device):
                 char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
                 if config.mode == 'train':
                     word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, dw], initializer=get_initializer(config.emb_mat))
@@ -79,7 +79,7 @@ class Model(object):
             Acx = dropout(Acx, config.input_keep_prob, self.is_train)
             Acq = dropout(Acq, config.input_keep_prob, self.is_train)
 
-            with tf.device("/cpu:0"):
+            with tf.device(config.device):
                 filter = tf.get_variable("filter", shape=[1, config.char_filter_height, dc, dco], dtype='float')
                 bias = tf.get_variable("bias", shape=[dco], dtype='float')
             strides = [1, 1, 1, 1]
@@ -96,7 +96,7 @@ class Model(object):
             qq = tf.concat(2, [qqc, Aq])  # [N, JQ, di]
 
         with tf.variable_scope("prepro"):
-            cell = CPUBasicLSTMCell(d, state_is_tuple=True)
+            cell = MyBasicLSTMCell(d, state_is_tuple=True)
             cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
             first_cell = cell
             second_cell = cell

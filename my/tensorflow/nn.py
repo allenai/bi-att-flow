@@ -17,7 +17,7 @@ def linear(args, output_size, bias, bias_start=0.0, scope=None, squeeze=False, w
         assert is_train is not None
         flat_args = [tf.cond(is_train, lambda: tf.nn.dropout(arg, input_keep_prob), lambda: arg)
                      for arg in flat_args]
-    linear_func = _linear_cpu if cpu else _linear
+    linear_func = my_linear if cpu else _linear
     flat_out = linear_func(flat_args, output_size, bias, bias_start=bias_start, scope=scope)
     out = reconstruct(flat_out, args[0], 1)
     if squeeze:
@@ -110,7 +110,7 @@ def get_logits(args, size, bias, bias_start=0.0, scope=None, mask=None, wd=0.0, 
         raise Exception()
 
 
-def _linear_cpu(args, output_size, bias, bias_start=0.0, scope=None):
+def my_linear(args, output_size, bias, bias_start=0.0, scope=None, device=None):
     """Linear map: sum_i(args[i] * W[i]), where W[i] is a variable.
 
     Args:
@@ -132,6 +132,9 @@ def _linear_cpu(args, output_size, bias, bias_start=0.0, scope=None):
     if not nest.is_sequence(args):
         args = [args]
 
+    if device is None:
+        device = "/cpu:0"
+
     # Calculate the total size of arguments on dimension 1.
     total_arg_size = 0
     shapes = [a.get_shape().as_list() for a in args]
@@ -147,7 +150,7 @@ def _linear_cpu(args, output_size, bias, bias_start=0.0, scope=None):
 
     # Now the computation.
     with tf.variable_scope(scope or "Linear"):
-        with tf.device("/cpu:0"):
+        with tf.device(device):
             matrix = tf.get_variable(
                 "Matrix", [total_arg_size, output_size], dtype=dtype)
         if len(args) == 1:
@@ -156,7 +159,7 @@ def _linear_cpu(args, output_size, bias, bias_start=0.0, scope=None):
             res = tf.matmul(tf.concat(1, args), matrix)
         if not bias:
             return res
-        with tf.device("/cpu:0"):
+        with tf.device(device):
             bias_term = tf.get_variable(
                 "Bias", [output_size],
                 dtype=dtype,

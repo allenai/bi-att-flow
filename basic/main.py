@@ -19,14 +19,15 @@ from basic.read_data import load_metadata, read_data, get_squad_data_filter, upd
 
 def main(config):
     set_dirs(config)
-    if config.mode == 'train':
-        _train(config)
-    elif config.mode == 'test':
-        _test(config)
-    elif config.mode == 'forward':
-        _forward(config)
-    else:
-        raise ValueError("invalid value for 'mode': {}".format(config.mode))
+    with tf.device(config.device):
+        if config.mode == 'train':
+            _train(config)
+        elif config.mode == 'test':
+            _test(config)
+        elif config.mode == 'forward':
+            _forward(config)
+        else:
+            raise ValueError("invalid value for 'mode': {}".format(config.mode))
 
 
 def _config_draft(config):
@@ -52,7 +53,8 @@ def _train(config):
     # construct model graph and variables (using default graph)
     pprint(config.__flags, indent=2)
     if config.num_gpus == 1:
-        model = Model(config)
+        with tf.name_scope("single") as scope:
+            model = Model(config, scope)
         trainer = Trainer(config, model)
         evaluator = F1Evaluator(config, model)
     else:

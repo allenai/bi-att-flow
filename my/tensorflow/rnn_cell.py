@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import DropoutWrapper, RNNCell, LSTMStateTuple, BasicLSTMCell
 
 from my.tensorflow import exp_mask, flatten
-from my.tensorflow.nn import linear, softsel, double_linear_logits, _linear_cpu
+from my.tensorflow.nn import linear, softsel, double_linear_logits, my_linear
 
 
 class SwitchableDropoutWrapper(DropoutWrapper):
@@ -221,7 +221,13 @@ class AttentionCell(RNNCell):
         return sim_mapper
 
 
-class CPUBasicLSTMCell(BasicLSTMCell):
+class MyBasicLSTMCell(BasicLSTMCell):
+    def __init__(self, num_units, forget_bias=1.0, input_size=None,
+                 state_is_tuple=True, activation=tf.tanh, device=None):
+        super(MyBasicLSTMCell, self).__init__(num_units, forget_bias=forget_bias, input_size=input_size,
+                                              state_is_tuple=state_is_tuple, activation=activation)
+        self.device = device
+
     def __call__(self, inputs, state, scope=None):
         """Long short-term memory cell (LSTM)."""
         with tf.variable_scope(scope or type(self).__name__):  # "BasicLSTMCell"
@@ -230,7 +236,7 @@ class CPUBasicLSTMCell(BasicLSTMCell):
                 c, h = state
             else:
                 c, h = tf.split(1, 2, state)
-            concat = _linear_cpu([inputs, h], 4 * self._num_units, True)
+            concat = my_linear([inputs, h], 4 * self._num_units, True, device=self.device)
 
             # i = input_gate, j = new_input, f = forget_gate, o = output_gate
             i, j, f, o = tf.split(1, 4, concat)
