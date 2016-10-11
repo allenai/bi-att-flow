@@ -69,6 +69,8 @@ flags.DEFINE_string("forward_name", "single", "Forward name [single]")
 flags.DEFINE_string("answer_path", "", "Answer path []")
 flags.DEFINE_string("load_path", "", "Load path []")
 flags.DEFINE_string("shared_path", "", "Shared path []")
+flags.DEFINE_string("device", "/cpu:0", "default device [/cpu:0]")
+flags.DEFINE_integer("num_gpus", 1, "num of gpus [1]")
 
 def main(_):
     config = flags.FLAGS

@@ -14,7 +14,8 @@ from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
 
 
 class Model(object):
-    def __init__(self, config):
+    def __init__(self, config, scope):
+        self.scope = scope
         self.config = config
         self.global_step = tf.get_variable('global_step', shape=[], dtype='int32',
                                            initializer=tf.constant_initializer(0), trainable=False)
@@ -49,6 +50,7 @@ class Model(object):
 
         self.ema_op = self._get_ema_op()
         self.summary = tf.merge_all_summaries()
+        self.summary = tf.merge_summary(tf.get_collection("summaries", scope=self.scope))
 
     def _build_forward(self):
         config = self.config
@@ -176,17 +178,17 @@ class Model(object):
             self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
         tf.add_to_collection("losses", ce_loss2)
 
-        self.loss = tf.add_n(tf.get_collection('losses'), name='loss')
+        self.loss = tf.add_n(tf.get_collection('losses', scope=self.scope), name='loss')
         tf.scalar_summary(self.loss.op.name, self.loss)
         tf.add_to_collection('ema/scalar', self.loss)
 
     def _get_ema_op(self):
         ema = tf.train.ExponentialMovingAverage(self.config.decay)
-        ema_op = ema.apply(tf.get_collection("ema/scalar") + tf.get_collection("ema/histogram"))
-        for var in tf.get_collection("ema/scalar"):
+        ema_op = ema.apply(tf.get_collection("ema/scalar", scope=self.scope) + tf.get_collection("ema/histogram", scope=self.scope))
+        for var in tf.get_collection("ema/scalar", scope=self.scope):
             ema_var = ema.average(var)
             tf.scalar_summary(ema_var.op.name, ema_var)
-        for var in tf.get_collection("ema/histogram"):
+        for var in tf.get_collection("ema/histogram", scope=self.scope):
             ema_var = ema.average(var)
             tf.histogram_summary(ema_var.op.name, ema_var)
         return ema_op
@@ -307,3 +309,13 @@ class Model(object):
                         break
 
         return feed_dict
+
+
+def get_multi_gpu_models(config):
+    models = []
+    for gpu_idx in range(config.num_gpus):
+        with tf.name_scope("model_{}".format(gpu_idx)) as scope, tf.device("/gpu:{}".format(gpu_idx)):
+            model = Model(config, scope)
+            tf.get_variable_scope().reuse_variables()
+            models.append(model)
+    return models

@@ -6,6 +6,7 @@ import math
 
 import numpy as np
 
+from my.tensorflow import grouper
 from my.utils import index
 
 
@@ -40,6 +41,18 @@ class DataSet(object):
 
             batch_ds = DataSet(batch_data, self.data_type, shared=self.shared)
             yield batch_idxs, batch_ds
+
+    def get_multi_batches(self, batch_size, num_batches_per_step, num_steps=None, shuffle=False):
+        num_batches = None if num_steps is None else num_batches_per_step * num_steps
+        flat_batches = self.get_batches(batch_size, num_batches=num_batches, shuffle=shuffle)
+
+        empty = next(self.get_batches(batch_size, num_batches=1))[1].get_empty()
+        batches = grouper(flat_batches, num_batches_per_step, fillvalue=((), empty))
+        return batches
+
+    def get_empty(self):
+        data = {key: [] for key in self.data}
+        return DataSet(data, self.data_type, shared=self.shared)
 
 
 class SquadDataSet(DataSet):

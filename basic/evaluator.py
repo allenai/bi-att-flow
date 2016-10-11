@@ -202,9 +202,9 @@ class F1Evaluation(AccuracyEvaluation):
 
 class F1Evaluator(LabeledEvaluator):
     def get_evaluation(self, sess, batch):
-        idxs, data_set = batch
+        idxs, data_set = self._split_batch(batch)
         assert isinstance(data_set, DataSet)
-        feed_dict = self.model.get_feed_dict(data_set, False)
+        feed_dict = self._get_feed_dict(batch)
         global_step, yp, yp2, loss = sess.run([self.model.global_step, self.model.yp, self.model.yp2, self.model.loss], feed_dict=feed_dict)
         y = data_set.data['y']
         if self.config.squash:
@@ -248,6 +248,12 @@ class F1Evaluator(LabeledEvaluator):
                          correct, float(loss), f1s, id2answer_dict)
         return e
 
+    def _split_batch(self, batch):
+        return batch
+
+    def _get_feed_dict(self, batch):
+        return self.model.get_feed_dict(batch[1], False)
+
     @staticmethod
     def compare(yi, ypi, yp2i):
         for start, stop in yi:
@@ -275,6 +281,29 @@ class F1Evaluator(LabeledEvaluator):
                 f1 = span_f1(true_span, pred_span)
                 max_f1 = max(f1, max_f1)
         return max_f1
+
+
+class MultiGPUF1Evaluator(F1Evaluator):
+    def __init__(self, config, models):
+        super(MultiGPUF1Evaluator, self).__init__(config, models[0])
+        self.models = models
+        with tf.name_scope("eval_concat"):
+            self.yp = tf.concat(0, [model.yp for model in models])
+            self.yp2 = tf.concat(0, [model.yp2 for model in models])
+            self.loss = tf.add_n([model.loss for model in models])/len(models)
+
+    def _split_batch(self, batches):
+        idxs_list, data_sets = zip(*batches)
+        idxs = sum(idxs_list, ())
+        data_set = sum(data_sets, data_sets[0].get_empty())
+        return idxs, data_set
+
+    def _get_feed_dict(self, batches):
+        feed_dict = {}
+        for model, (_, data_set) in zip(self.models, batches):
+            feed_dict.update(model.get_feed_dict(data_set, True))
+        return feed_dict
+
 
 
 class ForwardEvaluator(Evaluator):

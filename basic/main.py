@@ -11,22 +11,23 @@ import numpy as np
 
 from basic.evaluator import F1Evaluator, Evaluator, ForwardEvaluator
 from basic.graph_handler import GraphHandler
-from basic.model import Model
-from basic.trainer import Trainer
+from basic.model import Model, get_multi_gpu_models
+from basic.trainer import Trainer, MultiGPUTrainer
 
 from basic.read_data import load_metadata, read_data, get_squad_data_filter, update_config
 
 
 def main(config):
     set_dirs(config)
-    if config.mode == 'train':
-        _train(config)
-    elif config.mode == 'test':
-        _test(config)
-    elif config.mode == 'forward':
-        _forward(config)
-    else:
-        raise ValueError("invalid value for 'mode': {}".format(config.mode))
+    with tf.device(config.device):
+        if config.mode == 'train':
+            _train(config)
+        elif config.mode == 'test':
+            _test(config)
+        elif config.mode == 'forward':
+            _forward(config)
+        else:
+            raise ValueError("invalid value for 'mode': {}".format(config.mode))
 
 
 def _config_draft(config):
@@ -49,7 +50,6 @@ def _train(config):
 
     _config_draft(config)
 
-
     word2vec_dict = train_data.shared['lower_word2vec'] if config.lower_word else train_data.shared['word2vec']
     word2idx_dict = train_data.shared['word2idx']
     idx2vec_dict = {word2idx_dict[word]: vec for word, vec in word2vec_dict.items() if word in word2idx_dict}
@@ -61,13 +61,15 @@ def _train(config):
 
     # construct model graph and variables (using default graph)
     pprint(config.__flags, indent=2)
-    model = Model(config)
-    trainer = Trainer(config, model)
+    # model = Model(config)
+    models = get_multi_gpu_models(config)
+    model = models[0]
+    trainer = MultiGPUTrainer(config, models)
     evaluator = F1Evaluator(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     # Variables
-    sess = tf.Session()
+    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     graph_handler.initialize(sess)
 
     # begin training
@@ -75,10 +77,11 @@ def _train(config):
     max_acc = 0
     noupdate_count = 0
     global_step = 0
-    for _, batch in tqdm(train_data.get_batches(config.batch_size, num_batches=num_steps, shuffle=True), total=num_steps):
+    for batches in tqdm(train_data.get_multi_batches(config.batch_size, config.num_gpus,
+                                                     num_steps=num_steps, shuffle=True), total=num_steps):
         global_step = sess.run(model.global_step) + 1  # +1 because all calculations are done after step
         get_summary = global_step % config.log_period == 0
-        loss, summary, train_op = trainer.step(sess, batch, get_summary=get_summary)
+        loss, summary, train_op = trainer.step(sess, batches, get_summary=get_summary)
         if get_summary:
             graph_handler.add_summary(summary, global_step)
 

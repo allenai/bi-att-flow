@@ -1,3 +1,5 @@
+from itertools import zip_longest
+
 import tensorflow as tf
 from functools import reduce
 from operator import mul
@@ -140,3 +142,8 @@ def add_wd(wd, scope=None):
         for var in variables:
             weight_decay = tf.mul(tf.nn.l2_loss(var), wd, name="{}/wd".format(var.op.name))
             tf.add_to_collection('losses', weight_decay)
+
+
+def grouper(iterable, n, fillvalue=None):
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
