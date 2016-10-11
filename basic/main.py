@@ -135,7 +135,6 @@ def _test(config):
 
     pprint(config.__flags, indent=2)
     models = get_multi_gpu_models(config)
-    model = models[0]
     evaluator = MultiGPUF1Evaluator(config, models)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
