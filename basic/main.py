@@ -9,7 +9,7 @@ import tensorflow as tf
 from tqdm import tqdm
 import numpy as np
 
-from basic.evaluator import F1Evaluator, Evaluator, ForwardEvaluator
+from basic.evaluator import F1Evaluator, Evaluator, ForwardEvaluator, MultiGPUF1Evaluator
 from basic.graph_handler import GraphHandler
 from basic.model import Model, get_multi_gpu_models
 from basic.trainer import Trainer, MultiGPUTrainer
@@ -134,17 +134,24 @@ def _test(config):
         config.new_emb_mat = new_emb_mat
 
     pprint(config.__flags, indent=2)
-    model = Model(config)
-    evaluator = F1Evaluator(config, model)
+    models = get_multi_gpu_models(config)
+    model = models[0]
+    evaluator = MultiGPUF1Evaluator(config, models)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
-    sess = tf.Session()
+    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     graph_handler.initialize(sess)
 
-    num_batches = math.ceil(test_data.num_examples / config.batch_size)
-    if 0 < config.eval_num_batches < num_batches:
-        num_batches = config.eval_num_batches
-    e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
+    if 0 < config.eval_num_batches < math.ceil(test_data.num_examples / (config.batch_size * config.num_gpus)):
+        num_steps = config.eval_num_batches
+    else:
+        num_steps = None
+    """
+    e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_batches(config.batch_size,
+                                                                               num_batches=num_steps), total=num_steps))
+    """
+    e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_multi_batches(config.batch_size, config.num_gpus,
+                                                                                     num_steps=num_steps), total=num_steps))
     print(e)
     if config.dump_answer:
         print("dumping answer ...")
@@ -170,11 +177,12 @@ def _forward(config):
         config.new_emb_mat = new_emb_mat
 
     pprint(config.__flags, indent=2)
-    model = Model(config)
+    models = get_multi_gpu_models(config)
+    model = models[0]
     evaluator = ForwardEvaluator(config, model)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
-    sess = tf.Session()
+    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     graph_handler.initialize(sess)
 
     num_batches = math.ceil(test_data.num_examples / config.batch_size)

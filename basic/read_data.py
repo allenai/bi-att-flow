@@ -54,6 +54,11 @@ class DataSet(object):
         data = {key: [] for key in self.data}
         return DataSet(data, self.data_type, shared=self.shared)
 
+    def __add__(self, other):
+        data = {key: val + other.data[key] for key, val in self.data.items()}
+        valid_idxs = list(self.valid_idxs) + [valid_idx + self.num_examples for valid_idx in other.valid_idxs]
+        return DataSet(data, self.data_type, shared=self.shared, valid_idxs=valid_idxs)
+
 
 class SquadDataSet(DataSet):
     def __init__(self, data, data_type, shared=None, valid_idxs=None):

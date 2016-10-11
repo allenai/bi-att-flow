@@ -87,11 +87,13 @@ class Evaluator(object):
     def __init__(self, config, model):
         self.config = config
         self.model = model
+        self.global_step = model.global_step
+        self.yp = model.yp
 
     def get_evaluation(self, sess, batch):
         idxs, data_set = batch
         feed_dict = self.model.get_feed_dict(data_set, False, supervised=False)
-        global_step, yp = sess.run([self.model.global_step, self.model.yp], feed_dict=feed_dict)
+        global_step, yp = sess.run([self.global_step, self.yp], feed_dict=feed_dict)
         yp = yp[:data_set.num_examples]
         e = Evaluation(data_set.data_type, int(global_step), idxs, yp.tolist())
         return e
@@ -102,22 +104,30 @@ class Evaluator(object):
 
 
 class LabeledEvaluator(Evaluator):
+    def __init__(self, config, model):
+        super(LabeledEvaluator, self).__init__(config, model)
+        self.y = model.y
+
     def get_evaluation(self, sess, batch):
         idxs, data_set = batch
         feed_dict = self.model.get_feed_dict(data_set, False, supervised=False)
-        global_step, yp = sess.run([self.model.global_step, self.model.yp], feed_dict=feed_dict)
+        global_step, yp = sess.run([self.global_step, self.yp], feed_dict=feed_dict)
         yp = yp[:data_set.num_examples]
-        y = feed_dict[self.model.y]
+        y = feed_dict[self.y]
         e = LabeledEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y.tolist())
         return e
 
 
 class AccuracyEvaluator(LabeledEvaluator):
+    def __init__(self, config, model):
+        super(AccuracyEvaluator, self).__init__(config, model)
+        self.loss = model.loss
+
     def get_evaluation(self, sess, batch):
         idxs, data_set = batch
         assert isinstance(data_set, DataSet)
         feed_dict = self.model.get_feed_dict(data_set, False)
-        global_step, yp, loss = sess.run([self.model.global_step, self.model.yp, self.model.loss], feed_dict=feed_dict)
+        global_step, yp, loss = sess.run([self.global_step, self.yp, self.loss], feed_dict=feed_dict)
         y = data_set.data['y']
         yp = yp[:data_set.num_examples]
         correct = [self.__class__.compare(yi, ypi) for yi, ypi in zip(y, yp)]
@@ -201,11 +211,16 @@ class F1Evaluation(AccuracyEvaluation):
 
 
 class F1Evaluator(LabeledEvaluator):
+    def __init__(self, config, model):
+        super(F1Evaluator, self).__init__(config, model)
+        self.yp2 = model.yp2
+        self.loss = model.loss
+
     def get_evaluation(self, sess, batch):
         idxs, data_set = self._split_batch(batch)
         assert isinstance(data_set, DataSet)
         feed_dict = self._get_feed_dict(batch)
-        global_step, yp, yp2, loss = sess.run([self.model.global_step, self.model.yp, self.model.yp2, self.model.loss], feed_dict=feed_dict)
+        global_step, yp, yp2, loss = sess.run([self.global_step, self.yp, self.yp2, self.loss], feed_dict=feed_dict)
         y = data_set.data['y']
         if self.config.squash:
             new_y = []
@@ -301,17 +316,21 @@ class MultiGPUF1Evaluator(F1Evaluator):
     def _get_feed_dict(self, batches):
         feed_dict = {}
         for model, (_, data_set) in zip(self.models, batches):
-            feed_dict.update(model.get_feed_dict(data_set, True))
+            feed_dict.update(model.get_feed_dict(data_set, False))
         return feed_dict
 
 
-
 class ForwardEvaluator(Evaluator):
+    def __init__(self, config, model):
+        super(ForwardEvaluator, self).__init__(config, model)
+        self.yp2 = model.yp2
+        self.loss = model.loss
+
     def get_evaluation(self, sess, batch):
         idxs, data_set = batch
         assert isinstance(data_set, DataSet)
         feed_dict = self.model.get_feed_dict(data_set, False)
-        global_step, yp, yp2, loss = sess.run([self.model.global_step, self.model.yp, self.model.yp2, self.model.loss], feed_dict=feed_dict)
+        global_step, yp, yp2, loss = sess.run([self.global_step, self.yp, self.yp2, self.loss], feed_dict=feed_dict)
 
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
         spans = [get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)]
