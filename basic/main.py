@@ -141,11 +141,9 @@ def _test(config):
 
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     graph_handler.initialize(sess)
-
-    if 0 < config.eval_num_batches < math.ceil(test_data.num_examples / (config.batch_size * config.num_gpus)):
+    num_steps = math.ceil(test_data.num_examples / (config.batch_size * config.num_gpus))
+    if 0 < config.eval_num_batches < num_steps:
         num_steps = config.eval_num_batches
-    else:
-        num_steps = None
     """
     e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_batches(config.batch_size,
                                                                                num_batches=num_steps), total=num_steps))
