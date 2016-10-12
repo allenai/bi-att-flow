@@ -23,3 +23,4 @@ Preprocess Stanford QA dataset (along with GloVe vectors) and save them in `data
 ```python -m squad.prepro_simple```
 
 ## Training
+```CUDA_VISIBLE_DEVICES=0 python -m basic.cli --mode train --noload --attention --use_glove_for_unk --known_if_glove --nofinetune --notraditional --device /gpu:0```
