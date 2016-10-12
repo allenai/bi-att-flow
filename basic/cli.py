@@ -62,7 +62,7 @@ flags.DEFINE_bool("internal_attention", False, "internal attention [False]")
 flags.DEFINE_bool("use_glove_for_unk", False, "use glove for unk [False]")
 flags.DEFINE_bool("known_if_glove", False, "consider as known if present in glove [False]")
 flags.DEFINE_bool("eval", True, "eval? [True]")
-flags.DEFINE_string("logit_func", "linear", "logit func [linear]")
+flags.DEFINE_string("logit_func", "mul_linear", "logit func [linear]")
 flags.DEFINE_bool("traditional", True, "trad [True]")
 
 flags.DEFINE_string("forward_name", "single", "Forward name [single]")

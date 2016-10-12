@@ -73,7 +73,7 @@ def _train(config):
     graph_handler.initialize(sess)
 
     # begin training
-    num_steps = config.num_steps or int(config.num_epochs * train_data.num_examples / config.batch_size)
+    num_steps = config.num_steps or int(config.num_epochs * train_data.num_examples / (config.batch_size * config.num_gpus))
     max_acc = 0
     noupdate_count = 0
     global_step = 0

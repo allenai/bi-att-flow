@@ -105,5 +105,15 @@ def get_logits(args, size, bias, bias_start=0.0, scope=None, mask=None, wd=0.0, 
     elif func == 'double':
         return double_linear_logits(args, size, bias, bias_start=bias_start, scope=scope, mask=mask, wd=wd, input_keep_prob=input_keep_prob,
                                     is_train=is_train)
+    elif func == 'dot':
+        assert len(args) == 2
+        arg = args[0] * args[1]
+        return sum_logits([arg], mask=mask, name=scope)
+    elif func == 'mul_linear':
+        assert len(args) == 2
+        arg = args[0] * args[1]
+        return linear_logits([arg], bias, bias_start=bias_start, scope=scope, mask=mask, wd=wd, input_keep_prob=input_keep_prob,
+                             is_train=is_train)
+
     else:
         raise Exception()

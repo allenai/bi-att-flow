@@ -114,15 +114,22 @@ class Model(object):
                 with tf.variable_scope("attention"):
                     u_aug = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1, 1])  # [N, M, JX, JQ, 2d]
                     h_aug = tf.tile(tf.expand_dims(h, 3), [1, 1, 1, JQ, 1])
+                    h_aug_self_1 = tf.tile(tf.expand_dims(h, 3), [1, 1, 1, JX, 1])
+                    h_aug_self_2 = tf.tile(tf.expand_dims(h, 2), [1, 1, JX, 1, 1])
                     u_mask = tf.tile(tf.expand_dims(tf.expand_dims(self.q_mask, 1), 1), [1, M, JX, 1])
                     h_mask = tf.tile(tf.expand_dims(self.x_mask, -1), [1, 1, 1, JQ])
                     cur_mask = u_mask & h_mask
-                    u_logits = get_logits([u_aug * h_aug], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=cur_mask, is_train=self.is_train, func=config.logit_func, scope='u')
-                    h_logits = get_logits([u_f * h], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.logit_func, scope='h')
-                    u_a = softsel(u_aug, u_logits)
-                    h_a = softsel(h, h_logits)
+                    h_self_mask_1 = tf.tile(tf.expand_dims(self.x_mask, -1), [1, 1, 1, JX])
+                    h_self_mask_2 = tf.tile(tf.expand_dims(self.x_mask, 2), [1, 1, JX, 1])
+                    h_self_mask = h_self_mask_1 & h_self_mask_2
+                    u_logits = get_logits([u_aug, h_aug], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=cur_mask, is_train=self.is_train, func=config.logit_func, scope='u')
+                    h_logits = get_logits([u_f, h], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.logit_func, scope='h')
+                    h_self_logits = get_logits([h_aug_self_1, h_aug_self_2], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=h_self_mask, is_train=self.is_train, func=config.logit_func, scope='h_self')
+                    u_a = softsel(u_aug, u_logits)  # [N, M, JX, 2d]
+                    h_a = softsel(h, h_logits)  # [N, M, 2d]
+                    h_self_a = softsel(h_aug_self_2, h_self_logits)  # [N, M, JX, JX, 2d] -> [N, M, JX, 2d]
                     h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
-                    p0 = tf.concat(3, [p0, u_a, h_a])
+                    p0 = tf.concat(3, [p0, u_a, h_a, h_self_a])
             if config.internal_attention:
                 with tf.variable_scope("internal_attention"):
                     u = tf.reshape(tf.tile(tf.expand_dims(u, 1), [1, M, 1, 1]), [N*M, JQ, 2*d])
@@ -135,7 +142,7 @@ class Model(object):
                 g1 = tf.concat(3, [fw_g1, bw_g1])
                 # g1 = tf.concat(3, [g1, u, g1*u, tf.abs(g1-u)])
                 a1 = g1
-                dot = get_logits([h, a1, h * a1], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.logit_func, scope='logits1')
+                dot = get_logits([h, a1, h * a1], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func='linear', scope='logits1')
                 a1i = softmax(tf.reshape(dot, [N, M*JX]))
                 a1i = tf.reshape(a1i, [N, M, JX, 1])
                 # a1i = softsel(tf.reshape(a1, [N, M*JX, 2*d]), tf.reshape(dot, [N, M*JX]))
@@ -144,7 +151,7 @@ class Model(object):
                 (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(second_cell, second_cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
                 g2 = tf.concat(3, [fw_g2, bw_g2])
                 a2 = g2
-                dot2 = get_logits([h, a2, h * a2], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.logit_func, scope='logits2')
+                dot2 = get_logits([h, a2, h * a2], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func='linear', scope='logits2')
             else:
                 (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(first_cell, first_cell, p0, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
                 g1 = tf.concat(3, [fw_g1, bw_g1])
@@ -153,10 +160,10 @@ class Model(object):
                 # g1 = tf.concat(3, [g1, u, g1*u, tf.abs(g1-u)])
                 a1 = g2
                 a2 = g2
-                dot = get_logits([xx, a1], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.logit_func, scope='logits1')
+                dot = get_logits([xx, a1], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func='linear', scope='logits1')
                 a1i = softsel(tf.reshape(a1, [N, M*JX, 2*d]), tf.reshape(dot, [N, M*JX]))
                 a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
-                dot2 = get_logits([xx, a2, a1i], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.logit_func, scope='logits2')
+                dot2 = get_logits([xx, a2, a1i], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func='linear', scope='logits2')
 
             # g2 = tf.concat(3, [g2, u, g2*u, tf.abs(g2-u)])
 
