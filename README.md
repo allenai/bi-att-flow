@@ -19,6 +19,9 @@ pip install nltk progressba2 tqdm networkx requests
 ```
 
 ## Preprocessing
+Donwload SQuAD data and GloVE and nltk corpus:
+```chmod +x download.sh; ./download.sh```
+
 Preprocess Stanford QA dataset (along with GloVe vectors) and save them in `data/squad`:
 ```python -m squad.prepro_simple```
 
