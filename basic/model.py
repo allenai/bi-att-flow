@@ -7,8 +7,7 @@ from tensorflow.python.ops.rnn_cell import BasicLSTMCell, GRUCell
 
 from basic.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
-from my.tensorflow import mask
-from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel, dropout, get_logits, softmax
+from my.tensorflow.nn import softsel, dropout, get_logits, softmax
 from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
 
@@ -114,22 +113,15 @@ class Model(object):
                 with tf.variable_scope("attention"):
                     u_aug = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1, 1])  # [N, M, JX, JQ, 2d]
                     h_aug = tf.tile(tf.expand_dims(h, 3), [1, 1, 1, JQ, 1])
-                    h_aug_self_1 = tf.tile(tf.expand_dims(h, 3), [1, 1, 1, JX, 1])
-                    h_aug_self_2 = tf.tile(tf.expand_dims(h, 2), [1, 1, JX, 1, 1])
                     u_mask = tf.tile(tf.expand_dims(tf.expand_dims(self.q_mask, 1), 1), [1, M, JX, 1])
                     h_mask = tf.tile(tf.expand_dims(self.x_mask, -1), [1, 1, 1, JQ])
                     cur_mask = u_mask & h_mask
-                    h_self_mask_1 = tf.tile(tf.expand_dims(self.x_mask, -1), [1, 1, 1, JX])
-                    h_self_mask_2 = tf.tile(tf.expand_dims(self.x_mask, 2), [1, 1, JX, 1])
-                    h_self_mask = h_self_mask_1 & h_self_mask_2
                     u_logits = get_logits([u_aug, h_aug], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=cur_mask, is_train=self.is_train, func=config.logit_func, scope='u')
                     h_logits = get_logits([u_f, h], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.logit_func, scope='h')
-                    h_self_logits = get_logits([h_aug_self_1, h_aug_self_2], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=h_self_mask, is_train=self.is_train, func=config.logit_func, scope='h_self')
                     u_a = softsel(u_aug, u_logits)  # [N, M, JX, 2d]
                     h_a = softsel(h, h_logits)  # [N, M, 2d]
-                    h_self_a = softsel(h_aug_self_2, h_self_logits)  # [N, M, JX, JX, 2d] -> [N, M, JX, 2d]
                     h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
-                    p0 = tf.concat(3, [p0, u_a, h_a, h_self_a])
+                    p0 = tf.concat(3, [p0, u_a, h_a])
             if config.internal_attention:
                 with tf.variable_scope("internal_attention"):
                     u = tf.reshape(tf.tile(tf.expand_dims(u, 1), [1, M, 1, 1]), [N*M, JQ, 2*d])
