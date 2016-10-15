@@ -7,9 +7,57 @@ from tensorflow.python.ops.rnn_cell import BasicLSTMCell, GRUCell
 
 from basic.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
-from my.tensorflow.nn import softsel, dropout, get_logits, softmax
+from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel, dropout, get_logits, softmax
 from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
+
+
+def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None):
+    """
+    h_a:
+    all u attending on h
+    choosing an element of h that max-matches u
+    First creates confusion matrix between h and u
+    Then take max of the attention weights over u row
+    Finally softmax over
+
+    u_a:
+    each h attending on u
+
+    :param h: [N, M, JX, d]
+    :param u: [N, JQ, d]
+    :param h_mask:  [N, M, JX]
+    :param u_mask:  [N, B]
+    :param scope:
+    :return: [N, M, d], [N, M, JX, d]
+    """
+    with tf.variable_scope(scope or "bi_attention"):
+        N, M, JX, JQ, d = config.batch_size, config.max_num_sents, config.max_sent_size, config.max_ques_size, config.hidden_size
+        h_aug = tf.tile(tf.expand_dims(h, 3), [1, 1, 1, JQ, 1])
+        u_aug = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1, 1])
+        if h_mask is None:
+            and_mask = None
+        else:
+            h_mask_aug = tf.tile(tf.expand_dims(h_mask, 3), [1, 1, 1, JQ])
+            u_mask_aug = tf.tile(tf.expand_dims(tf.expand_dims(u_mask, 1), 1), [1, M, JX, 1])
+            and_mask = h_mask_aug & u_mask_aug
+        logits = get_logits([h_aug, u_aug], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=and_mask,
+                            is_train=is_train, func=config.logit_func, scope='logits')  # [N, M, JX, JQ]
+        maxed_logits = tf.reduce_max(logits, 3)  # [N, M, JX]
+        h_a = softsel(h, maxed_logits)  # [N, M, d]
+        u_a = softsel(u_aug, logits)  # [N, M, JX, d]
+        return h_a, u_a
+
+
+def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None):
+    with tf.variable_scope(scope or "attention_layer"):
+        N, M, JX, JQ, d = config.batch_size, config.max_num_sents, config.max_sent_size, config.max_ques_size, config.hidden_size
+        h_a, u_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask)
+        h_a_tiled = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
+        out = linear([h, h_a_tiled, u_a], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, is_train=is_train)
+        out = tf.nn.relu(out)
+        out = tf.reshape(out, [N, M, JX, d])
+        return out
 
 
 class Model(object):
@@ -23,14 +71,14 @@ class Model(object):
         N, M, JX, JQ, VW, VC, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.max_word_size
-        self.x = tf.placeholder('int32', [None, M, JX], name='x')
-        self.cx = tf.placeholder('int32', [None, M, JX, W], name='cx')
-        self.x_mask = tf.placeholder('bool', [None, M, JX], name='x_mask')
-        self.q = tf.placeholder('int32', [None, JQ], name='q')
-        self.cq = tf.placeholder('int32', [None, JQ, W], name='cq')
-        self.q_mask = tf.placeholder('bool', [None, JQ], name='q_mask')
-        self.y = tf.placeholder('bool', [None, M, JX], name='y')
-        self.y2 = tf.placeholder('bool', [None, M, JX], name='y2')
+        self.x = tf.placeholder('int32', [N, M, JX], name='x')
+        self.cx = tf.placeholder('int32', [N, M, JX, W], name='cx')
+        self.x_mask = tf.placeholder('bool', [N, M, JX], name='x_mask')
+        self.q = tf.placeholder('int32', [N, JQ], name='q')
+        self.cq = tf.placeholder('int32', [N, JQ, W], name='cq')
+        self.q_mask = tf.placeholder('bool', [N, JQ], name='q_mask')
+        self.y = tf.placeholder('bool', [N, M, JX], name='y')
+        self.y2 = tf.placeholder('bool', [N, M, JX], name='y2')
         self.is_train = tf.placeholder('bool', [], name='is_train')
         self.new_emb_mat = tf.placeholder('float', [None, config.word_emb_size], name='new_emb_mat')
 
@@ -101,63 +149,34 @@ class Model(object):
         with tf.variable_scope("prepro"):
             (fw_u, bw_u), ((_, fw_u_f), (_, bw_u_f)) = bidirectional_dynamic_rnn(cell, cell, qq, q_len, dtype='float', scope='prepro')  # [N, J, d], [N, d]
             u = tf.concat(2, [fw_u, bw_u])
-            u_f = tf.concat(1, [fw_u_f, bw_u_f])
             tf.get_variable_scope().reuse_variables()
             (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='prepro')  # [N, M, JX, 2d]
             h = tf.concat(3, [fw_h, bw_h])  # [N, M, JX, 2d]
 
         with tf.variable_scope("main"):
-            u_f = tf.tile(tf.expand_dims(tf.expand_dims(u_f, 1), 1), [1, M, JX, 1])  # [N, M, JX, 2d]
-            p0 = tf.concat(3, [h, u_f])
             if config.attention:
                 with tf.variable_scope("attention"):
-                    u_aug = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1, 1])  # [N, M, JX, JQ, 2d]
-                    h_aug = tf.tile(tf.expand_dims(h, 3), [1, 1, 1, JQ, 1])
-                    u_mask = tf.tile(tf.expand_dims(tf.expand_dims(self.q_mask, 1), 1), [1, M, JX, 1])
-                    h_mask = tf.tile(tf.expand_dims(self.x_mask, -1), [1, 1, 1, JQ])
-                    cur_mask = u_mask & h_mask
-                    u_logits = get_logits([u_aug, h_aug], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=cur_mask, is_train=self.is_train, func='linear', scope='u')
-                    h_logits = get_logits([u_f, h], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func='linear', scope='h')
-                    u_a = softsel(u_aug, u_logits)  # [N, M, JX, 2d]
-                    h_a = softsel(h, h_logits)  # [N, M, 2d]
-                    h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
-                    p0 = tf.concat(3, [p0, u_a, h_a])
+                    p0 = attention_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0")
+                    p1 = attention_layer(config, self.is_train, p0, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p1")
+                    p = p1
             if config.internal_attention:
                 with tf.variable_scope("internal_attention"):
                     u = tf.reshape(tf.tile(tf.expand_dims(u, 1), [1, M, 1, 1]), [N*M, JQ, 2*d])
                     q_mask = tf.reshape(tf.tile(tf.expand_dims(self.q_mask, 1), [1, M, 1]), [N*M, JQ])
                     first_cell = AttentionCell(cell, u, mask=q_mask, mapper='sim', input_keep_prob=self.config.input_keep_prob, is_train=self.is_train)
-                    p0 = h
+                    p = h
 
-            if config.traditional:
-                (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(first_cell, first_cell, p0, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
-                g1 = tf.concat(3, [fw_g1, bw_g1])
-                # g1 = tf.concat(3, [g1, u, g1*u, tf.abs(g1-u)])
-                a1 = g1
-                dot = get_logits([h, a1], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func='linear', scope='logits1')
-                a1i = softmax(tf.reshape(dot, [N, M*JX]))
-                a1i = tf.reshape(a1i, [N, M, JX, 1])
-                # a1i = softsel(tf.reshape(a1, [N, M*JX, 2*d]), tf.reshape(dot, [N, M*JX]))
-                # a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
-                g1 = tf.concat(3, [g1, a1i])
-                (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(second_cell, second_cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
-                g2 = tf.concat(3, [fw_g2, bw_g2])
-                a2 = g2
-                dot2 = get_logits([h, a2], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func='linear', scope='logits2')
-            else:
-                (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(first_cell, first_cell, p0, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
-                g1 = tf.concat(3, [fw_g1, bw_g1])
-                """
-                (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(second_cell, second_cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
-                g2 = tf.concat(3, [fw_g2, bw_g2])
-                # g1 = tf.concat(3, [g1, u, g1*u, tf.abs(g1-u)])
-                """
-                a1 = g1
-                a2 = g1
-                dot = get_logits([a1], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func='linear', scope='logits1')
-                a1i = softsel(tf.reshape(a1, [N, M*JX, 2*d]), tf.reshape(dot, [N, M*JX]))
-                a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
-                dot2 = get_logits([a2, a1i], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func='linear', scope='logits2')
+            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(first_cell, first_cell, p, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
+            g1 = tf.concat(3, [fw_g1, bw_g1])
+            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(second_cell, second_cell, g1, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
+            g2 = tf.concat(3, [fw_g2, bw_g2])
+            g2 = g1 + g2
+            a1 = g2
+            a2 = g2
+            dot = get_logits([xx, a1], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func='linear', scope='logits1')
+            a1i = softsel(tf.reshape(a1, [N, M*JX, 2*d]), tf.reshape(dot, [N, M*JX]))
+            a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
+            dot2 = get_logits([xx, a2, a1i], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func='linear', scope='logits2')
 
             # g2 = tf.concat(3, [g2, u, g2*u, tf.abs(g2-u)])
 
