@@ -52,16 +52,15 @@ flags.DEFINE_integer("word_size_th", 16, "word size th [16]")
 flags.DEFINE_integer("para_size_th", 256, "para size th [256]")
 
 flags.DEFINE_bool("swap_memory", True, "swap memory? [True]")
-flags.DEFINE_string("logit", "2l", "1l, 2l [2l]")
 flags.DEFINE_string("data_filter", "max", "max | valid | semi [max]")
 flags.DEFINE_bool("finetune", False, "finetune? [False]")
-flags.DEFINE_bool("two_layers", False, "two layers [False]")
-flags.DEFINE_bool("greedy", False, "greedy [False]")
+flags.DEFINE_bool("feed_gt", False, "feed gt prev token during training [False]")
+flags.DEFINE_bool("feed_hard", False, "feed hard argmax prev token during testing [False]")
 flags.DEFINE_bool("use_glove_for_unk", True, "use glove for unk [False]")
 flags.DEFINE_bool("known_if_glove", True, "consider as known if present in glove [False]")
 flags.DEFINE_bool("eval", True, "eval? [True]")
-flags.DEFINE_string("logit_func", "mul_linear", "logit func [linear]")
 flags.DEFINE_integer("highway_num_layers", 2, "highway num layers [2]")
+flags.DEFINE_bool("use_word_emb", True, "use word embedding? [True]")
 
 flags.DEFINE_string("forward_name", "single", "Forward name [single]")
 flags.DEFINE_string("answer_path", "", "Answer path []")
@@ -69,6 +68,9 @@ flags.DEFINE_string("load_path", "", "Load path []")
 flags.DEFINE_string("shared_path", "", "Shared path []")
 flags.DEFINE_string("device", "/cpu:0", "default device [/cpu:0]")
 flags.DEFINE_integer("num_gpus", 1, "num of gpus [1]")
+
+flags.DEFINE_string("out_channel_dims", "0,100", "Out channel dims, separated by commas [0,100]")
+flags.DEFINE_string("filter_heights", "3,5", "Filter heights, separated by commas [3,5]")
 
 def main(_):
     config = flags.FLAGS

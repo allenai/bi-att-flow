@@ -5,8 +5,8 @@ from functools import reduce
 from operator import mul
 import numpy as np
 
-VERY_BIG_NUMBER = 1e9
-VERY_SMALL_NUMBER = 1e-9
+VERY_BIG_NUMBER = 1e30
+VERY_SMALL_NUMBER = 1e-30
 VERY_POSITIVE_NUMBER = VERY_BIG_NUMBER
 VERY_NEGATIVE_NUMBER = -VERY_BIG_NUMBER
 
