@@ -6,10 +6,9 @@ import os
 # no metadata
 from collections import Counter
 
-import nltk
 from tqdm import tqdm
 
-from my.nltk_utils import load_compressed_tree
+from my.utils import get_word_span, process_tokens
 
 
 def bool_(arg):
@@ -17,7 +16,7 @@ def bool_(arg):
         return True
     elif arg == 'False':
         return False
-    raise Exception()
+    raise Exception(arg)
 
 
 def main():
@@ -38,27 +37,49 @@ def get_args():
     parser.add_argument("--glove_corpus", default="6B")
     parser.add_argument("--glove_dir", default=glove_dir)
     parser.add_argument("--glove_vec_size", default=100, type=int)
-    parser.add_argument("--full_train", default=False, type=bool_)
+    parser.add_argument("--mode", default="full", type=str)
+    parser.add_argument("--single_path", default="", type=str)
+    parser.add_argument("--tokenizer", default="PTB", type=str)
+    parser.add_argument("--process_tokens", default=False, type=bool_)
+    parser.add_argument("--url", default="vision-server2.corp.ai2", type=str)
+    parser.add_argument("--port", default=8000, type=int)
     # TODO : put more args here
     return parser.parse_args()
+
+
+def create_all(args):
+    out_path = os.path.join(args.source_dir, "all-v1.1.json")
+    if os.path.exists(out_path):
+        return
+    train_path = os.path.join(args.source_dir, "train-v1.1.json")
+    train_data = json.load(open(train_path, 'r'))
+    dev_path = os.path.join(args.source_dir, "dev-v1.1.json")
+    dev_data = json.load(open(dev_path, 'r'))
+    train_data['data'].extend(dev_data['data'])
+    print("dumping all data ...")
+    json.dump(train_data, open(out_path, 'w'))
 
 
 def prepro(args):
     if not os.path.exists(args.target_dir):
         os.makedirs(args.target_dir)
 
-    if args.full_train:
-        data_train, shared_train = prepro_each(args, 'train')
-        data_dev, shared_dev = prepro_each(args, 'dev')
+    if args.mode == 'full':
+        prepro_each(args, 'train', out_name='train')
+        prepro_each(args, 'dev', out_name='dev')
+        prepro_each(args, 'dev', out_name='test')
+    elif args.mode == 'all':
+        create_all(args)
+        prepro_each(args, 'dev', 0.0, 0.0, out_name='dev')
+        prepro_each(args, 'dev', 0.0, 0.0, out_name='test')
+        prepro_each(args, 'all', out_name='train')
+    elif args.mode == 'single':
+        assert len(args.single_path) > 0
+        prepro_each(args, "NULL", out_name="single", in_path=args.single_path)
     else:
-        data_train, shared_train = prepro_each(args, 'train', 0.0, args.train_ratio)
-        data_dev, shared_dev = prepro_each(args, 'train', args.train_ratio, 1.0)
-    data_test, shared_test = prepro_each(args, 'dev')
-
-    print("saving ...")
-    save(args, data_train, shared_train, 'train')
-    save(args, data_dev, shared_dev, 'dev')
-    save(args, data_test, shared_test, 'test')
+        prepro_each(args, 'train', 0.0, args.train_ratio, out_name='train')
+        prepro_each(args, 'train', args.train_ratio, 1.0, out_name='dev')
+        prepro_each(args, 'dev', out_name='test')
 
 
 def save(args, data, shared, data_type):
@@ -73,7 +94,7 @@ def get_word2vec(args, word_counter):
     sizes = {'6B': int(4e5), '42B': int(1.9e6), '840B': int(2.2e6), '2B': int(1.2e6)}
     total = sizes[args.glove_corpus]
     word2vec_dict = {}
-    with open(glove_path, 'r') as fh:
+    with open(glove_path, 'r', encoding='utf-8') as fh:
         for line in tqdm(fh, total=total):
             array = line.lstrip().rstrip().split(" ")
             word = array[0]
@@ -91,39 +112,45 @@ def get_word2vec(args, word_counter):
     return word2vec_dict
 
 
-def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
-    source_path = os.path.join(args.source_dir, "{}-v1.0-aug.json".format(data_type))
+def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="default", in_path=None):
+    if args.tokenizer == "PTB":
+        import nltk
+        sent_tokenize = nltk.sent_tokenize
+        def word_tokenize(tokens):
+            return [token.replace("''", '"').replace("``", '"') for token in nltk.word_tokenize(tokens)]
+    elif args.tokenizer == 'Stanford':
+        from my.corenlp_interface import CoreNLPInterface
+        interface = CoreNLPInterface(args.url, args.port)
+        sent_tokenize = interface.split_doc
+        word_tokenize = interface.split_sent
+    else:
+        raise Exception()
+
+    source_path = in_path or os.path.join(args.source_dir, "{}-v1.1.json".format(data_type))
     source_data = json.load(open(source_path, 'r'))
 
     q, cq, y, rx, rcx, ids, idxs = [], [], [], [], [], [], []
-    x, cx, tx, stx = [], [], [], []
+    x, cx = [], []
     answerss = []
     word_counter, char_counter, lower_word_counter = Counter(), Counter(), Counter()
-    pos_counter = Counter()
     start_ai = int(round(len(source_data['data']) * start_ratio))
     stop_ai = int(round(len(source_data['data']) * stop_ratio))
     for ai, article in enumerate(tqdm(source_data['data'][start_ai:stop_ai])):
-        xp, cxp, txp, stxp = [], [], [], []
+        xp, cxp = [], []
         x.append(xp)
         cx.append(cxp)
-        tx.append(txp)
-        stx.append(stxp)
         for pi, para in enumerate(article['paragraphs']):
-            xi = []
-            for dep in para['deps']:
-                if dep is None:
-                    xi.append([])
-                else:
-                    xi.append([node[0] for node in dep[0]])
+            # wordss
+            context = para['context']
+            context = context.replace("''", '" ')
+            context = context.replace("``", '" ')
+            xi = list(map(word_tokenize, sent_tokenize(context)))
+            if args.process_tokens:
+                xi = [process_tokens(tokens) for tokens in xi]
+            # given xi, add chars
             cxi = [[list(xijk) for xijk in xij] for xij in xi]
             xp.append(xi)
             cxp.append(cxi)
-            txp.append(para['consts'])
-            stxp.append([str(load_compressed_tree(s)) for s in para['consts']])
-            trees = map(nltk.tree.Tree.fromstring, para['consts'])
-            for tree in trees:
-                for subtree in tree.subtrees():
-                    pos_counter[subtree.label()] += 1
 
             for xij in xi:
                 for xijk in xij:
@@ -136,15 +163,20 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
             assert len(x) - 1 == ai
             assert len(x[ai]) - 1 == pi
             for qa in para['qas']:
-                dep = qa['dep']
-                qi = [] if dep is None else [node[0] for node in dep[0]]
+                # get words
+                qi = word_tokenize(qa['question'])
                 cqi = [list(qij) for qij in qi]
                 yi = []
                 answers = []
                 for answer in qa['answers']:
-                    answers.append(answer['text'])
-                    yi0 = answer['answer_word_start'] or [0, 0]
-                    yi1 = answer['answer_word_stop'] or [0, 1]
+                    answer_text = answer['text']
+                    answers.append(answer_text)
+                    answer_start = answer['answer_start']
+                    answer_stop = answer_start + len(answer_text)
+                    # TODO : put some function that gives word_start, word_stop here
+                    yi0, yi1 = get_word_span(context, xi, answer_start, answer_stop)
+                    # yi0 = answer['answer_word_start'] or [0, 0]
+                    # yi1 = answer['answer_word_stop'] or [0, 1]
                     assert len(xi[yi0[0]]) > yi0[1]
                     assert len(xi[yi1[0]]) >= yi1[1]
                     yi.append([yi0, yi1])
@@ -170,13 +202,15 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0):
     word2vec_dict = get_word2vec(args, word_counter)
     lower_word2vec_dict = get_word2vec(args, lower_word_counter)
 
-    data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, '*tx': rx, '*stx': rx,
+    data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx,
             'idxs': idxs, 'ids': ids, 'answerss': answerss}
-    shared = {'x': x, 'cx': cx, 'tx': tx, 'stx': stx,
+    shared = {'x': x, 'cx': cx,
               'word_counter': word_counter, 'char_counter': char_counter, 'lower_word_counter': lower_word_counter,
-              'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dict, 'pos_counter': pos_counter}
+              'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dict}
 
-    return data, shared
+    print("saving ...")
+    save(args, data, shared, out_name)
+
 
 
 if __name__ == "__main__":
