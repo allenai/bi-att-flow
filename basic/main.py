@@ -74,7 +74,7 @@ def _train(config):
 
     # begin training
     num_steps = config.num_steps or int(config.num_epochs * train_data.num_examples / (config.batch_size * config.num_gpus))
-    max_acc = 0
+    min_loss = 1e9
     noupdate_count = 0
     global_step = 0
     for batches in tqdm(train_data.get_multi_batches(config.batch_size, config.num_gpus,
@@ -103,8 +103,8 @@ def _train(config):
             e_dev = evaluator.get_evaluation_from_batches(
                 sess, tqdm(dev_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
             graph_handler.add_summaries(e_dev.summaries, global_step)
-            if e_dev.acc > max_acc:
-                max_acc = e_dev.acc
+            if e_dev.loss < min_loss:
+                min_loss = e_dev.loss
                 noupdate_count = 0
             else:
                 noupdate_count += 1
