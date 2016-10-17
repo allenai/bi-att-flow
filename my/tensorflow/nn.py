@@ -144,3 +144,25 @@ def highway_network(arg, num_layers, bias, bias_start=0.0, scope=None, wd=0.0, i
                                 input_keep_prob=input_keep_prob, is_train=is_train)
             prev = cur
         return cur
+
+
+def conv1d(in_, filter_size, height, padding, scope=None):
+    with tf.variable_scope(scope or "conv1d"):
+        num_channels = in_.get_shape()[-1]
+        filter_ = tf.get_variable("filter", shape=[1, height, num_channels, filter_size], dtype='float')
+        bias = tf.get_variable("bias", shape=[filter_size], dtype='float')
+        strides = [1, 1, 1, 1]
+        xxc = tf.nn.conv2d(in_, filter_, strides, padding) + bias  # [N*M, JX, W/filter_stride, d]
+        out = tf.reduce_max(tf.nn.relu(xxc), 2)  # [-1, JX, d]
+        return out
+
+
+def multi_conv1d(in_, filter_sizes, heights, padding, scope=None):
+    with tf.variable_scope(scope or "multi_conv1d"):
+        assert len(filter_sizes) == len(heights)
+        outs = []
+        for filter_size, height in zip(filter_sizes, heights):
+            out = conv1d(in_, filter_size, height, padding, scope="conv1d_{}".format(height))
+            outs.append(out)
+        concat_out = tf.concat(2, outs)
+        return concat_out

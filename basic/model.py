@@ -8,7 +8,7 @@ from tensorflow.python.ops.rnn_cell import BasicLSTMCell, GRUCell
 from basic.read_data import DataSet
 from my.tensorflow import exp_mask, get_initializer
 from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel, dropout, get_logits, softmax, \
-    highway_network
+    highway_network, multi_conv1d
 from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
 
@@ -112,36 +112,41 @@ class Model(object):
             config.max_word_size
         dc, dw, dco = config.char_emb_size, config.word_emb_size, config.char_out_size
 
-        with tf.variable_scope("emb"), tf.device("/cpu:0"):
-            char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
-            if config.mode == 'train':
-                word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, dw], initializer=get_initializer(config.emb_mat))
-            else:
-                word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, dw], dtype='float')
-            if config.use_glove_for_unk:
-                word_emb_mat = tf.concat(0, [word_emb_mat, self.new_emb_mat])
+        with tf.variable_scope("emb"):
+            with tf.variable_scope("emb_var"), tf.device("/cpu:0"):
+                char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
+                if config.mode == 'train':
+                    word_emb_mat = tf.get_variable("word_emb_mat", dtype='float', shape=[VW, dw], initializer=get_initializer(config.emb_mat))
+                else:
+                    word_emb_mat = tf.get_variable("word_emb_mat", shape=[VW, dw], dtype='float')
+                if config.use_glove_for_unk:
+                    word_emb_mat = tf.concat(0, [word_emb_mat, self.new_emb_mat])
 
-        with tf.variable_scope("char"):
-            Acx = tf.nn.embedding_lookup(char_emb_mat, self.cx)  # [N, M, JX, W, dc]
-            Acq = tf.nn.embedding_lookup(char_emb_mat, self.cq)  # [N, JQ, W, dc]
-            # Acx = dropout(Acx, config.input_keep_prob, self.is_train)
-            # Acq = dropout(Acq, config.input_keep_prob, self.is_train)
+            with tf.variable_scope("char"):
+                Acx = tf.nn.embedding_lookup(char_emb_mat, self.cx)  # [N, M, JX, W, dc]
+                Acq = tf.nn.embedding_lookup(char_emb_mat, self.cq)  # [N, JQ, W, dc]
+                # Acx = dropout(Acx, config.input_keep_prob, self.is_train)
+                # Acq = dropout(Acq, config.input_keep_prob, self.is_train)
 
-            filter = tf.get_variable("filter", shape=[1, config.char_filter_height, dc, dco], dtype='float')
-            bias = tf.get_variable("bias", shape=[dco], dtype='float')
-            strides = [1, 1, 1, 1]
-            Acx = tf.reshape(Acx, [-1, JX, W, dc])
-            Acq = tf.reshape(Acq, [-1, JQ, W, dc])
-            xxc = tf.nn.conv2d(Acx, filter, strides, "VALID") + bias  # [N*M, JX, W/filter_stride, d]
-            qqc = tf.nn.conv2d(Acq, filter, strides, "VALID") + bias  # [N, JQ, W/filter_stride, d]
-            xxc = tf.reshape(tf.reduce_max(tf.nn.relu(xxc), 2), [-1, M, JX, dco])
-            qqc = tf.reshape(tf.reduce_max(tf.nn.relu(qqc), 2), [-1, JQ, dco])
+                Acx = tf.reshape(Acx, [-1, JX, W, dc])
+                Acq = tf.reshape(Acq, [-1, JQ, W, dc])
 
-        Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
-        Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
+                filter_sizes = [20, 30, 30, 20]
+                heights = [3, 5, 7, 9]
+                assert sum(filter_sizes) == config.char_out_size
+                with tf.variable_scope("conv"):
+                    xxc = multi_conv1d(Acx, filter_sizes, heights, "VALID")
+                    tf.get_variable_scope().reuse_variables()
+                    qqc = multi_conv1d(Acq, filter_sizes, heights, "VALID")
+                    xxc = tf.reshape(xxc, [-1, M, JX, dco])
+                    qqc = tf.reshape(qqc, [-1, JQ, dco])
 
-        xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, di]
-        qq = tf.concat(2, [qqc, Aq])  # [N, JQ, di]
+            with tf.name_scope("word"):
+                Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
+                Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
+
+            xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, di]
+            qq = tf.concat(2, [qqc, Aq])  # [N, JQ, di]
 
         # highway network
         with tf.variable_scope("highway"):
@@ -172,7 +177,7 @@ class Model(object):
             # [N, M, JX]
             logits = get_logits([g1, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func='linear', scope='logits1')
 
-            # logits = tf.cond(self.is_train, lambda: tf.cast(self.y, 'float'), lambda: logits)
+            logits = tf.cond(self.is_train, lambda: tf.cast(self.y, 'float'), lambda: logits)
 
             a1i = softsel(tf.reshape(g1, [N, M*JX, 2*d]), tf.reshape(logits, [N, M*JX]))
             a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
