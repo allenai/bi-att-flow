@@ -162,6 +162,8 @@ def multi_conv1d(in_, filter_sizes, heights, padding, scope=None):
         assert len(filter_sizes) == len(heights)
         outs = []
         for filter_size, height in zip(filter_sizes, heights):
+            if filter_size == 0:
+                continue
             out = conv1d(in_, filter_size, height, padding, scope="conv1d_{}".format(height))
             outs.append(out)
         concat_out = tf.concat(2, outs)

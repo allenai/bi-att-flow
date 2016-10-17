@@ -69,8 +69,8 @@ flags.DEFINE_string("shared_path", "", "Shared path []")
 flags.DEFINE_string("device", "/cpu:0", "default device [/cpu:0]")
 flags.DEFINE_integer("num_gpus", 1, "num of gpus [1]")
 
-flags.DEFINE_string("out_channel_dims", "0,100", "Out channel dims, separated by commas [0,100]")
-flags.DEFINE_string("filter_heights", "3,5", "Filter heights, separated by commas [3,5]")
+flags.DEFINE_string("out_channel_dims", "100", "Out channel dims, separated by commas [100]")
+flags.DEFINE_string("filter_heights", "5", "Filter heights, separated by commas [5]")
 
 def main(_):
     config = flags.FLAGS
