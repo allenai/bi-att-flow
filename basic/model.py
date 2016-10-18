@@ -52,15 +52,18 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None):
         # maxed_logits = tf.reduce_max(h_logits, 3)  # [N, M, JX]
         h_a = softsel(h, h_logits)  # [N, M, d]
         u_a = softsel(u_aug, u_logits)  # [N, M, JX, d]
-        return h_a, u_a
+        return u_avg, h_a, u_a
 
 
 def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None):
     with tf.variable_scope(scope or "attention_layer"):
         N, M, JX, JQ, d = config.batch_size, config.max_num_sents, config.max_sent_size, config.max_ques_size, config.hidden_size
-        h_a, u_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask)
+        u_avg, h_a, u_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask)
         h_a_tiled = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
-        out = tf.concat(3, [h, h_a_tiled, u_a, h * h_a_tiled, h * u_a])
+        if config.aug_att:
+            out = tf.concat(3, [h, u_avg, h_a_tiled, u_a, h * u_avg,  h * h_a_tiled, h * u_a])
+        else:
+            out = tf.concat(3, [h, h_a_tiled, u_a, h * h_a_tiled, h * u_a])
         return out
 
 
@@ -129,9 +132,12 @@ class Model(object):
                 heights = list(map(int, config.filter_heights.split(',')))
                 assert sum(filter_sizes) == dco
                 with tf.variable_scope("conv"):
-                    xx = multi_conv1d(Acx, filter_sizes, heights, "VALID")
-                    tf.get_variable_scope().reuse_variables()
-                    qq = multi_conv1d(Acq, filter_sizes, heights, "VALID")
+                    xx = multi_conv1d(Acx, filter_sizes, heights, "VALID", scope="xx")
+                    if config.share_cnn_weights:
+                        tf.get_variable_scope().reuse_variables()
+                        qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", scope="xx")
+                    else:
+                        qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", scope="qq")
                     xx = tf.reshape(xx, [-1, M, JX, dco])
                     qq = tf.reshape(qq, [-1, JQ, dco])
 
@@ -162,11 +168,25 @@ class Model(object):
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("prepro"):
-            (fw_u, bw_u), ((_, fw_u_f), (_, bw_u_f)) = bidirectional_dynamic_rnn(d_cell, d_cell, qq, q_len, dtype='float', scope='prepro')  # [N, J, d], [N, d]
+            (fw_u, bw_u), ((_, fw_u_f), (_, bw_u_f)) = bidirectional_dynamic_rnn(d_cell, d_cell, qq, q_len, dtype='float', scope='u1')  # [N, J, d], [N, d]
             u = tf.concat(2, [fw_u, bw_u])
-            tf.get_variable_scope().reuse_variables()
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='prepro')  # [N, M, JX, 2d]
-            h = tf.concat(3, [fw_h, bw_h])  # [N, M, JX, 2d]
+            if config.two_prepro_layers:
+                (fw_u, bw_u), ((_, fw_u_f), (_, bw_u_f)) = bidirectional_dynamic_rnn(d_cell, d_cell, u, q_len, dtype='float', scope='u2')  # [N, J, d], [N, d]
+                u = tf.concat(2, [fw_u, bw_u])
+            if config.share_lstm_weights:
+                tf.get_variable_scope().reuse_variables()
+                (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='u1')  # [N, M, JX, 2d]
+                h = tf.concat(3, [fw_h, bw_h])  # [N, M, JX, 2d]
+                if config.two_prepro_layers:
+                    (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, h, x_len, dtype='float', scope='u2')  # [N, M, JX, 2d]
+                    h = tf.concat(3, [fw_h, bw_h])  # [N, M, JX, 2d]
+
+            else:
+                (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, xx, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
+                h = tf.concat(3, [fw_h, bw_h])  # [N, M, JX, 2d]
+                if config.two_prepro_layers:
+                    (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, h, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
+                    h = tf.concat(3, [fw_h, bw_h])  # [N, M, JX, 2d]
 
         with tf.variable_scope("main"):
             p0 = attention_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0")

@@ -71,6 +71,11 @@ flags.DEFINE_integer("num_gpus", 1, "num of gpus [1]")
 flags.DEFINE_string("out_channel_dims", "100", "Out channel dims, separated by commas [100]")
 flags.DEFINE_string("filter_heights", "5", "Filter heights, separated by commas [5]")
 
+flags.DEFINE_bool("share_cnn_weights", False, "Share CNN weights [False]")
+flags.DEFINE_bool("share_lstm_weights", True, "Share LSTM weights [True]")
+flags.DEFINE_bool("two_prepro_layers", False, "Use two layers for preprocessing? [False]")
+flags.DEFINE_bool("aug_att", False, "Augment attention layers with more features? [False]")
+
 def main(_):
     config = flags.FLAGS
 
