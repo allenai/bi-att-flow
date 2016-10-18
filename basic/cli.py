@@ -75,6 +75,7 @@ flags.DEFINE_bool("share_cnn_weights", False, "Share CNN weights [False]")
 flags.DEFINE_bool("share_lstm_weights", True, "Share LSTM weights [True]")
 flags.DEFINE_bool("two_prepro_layers", False, "Use two layers for preprocessing? [False]")
 flags.DEFINE_bool("aug_att", False, "Augment attention layers with more features? [False]")
+flags.DEFINE_integer("max_to_keep", 20, "Max recent saves to keep [20]")
 
 def main(_):
     config = flags.FLAGS

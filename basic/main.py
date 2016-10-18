@@ -65,7 +65,7 @@ def _train(config):
     models = get_multi_gpu_models(config)
     model = models[0]
     trainer = MultiGPUTrainer(config, models)
-    evaluator = F1Evaluator(config, model)
+    evaluator = MultiGPUF1Evaluator(config, models)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     # Variables
@@ -74,8 +74,6 @@ def _train(config):
 
     # begin training
     num_steps = config.num_steps or int(config.num_epochs * train_data.num_examples / (config.batch_size * config.num_gpus))
-    min_loss = 1e9
-    noupdate_count = 0
     global_step = 0
     for batches in tqdm(train_data.get_multi_batches(config.batch_size, config.num_gpus,
                                                      num_steps=num_steps, shuffle=True), total=num_steps):
@@ -93,23 +91,17 @@ def _train(config):
             continue
         # Occasional evaluation
         if global_step % config.eval_period == 0:
-            num_batches = math.ceil(dev_data.num_examples / config.batch_size)
-            if 0 < config.eval_num_batches < num_batches:
-                num_batches = config.eval_num_batches
+            num_steps = math.ceil(dev_data.num_examples / (config.batch_size * config.num_gpus))
+            if 0 < config.eval_num_batches < num_steps:
+                num_steps = config.eval_num_batches
             e_train = evaluator.get_evaluation_from_batches(
-                sess, tqdm(train_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches)
+                sess, tqdm(train_data.get_multi_batches(config.batch_size, config.num_gpus, num_steps=num_steps), total=num_steps)
             )
             graph_handler.add_summaries(e_train.summaries, global_step)
             e_dev = evaluator.get_evaluation_from_batches(
-                sess, tqdm(dev_data.get_batches(config.batch_size, num_batches=num_batches), total=num_batches))
+                sess, tqdm(dev_data.get_multi_batches(config.batch_size, config.num_gpus, num_steps=num_steps), total=num_steps))
             graph_handler.add_summaries(e_dev.summaries, global_step)
-            if e_dev.loss < min_loss:
-                min_loss = e_dev.loss
-                noupdate_count = 0
-            else:
-                noupdate_count += 1
-                if noupdate_count == config.early_stop:
-                    break
+
             if config.dump_eval:
                 graph_handler.dump_eval(e_dev)
             if config.dump_answer:
