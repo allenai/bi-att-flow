@@ -43,6 +43,7 @@ def get_args():
     parser.add_argument("--process_tokens", default=False, type=bool_)
     parser.add_argument("--url", default="vision-server2.corp.ai2", type=str)
     parser.add_argument("--port", default=8000, type=int)
+    parser.add_argument("--merge", default=False, type=bool_)
     # TODO : put more args here
     return parser.parse_args()
 
@@ -125,6 +126,9 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
         word_tokenize = interface.split_sent
     else:
         raise Exception()
+
+    if args.merge:
+        sent_tokenize = lambda para: [para]
 
     source_path = in_path or os.path.join(args.source_dir, "{}-v1.1.json".format(data_type))
     source_data = json.load(open(source_path, 'r'))

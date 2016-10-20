@@ -1,8 +1,10 @@
 # Co-Attention Model for Stanford QA
 
 A simple model.
+Follow three simple steps.
+For more advanced usages, see below.
 
-## Requirements
+## 0. Requirements
 #### General
 - Python (developed on 3.5.2)
 - unzip
@@ -14,7 +16,7 @@ A simple model.
 - jinja2 (for visaulization; if you only train and test, not needed)
 
 ## 1. Pre-processing
-First, prepare data. Donwload SQuAD data and GloVE and nltk corpus
+First, prepare data. Donwload SQuAD data and GloVe and nltk corpus
 (~850 MB, this will download files to `$HOME/data`):
 ```
 chmod +x download.sh; ./download.sh
@@ -39,17 +41,37 @@ python -m basic.cli --mode train --noload
 ```
 
 ## 3. Testing
-To Test:
+To Test (~30 mins):
 ```
 python -m basic.cli --mode test --batch_size 8
 ```
 
+This command loads the most recently saved model during training and begins testing on the test data.
 Note that batch size is reduced to 8, because testing requires more memory per example.
+After the process ends, it prints F1 and EM scores, and also outputs a json file (`$PWD/out/basic/00/answer/test-####.json`,
+where `####` is the step # that the model was saved).
+Note that the printed scores are not official (our scoring scheme is a bit harsher).
+To obtain the official number, use the official evaluator and the output json file:
+
+```
+python squad/evaluate-v1.1.py $HOME/data/squad/dev-v1.1.json out/basic/00/answer/test-####.json
+```
 
 
 ## Results
 
 F1=74.4%, EM=64.0% on dev data
+
+
+## Using Pre-trained Model
+
+If you would like to use pre-trained model, it's very easy! 
+You can download the model weights [here][save] (make sure that its commit id matches the source code's).
+Extract them and put them in `$PWD/out/basic/00/save` directory, with names unchanged.
+Then do the testing again, but you need to specify the step # that you are loading from:
+```
+abc
+```
 
 
 ## Multi-GPU Training & Testing
@@ -69,3 +91,4 @@ python -m basic.cli --mode test --batch_size 2 --num_gpus 3
  
 
 [multi-gpu]: https://www.tensorflow.org/versions/r0.11/tutorials/deep_cnn/index.html#training-a-model-using-multiple-gpu-cards
+[save]: #

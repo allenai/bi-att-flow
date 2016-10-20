@@ -14,7 +14,7 @@ flags.DEFINE_string("out_base_dir", "out", "out base dir [out]")
 flags.DEFINE_integer("batch_size", 60, "Batch size [60]")
 flags.DEFINE_float("init_lr", 0.5, "Initial learning rate [0.5]")
 flags.DEFINE_integer("num_epochs", 50, "Total number of epochs for training [50]")
-flags.DEFINE_integer("num_steps", 0, "Number of steps [0]")
+flags.DEFINE_integer("num_steps", 20000, "Number of steps [20000]")
 flags.DEFINE_integer("eval_num_batches", 100, "eval num batches [100]")
 flags.DEFINE_integer("load_step", 0, "load step [0]")
 flags.DEFINE_integer("early_stop", 4, "early stop [4]")
@@ -71,11 +71,15 @@ flags.DEFINE_integer("num_gpus", 1, "num of gpus [1]")
 flags.DEFINE_string("out_channel_dims", "100", "Out channel dims, separated by commas [100]")
 flags.DEFINE_string("filter_heights", "5", "Filter heights, separated by commas [5]")
 
-flags.DEFINE_bool("share_cnn_weights", False, "Share CNN weights [False]")
+flags.DEFINE_bool("share_cnn_weights", True, "Share CNN weights [False]")
 flags.DEFINE_bool("share_lstm_weights", True, "Share LSTM weights [True]")
 flags.DEFINE_bool("two_prepro_layers", False, "Use two layers for preprocessing? [False]")
 flags.DEFINE_bool("aug_att", False, "Augment attention layers with more features? [False]")
 flags.DEFINE_integer("max_to_keep", 20, "Max recent saves to keep [20]")
+flags.DEFINE_bool("vis", False, "output visualization numbers? [False]")
+flags.DEFINE_bool("dump_pickle", True, "Dump pickle instead of json? [True]")
+flags.DEFINE_float("keep_prob", 1.0, "keep prob [1.0]")
+
 
 def main(_):
     config = flags.FLAGS

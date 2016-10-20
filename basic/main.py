@@ -65,7 +65,7 @@ def _train(config):
     models = get_multi_gpu_models(config)
     model = models[0]
     trainer = MultiGPUTrainer(config, models)
-    evaluator = MultiGPUF1Evaluator(config, models)
+    evaluator = MultiGPUF1Evaluator(config, models, tensor_dict=model.tensor_dict if config.vis else None)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     # Variables
@@ -127,7 +127,7 @@ def _test(config):
 
     pprint(config.__flags, indent=2)
     models = get_multi_gpu_models(config)
-    evaluator = MultiGPUF1Evaluator(config, models)
+    evaluator = MultiGPUF1Evaluator(config, models, tensor_dict=models[0].tensor_dict if config.vis else None)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
@@ -135,12 +135,18 @@ def _test(config):
     num_steps = math.ceil(test_data.num_examples / (config.batch_size * config.num_gpus))
     if 0 < config.eval_num_batches < num_steps:
         num_steps = config.eval_num_batches
-    """
-    e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_batches(config.batch_size,
-                                                                               num_batches=num_steps), total=num_steps))
-    """
-    e = evaluator.get_evaluation_from_batches(sess, tqdm(test_data.get_multi_batches(config.batch_size, config.num_gpus,
-                                                                                     num_steps=num_steps), total=num_steps))
+
+    e = None
+    for multi_batch in tqdm(test_data.get_multi_batches(config.batch_size, config.num_gpus, num_steps=num_steps), total=num_steps):
+        ei = evaluator.get_evaluation(sess, multi_batch)
+        e = ei if e is None else e + ei
+        if config.vis:
+            eval_subdir = os.path.join(config.eval_dir, "{}-{}".format(ei.data_type, str(ei.global_step).zfill(6)))
+            if not os.path.exists(eval_subdir):
+                os.mkdir(eval_subdir)
+            path = os.path.join(eval_subdir, str(ei.idxs[0]).zfill(8))
+            graph_handler.dump_eval(ei, path=path)
+
     print(e)
     if config.dump_answer:
         print("dumping answer ...")

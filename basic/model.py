@@ -13,7 +13,7 @@ from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
 
 
-def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None):
+def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
     """
     h_a:
     all u attending on h
@@ -52,13 +52,18 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None):
         # maxed_logits = tf.reduce_max(h_logits, 3)  # [N, M, JX]
         h_a = softsel(h, h_logits)  # [N, M, d]
         u_a = softsel(u_aug, u_logits)  # [N, M, JX, d]
+        if tensor_dict is not None:
+            a_h = tf.nn.softmax(h_logits)  # [N, M, JX]
+            a_u = tf.nn.softmax(u_logits)  # [N, M, JX, JQ]
+            tensor_dict['a_h'] = a_h
+            tensor_dict['a_u'] = a_u
         return u_avg, h_a, u_a
 
 
-def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None):
+def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
     with tf.variable_scope(scope or "attention_layer"):
         N, M, JX, JQ, d = config.batch_size, config.max_num_sents, config.max_sent_size, config.max_ques_size, config.hidden_size
-        u_avg, h_a, u_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask)
+        u_avg, h_a, u_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
         h_a_tiled = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
         if config.aug_att:
             out = tf.concat(3, [h, u_avg, h_a_tiled, u_a, h * u_avg,  h * h_a_tiled, h * u_a])
@@ -90,6 +95,7 @@ class Model(object):
         self.new_emb_mat = tf.placeholder('float', [None, config.word_emb_size], name='new_emb_mat')
 
         # Define misc
+        self.tensor_dict = {}
 
         # Forward outputs / loss inputs
         self.logits = None
@@ -132,12 +138,12 @@ class Model(object):
                 heights = list(map(int, config.filter_heights.split(',')))
                 assert sum(filter_sizes) == dco
                 with tf.variable_scope("conv"):
-                    xx = multi_conv1d(Acx, filter_sizes, heights, "VALID", scope="xx")
+                    xx = multi_conv1d(Acx, filter_sizes, heights, "VALID",  self.is_train, config.keep_prob, scope="xx")
                     if config.share_cnn_weights:
                         tf.get_variable_scope().reuse_variables()
-                        qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", scope="xx")
+                        qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", self.is_train, config.keep_prob, scope="xx")
                     else:
-                        qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", scope="qq")
+                        qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", self.is_train, config.keep_prob, scope="qq")
                     xx = tf.reshape(xx, [-1, M, JX, dco])
                     qq = tf.reshape(qq, [-1, JQ, dco])
 
@@ -153,6 +159,8 @@ class Model(object):
                 with tf.name_scope("word"):
                     Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
                     Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
+                    self.tensor_dict['x'] = Ax
+                    self.tensor_dict['q'] = Aq
                 xx = tf.concat(3, [xx, Ax])  # [N, M, JX, di]
                 qq = tf.concat(2, [qq, Aq])  # [N, JQ, di]
 
@@ -161,6 +169,8 @@ class Model(object):
             xx = highway_network(xx, config.highway_num_layers, True, wd=config.wd, is_train=self.is_train)
             tf.get_variable_scope().reuse_variables()
             qq = highway_network(qq, config.highway_num_layers, True, wd=config.wd, is_train=self.is_train)
+            self.tensor_dict['xx'] = xx
+            self.tensor_dict['qq'] = qq
 
         cell = BasicLSTMCell(d, state_is_tuple=True)
         d_cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
@@ -187,9 +197,11 @@ class Model(object):
                 if config.two_prepro_layers:
                     (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell, cell, h, x_len, dtype='float', scope='h2')  # [N, M, JX, 2d]
                     h = tf.concat(3, [fw_h, bw_h])  # [N, M, JX, 2d]
+            self.tensor_dict['u'] = u
+            self.tensor_dict['h'] = h
 
         with tf.variable_scope("main"):
-            p0 = attention_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0")
+            p0 = attention_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0", tensor_dict=self.tensor_dict)
             (fw_g0, bw_g0), _ = bidirectional_dynamic_rnn(d_cell, d_cell, p0, x_len, dtype='float', scope='g0')  # [N, M, JX, 2d]
             g0 = tf.concat(3, [fw_g0, bw_g0])
             # p1 = attention_layer(config, self.is_train, g0, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p1")
@@ -215,11 +227,20 @@ class Model(object):
             logits2 = get_logits([g2, p0], None, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask,
                                  is_train=self.is_train, func='linear', scope='logits2')
 
-        self.logits = tf.reshape(logits, [-1, M * JX])  # [N, M, JX]
-        self.logits2 = tf.reshape(logits2, [-1, M * JX])
+            flat_logits = tf.reshape(logits, [-1, M * JX])
+            flat_yp = tf.nn.softmax(flat_logits)  # [-1, M*JX]
+            yp = tf.reshape(flat_yp, [-1, M, JX])
+            flat_logits2 = tf.reshape(logits2, [-1, M * JX])
+            flat_yp2 = tf.nn.softmax(flat_logits2)
+            yp2 = tf.reshape(flat_yp2, [-1, M, JX])
 
-        self.yp = tf.reshape(tf.nn.softmax(self.logits), [-1, M, JX])
-        self.yp2 = tf.reshape(tf.nn.softmax(self.logits2), [-1, M, JX])
+            self.tensor_dict['g1'] = g1
+            self.tensor_dict['g2'] = g2
+
+            self.logits = flat_logits
+            self.logits2 = flat_logits2
+            self.yp = yp
+            self.yp2 = yp2
 
     def _build_loss(self):
         config = self.config

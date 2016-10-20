@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 import tensorflow as tf
 import os
@@ -8,17 +9,22 @@ from my.utils import argmax
 
 
 class Evaluation(object):
-    def __init__(self, data_type, global_step, idxs, yp):
+    def __init__(self, data_type, global_step, idxs, yp, tensor_dict=None):
         self.data_type = data_type
         self.global_step = global_step
         self.idxs = idxs
         self.yp = yp
         self.num_examples = len(yp)
+        self.tensor_dict = None
         self.dict = {'data_type': data_type,
                      'global_step': global_step,
                      'yp': yp,
                      'idxs': idxs,
                      'num_examples': self.num_examples}
+        if tensor_dict is not None:
+            self.tensor_dict = {key: val.tolist() for key, val in tensor_dict.items()}
+            for key, val in self.tensor_dict.items():
+                self.dict[key] = val
         self.summaries = None
 
     def __repr__(self):
@@ -31,15 +37,18 @@ class Evaluation(object):
         assert self.global_step == other.global_step
         new_yp = self.yp + other.yp
         new_idxs = self.idxs + other.idxs
-        return Evaluation(self.data_type, self.global_step, new_idxs, new_yp)
+        new_tensor_dict = None
+        if self.tensor_dict is not None:
+            new_tensor_dict = {key: val + other.tensor_dict[key] for key, val in self.tensor_dict.items()}
+        return Evaluation(self.data_type, self.global_step, new_idxs, new_yp, tensor_dict=new_tensor_dict)
 
     def __radd__(self, other):
         return self.__add__(other)
 
 
 class LabeledEvaluation(Evaluation):
-    def __init__(self, data_type, global_step, idxs, yp, y):
-        super(LabeledEvaluation, self).__init__(data_type, global_step, idxs, yp)
+    def __init__(self, data_type, global_step, idxs, yp, y, tensor_dict=None):
+        super(LabeledEvaluation, self).__init__(data_type, global_step, idxs, yp, tensor_dict=tensor_dict)
         self.y = y
         self.dict['y'] = y
 
@@ -51,12 +60,14 @@ class LabeledEvaluation(Evaluation):
         new_yp = self.yp + other.yp
         new_y = self.y + other.y
         new_idxs = self.idxs + other.idxs
-        return LabeledEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_y)
+        if self.tensor_dict is not None:
+            new_tensor_dict = {key: np.concatenate((val, other.tensor_dict[key]), axis=0) for key, val in self.tensor_dict.items()}
+        return LabeledEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_y, tensor_dict=new_tensor_dict)
 
 
 class AccuracyEvaluation(LabeledEvaluation):
-    def __init__(self, data_type, global_step, idxs, yp, y, correct, loss):
-        super(AccuracyEvaluation, self).__init__(data_type, global_step, idxs, yp, y)
+    def __init__(self, data_type, global_step, idxs, yp, y, correct, loss, tensor_dict=None):
+        super(AccuracyEvaluation, self).__init__(data_type, global_step, idxs, yp, y, tensor_dict=tensor_dict)
         self.loss = loss
         self.correct = correct
         self.acc = sum(correct) / len(correct)
@@ -80,22 +91,26 @@ class AccuracyEvaluation(LabeledEvaluation):
         new_y = self.y + other.y
         new_correct = self.correct + other.correct
         new_loss = (self.loss * self.num_examples + other.loss * other.num_examples) / len(new_correct)
-        return AccuracyEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_y, new_correct, new_loss)
+        if self.tensor_dict is not None:
+            new_tensor_dict = {key: np.concatenate((val, other.tensor_dict[key]), axis=0) for key, val in self.tensor_dict.items()}
+        return AccuracyEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_y, new_correct, new_loss, tensor_dict=new_tensor_dict)
 
 
 class Evaluator(object):
-    def __init__(self, config, model):
+    def __init__(self, config, model, tensor_dict=None):
         self.config = config
         self.model = model
         self.global_step = model.global_step
         self.yp = model.yp
+        self.tensor_dict = {} if tensor_dict is None else tensor_dict
 
     def get_evaluation(self, sess, batch):
         idxs, data_set = batch
         feed_dict = self.model.get_feed_dict(data_set, False, supervised=False)
-        global_step, yp = sess.run([self.global_step, self.yp], feed_dict=feed_dict)
+        global_step, yp, vals = sess.run([self.global_step, self.yp, list(self.tensor_dict.values())], feed_dict=feed_dict)
         yp = yp[:data_set.num_examples]
-        e = Evaluation(data_set.data_type, int(global_step), idxs, yp.tolist())
+        tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
+        e = Evaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), tensor_dict=tensor_dict)
         return e
 
     def get_evaluation_from_batches(self, sess, batches):
@@ -104,34 +119,36 @@ class Evaluator(object):
 
 
 class LabeledEvaluator(Evaluator):
-    def __init__(self, config, model):
-        super(LabeledEvaluator, self).__init__(config, model)
+    def __init__(self, config, model, tensor_dict=None):
+        super(LabeledEvaluator, self).__init__(config, model, tensor_dict=tensor_dict)
         self.y = model.y
 
     def get_evaluation(self, sess, batch):
         idxs, data_set = batch
         feed_dict = self.model.get_feed_dict(data_set, False, supervised=False)
-        global_step, yp = sess.run([self.global_step, self.yp], feed_dict=feed_dict)
+        global_step, yp, vals = sess.run([self.global_step, self.yp, list(self.tensor_dict.values())], feed_dict=feed_dict)
         yp = yp[:data_set.num_examples]
         y = feed_dict[self.y]
-        e = LabeledEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y.tolist())
+        tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
+        e = LabeledEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y.tolist(), tensor_dict=tensor_dict)
         return e
 
 
 class AccuracyEvaluator(LabeledEvaluator):
-    def __init__(self, config, model):
-        super(AccuracyEvaluator, self).__init__(config, model)
+    def __init__(self, config, model, tensor_dict=None):
+        super(AccuracyEvaluator, self).__init__(config, model, tensor_dict=tensor_dict)
         self.loss = model.loss
 
     def get_evaluation(self, sess, batch):
         idxs, data_set = batch
         assert isinstance(data_set, DataSet)
         feed_dict = self.model.get_feed_dict(data_set, False)
-        global_step, yp, loss = sess.run([self.global_step, self.yp, self.loss], feed_dict=feed_dict)
+        global_step, yp, loss, vals = sess.run([self.global_step, self.yp, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
         y = data_set.data['y']
         yp = yp[:data_set.num_examples]
         correct = [self.__class__.compare(yi, ypi) for yi, ypi in zip(y, yp)]
-        e = AccuracyEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y, correct, float(loss))
+        tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
+        e = AccuracyEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y, correct, float(loss), tensor_dict=tensor_dict)
         return e
 
     @staticmethod
@@ -154,8 +171,8 @@ class AccuracyEvaluator2(AccuracyEvaluator):
 
 
 class ForwardEvaluation(Evaluation):
-    def __init__(self, data_type, global_step, idxs, yp, yp2, loss, id2answer_dict):
-        super(ForwardEvaluation, self).__init__(data_type, global_step, idxs, yp)
+    def __init__(self, data_type, global_step, idxs, yp, yp2, loss, id2answer_dict, tensor_dict=None):
+        super(ForwardEvaluation, self).__init__(data_type, global_step, idxs, yp, tensor_dict=tensor_dict)
         self.yp2 = yp2
         self.loss = loss
         self.dict['loss'] = loss
@@ -172,15 +189,17 @@ class ForwardEvaluation(Evaluation):
         new_yp2 = self.yp2 + other.yp2
         new_loss = (self.loss * self.num_examples + other.loss * other.num_examples) / len(new_yp)
         new_id2answer_dict = dict(list(self.id2answer_dict.items()) + list(other.id2answer_dict.items()))
-        return ForwardEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_loss, new_id2answer_dict)
+        if self.tensor_dict is not None:
+            new_tensor_dict = {key: np.concatenate((val, other.tensor_dict[key]), axis=0) for key, val in self.tensor_dict.items()}
+        return ForwardEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_loss, new_id2answer_dict, tensor_dict=new_tensor_dict)
 
     def __repr__(self):
         return "{} step {}: loss={:.4f}".format(self.data_type, self.global_step, self.loss)
 
 
 class F1Evaluation(AccuracyEvaluation):
-    def __init__(self, data_type, global_step, idxs, yp, yp2, y, correct, loss, f1s, id2answer_dict):
-        super(F1Evaluation, self).__init__(data_type, global_step, idxs, yp, y, correct, loss)
+    def __init__(self, data_type, global_step, idxs, yp, yp2, y, correct, loss, f1s, id2answer_dict, tensor_dict=None):
+        super(F1Evaluation, self).__init__(data_type, global_step, idxs, yp, y, correct, loss, tensor_dict=tensor_dict)
         self.yp2 = yp2
         self.f1s = f1s
         self.f1 = float(np.mean(f1s))
@@ -211,8 +230,8 @@ class F1Evaluation(AccuracyEvaluation):
 
 
 class F1Evaluator(LabeledEvaluator):
-    def __init__(self, config, model):
-        super(F1Evaluator, self).__init__(config, model)
+    def __init__(self, config, model, tensor_dict=None):
+        super(F1Evaluator, self).__init__(config, model, tensor_dict=tensor_dict)
         self.yp2 = model.yp2
         self.loss = model.loss
 
@@ -220,7 +239,7 @@ class F1Evaluator(LabeledEvaluator):
         idxs, data_set = self._split_batch(batch)
         assert isinstance(data_set, DataSet)
         feed_dict = self._get_feed_dict(batch)
-        global_step, yp, yp2, loss = sess.run([self.global_step, self.yp, self.yp2, self.loss], feed_dict=feed_dict)
+        global_step, yp, yp2, loss, vals = sess.run([self.global_step, self.yp, self.yp2, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
         y = data_set.data['y']
         if self.config.squash:
             new_y = []
@@ -259,8 +278,9 @@ class F1Evaluator(LabeledEvaluator):
                           for id_, xi, span in zip(data_set.data['ids'], data_set.data['x'], spans)}
         correct = [self.__class__.compare2(yi, span) for yi, span in zip(y, spans)]
         f1s = [self.__class__.span_f1(yi, span) for yi, span in zip(y, spans)]
+        tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
         e = F1Evaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), y,
-                         correct, float(loss), f1s, id2answer_dict)
+                         correct, float(loss), f1s, id2answer_dict, tensor_dict=tensor_dict)
         return e
 
     def _split_batch(self, batch):
@@ -299,8 +319,8 @@ class F1Evaluator(LabeledEvaluator):
 
 
 class MultiGPUF1Evaluator(F1Evaluator):
-    def __init__(self, config, models):
-        super(MultiGPUF1Evaluator, self).__init__(config, models[0])
+    def __init__(self, config, models, tensor_dict=None):
+        super(MultiGPUF1Evaluator, self).__init__(config, models[0], tensor_dict=tensor_dict)
         self.models = models
         with tf.name_scope("eval_concat"):
             self.yp = tf.concat(0, [model.yp for model in models])
@@ -321,8 +341,8 @@ class MultiGPUF1Evaluator(F1Evaluator):
 
 
 class ForwardEvaluator(Evaluator):
-    def __init__(self, config, model):
-        super(ForwardEvaluator, self).__init__(config, model)
+    def __init__(self, config, model, tensor_dict=None):
+        super(ForwardEvaluator, self).__init__(config, model, tensor_dict=tensor_dict)
         self.yp2 = model.yp2
         self.loss = model.loss
 
@@ -330,7 +350,7 @@ class ForwardEvaluator(Evaluator):
         idxs, data_set = batch
         assert isinstance(data_set, DataSet)
         feed_dict = self.model.get_feed_dict(data_set, False)
-        global_step, yp, yp2, loss = sess.run([self.global_step, self.yp, self.yp2, self.loss], feed_dict=feed_dict)
+        global_step, yp, yp2, loss, vals = sess.run([self.global_step, self.yp, self.yp2, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
 
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
         spans = [get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)]
@@ -344,7 +364,8 @@ class ForwardEvaluator(Evaluator):
 
         id2answer_dict = {id_: " ".join(_get(xi, span))
                           for id_, xi, span in zip(data_set.data['ids'], data_set.data['x'], spans)}
-        e = ForwardEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), float(loss), id2answer_dict)
+        tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
+        e = ForwardEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), float(loss), id2answer_dict, tensor_dict=tensor_dict)
         return e
 
     @staticmethod
