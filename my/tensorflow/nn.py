@@ -120,6 +120,11 @@ def get_logits(args, size, bias, bias_start=0.0, scope=None, mask=None, wd=0.0, 
         proj = linear([args[0]], d, bias, bias_start=bias_start, scope=scope, wd=wd, input_keep_prob=input_keep_prob,
                       is_train=is_train)
         return sum_logits([proj * args[1]], mask=mask)
+    elif func == 'tri_linear':
+        assert len(args) == 2
+        new_arg = args[0] * args[1]
+        return linear_logits([args[0], args[1], new_arg], bias, bias_start=bias_start, scope=scope, mask=mask, wd=wd, input_keep_prob=input_keep_prob,
+                             is_train=is_train)
     else:
         raise Exception()
 
