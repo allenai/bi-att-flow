@@ -82,6 +82,7 @@ flags.DEFINE_float("keep_prob", 1.0, "keep prob [1.0]")
 flags.DEFINE_string("prev_mode", "gy", "prev mode gy | y | a [gy]")
 flags.DEFINE_string("logit_func", "tri_linear", "logit func [tri_linear]")
 flags.DEFINE_bool("sh", False, "use superhighway [False]")
+flags.DEFINE_string("answer_func", "tri_linear", "answer logit func [tri_linear]")
 
 
 def main(_):
