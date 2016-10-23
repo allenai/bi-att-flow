@@ -3,6 +3,7 @@ import os
 import random
 import itertools
 import math
+from collections import defaultdict
 
 import numpy as np
 
@@ -10,12 +11,33 @@ from my.tensorflow import grouper
 from my.utils import index
 
 
+class Data(object):
+    def get_size(self):
+        raise NotImplementedError()
+
+    def get_by_idxs(self, idxs):
+        """
+        Efficient way to obtain a batch of items from filesystem
+        :param idxs:
+        :return dict: {'X': [,], 'Y', }
+        """
+        data = defaultdict(list)
+        for idx in idxs:
+            each_data = self.get_one(idx)
+            for key, val in each_data.items():
+                data[key].append(val)
+        return data
+
+    def get_one(self, idx):
+        raise NotImplementedError()
+
+
 class DataSet(object):
     def __init__(self, data, data_type, shared=None, valid_idxs=None):
-        total_num_examples = len(next(iter(data.values())))
         self.data = data  # e.g. {'X': [0, 1, 2], 'Y': [2, 3, 4]}
         self.data_type = data_type
         self.shared = shared
+        total_num_examples = self.get_data_size()
         self.valid_idxs = range(total_num_examples) if valid_idxs is None else valid_idxs
         self.num_examples = len(self.valid_idxs)
 
@@ -23,6 +45,23 @@ class DataSet(object):
         rx = self.data['*x'][idx]
         x = self.shared['x'][rx[0]][rx[1]]
         return max(map(len, x))
+
+    def get_data_size(self):
+        if isinstance(self.data, dict):
+            return len(next(iter(self.data.values())))
+        elif isinstance(self.data, Data):
+            return self.data.get_size()
+        raise Exception()
+
+    def get_by_idxs(self, idxs):
+        if isinstance(self.data, dict):
+            out = defaultdict(list)
+            for key, val in self.data.items():
+                out[key].extend(val[idx] for idx in idxs)
+            return out
+        elif isinstance(self.data, Data):
+            return self.data.get_by_idxs(idxs)
+        raise Exception()
 
     def get_batches(self, batch_size, num_batches=None, shuffle=False, cluster=False):
         """
@@ -53,14 +92,14 @@ class DataSet(object):
         batch_idx_tuples = itertools.chain.from_iterable(grouped() for _ in range(num_epochs))
         for _ in range(num_batches):
             batch_idxs = tuple(i for i in next(batch_idx_tuples) if i is not None)
-            batch_data = {}
-            for key, val in self.data.items():
+            batch_data = self.get_by_idxs(batch_idxs)
+            shared_batch_data = {}
+            for key, val in batch_data.items():
                 if key.startswith('*'):
                     assert self.shared is not None
                     shared_key = key[1:]
-                    batch_data[shared_key] = [index(self.shared[shared_key], val[idx]) for idx in batch_idxs]
-                else:
-                    batch_data[key] = list(map(val.__getitem__, batch_idxs))
+                    shared_batch_data[shared_key] = [index(self.shared[shared_key], each) for each in val]
+            batch_data.update(shared_batch_data)
 
             batch_ds = DataSet(batch_data, self.data_type, shared=self.shared)
             yield batch_idxs, batch_ds
