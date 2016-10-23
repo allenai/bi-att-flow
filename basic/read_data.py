@@ -19,17 +19,40 @@ class DataSet(object):
         self.valid_idxs = range(total_num_examples) if valid_idxs is None else valid_idxs
         self.num_examples = len(self.valid_idxs)
 
-    def get_batches(self, batch_size, num_batches=None, shuffle=False):
+    def _sort_key(self, idx):
+        rx = self.data['*x'][idx]
+        x = self.shared['x'][rx[0]][rx[1]]
+        return max(map(len, x))
+
+    def get_batches(self, batch_size, num_batches=None, shuffle=False, cluster=False):
+        """
+
+        :param batch_size:
+        :param num_batches:
+        :param shuffle:
+        :param cluster: cluster examples by their lengths; this might give performance boost (i.e. faster training).
+        :return:
+        """
         num_batches_per_epoch = int(math.ceil(self.num_examples / batch_size))
         if num_batches is None:
             num_batches = num_batches_per_epoch
         num_epochs = int(math.ceil(num_batches / num_batches_per_epoch))
 
-        idxs = itertools.chain.from_iterable(random.sample(self.valid_idxs, len(self.valid_idxs))
-                                             if shuffle else self.valid_idxs
-                                             for _ in range(num_epochs))
+        if shuffle:
+            if cluster:
+                sorted_idxs = sorted(self.valid_idxs, key=self._sort_key)
+                sorted_grouped = lambda: list(grouper(sorted_idxs, batch_size))
+                grouped = lambda: random.sample(sorted_grouped(), num_batches_per_epoch)
+            else:
+                random_grouped = lambda: list(grouper(random.sample(self.valid_idxs, len(self.valid_idxs)), batch_size))
+                grouped = random_grouped
+        else:
+            raw_grouped = lambda: list(grouper(self.valid_idxs, batch_size))
+            grouped = raw_grouped
+
+        batch_idx_tuples = itertools.chain.from_iterable(grouped() for _ in range(num_epochs))
         for _ in range(num_batches):
-            batch_idxs = tuple(itertools.islice(idxs, batch_size))
+            batch_idxs = tuple(i for i in next(batch_idx_tuples) if i is not None)
             batch_data = {}
             for key, val in self.data.items():
                 if key.startswith('*'):
@@ -42,9 +65,9 @@ class DataSet(object):
             batch_ds = DataSet(batch_data, self.data_type, shared=self.shared)
             yield batch_idxs, batch_ds
 
-    def get_multi_batches(self, batch_size, num_batches_per_step, num_steps=None, shuffle=False):
+    def get_multi_batches(self, batch_size, num_batches_per_step, num_steps=None, shuffle=False, cluster=False):
         num_batches = None if num_steps is None else num_batches_per_step * num_steps
-        flat_batches = self.get_batches(batch_size, num_batches=num_batches, shuffle=shuffle)
+        flat_batches = self.get_batches(batch_size, num_batches=num_batches, shuffle=shuffle, cluster=cluster)
 
         empty = next(self.get_batches(batch_size, num_batches=1))[1].get_empty()
         batches = grouper(flat_batches, num_batches_per_step, fillvalue=((), empty))

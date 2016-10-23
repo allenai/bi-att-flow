@@ -76,7 +76,7 @@ def _train(config):
     num_steps = config.num_steps or int(config.num_epochs * train_data.num_examples / (config.batch_size * config.num_gpus))
     global_step = 0
     for batches in tqdm(train_data.get_multi_batches(config.batch_size, config.num_gpus,
-                                                     num_steps=num_steps, shuffle=True), total=num_steps):
+                                                     num_steps=num_steps, shuffle=True, cluster=config.cluster), total=num_steps):
         global_step = sess.run(model.global_step) + 1  # +1 because all calculations are done after step
         get_summary = global_step % config.log_period == 0
         loss, summary, train_op = trainer.step(sess, batches, get_summary=get_summary)
