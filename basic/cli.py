@@ -84,6 +84,7 @@ flags.DEFINE_string("logit_func", "tri_linear", "logit func [tri_linear]")
 flags.DEFINE_bool("sh", False, "use superhighway [False]")
 flags.DEFINE_string("answer_func", "linear", "answer logit func [linear]")
 flags.DEFINE_bool("cluster", False, "Cluster data for faster training [False]")
+flags.DEFINE_bool("len_opt", False, "Length optimization? [False]")
 
 
 def main(_):

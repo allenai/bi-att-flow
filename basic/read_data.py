@@ -84,12 +84,13 @@ class DataSet(object):
         num_epochs = int(math.ceil(num_batches / num_batches_per_epoch))
 
         if shuffle:
+            random_idxs = random.sample(self.valid_idxs, len(self.valid_idxs))
             if cluster:
-                sorted_idxs = sorted(self.valid_idxs, key=self._sort_key)
+                sorted_idxs = sorted(random_idxs, key=self._sort_key)
                 sorted_grouped = lambda: list(grouper(sorted_idxs, batch_size))
                 grouped = lambda: random.sample(sorted_grouped(), num_batches_per_epoch)
             else:
-                random_grouped = lambda: list(grouper(random.sample(self.valid_idxs, len(self.valid_idxs)), batch_size))
+                random_grouped = lambda: list(grouper(random_idxs, batch_size))
                 grouped = random_grouped
         else:
             raw_grouped = lambda: list(grouper(self.valid_idxs, batch_size))

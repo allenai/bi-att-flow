@@ -119,17 +119,23 @@ def exp_mask(val, mask, name=None):
 
 
 def flatten(tensor, keep):
-    if keep == 0:
-        out_shape = [-1]
-    else:
-        out_shape = [-1] + tensor.get_shape().as_list()[-keep:]
+    fixed_shape = tensor.get_shape().as_list()
+    start = len(fixed_shape) - keep
+    left = reduce(mul, [fixed_shape[i] or tf.shape(tensor)[i] for i in range(start)])
+    out_shape = [left] + [fixed_shape[i] or tf.shape(tensor)[i] for i in range(start, len(fixed_shape))]
     flat = tf.reshape(tensor, out_shape)
     return flat
 
 
 def reconstruct(tensor, ref, keep):
-    pre_shape = [tf.shape(ref)[i] for i in range(len(ref.get_shape().as_list()[:-keep]))]
-    keep_shape = tensor.get_shape().as_list()[-keep:]
+    ref_shape = ref.get_shape().as_list()
+    tensor_shape = tensor.get_shape().as_list()
+    ref_stop = len(ref_shape) - keep
+    tensor_start = len(tensor_shape) - keep
+    pre_shape = [ref_shape[i] or tf.shape(ref)[i] for i in range(ref_stop)]
+    keep_shape = [tensor_shape[i] or tf.shape(tensor)[i] for i in range(tensor_start, len(tensor_shape))]
+    # pre_shape = [tf.shape(ref)[i] for i in range(len(ref.get_shape().as_list()[:-keep]))]
+    # keep_shape = tensor.get_shape().as_list()[-keep:]
     target_shape = pre_shape + keep_shape
     out = tf.reshape(tensor, target_shape)
     return out

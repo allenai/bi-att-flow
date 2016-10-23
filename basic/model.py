@@ -35,6 +35,7 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
     """
     with tf.variable_scope(scope or "bi_attention"):
         N, M, JX, JQ, d = config.batch_size, config.max_num_sents, config.max_sent_size, config.max_ques_size, config.hidden_size
+        JX = tf.shape(h)[2]
         h_aug = tf.tile(tf.expand_dims(h, 3), [1, 1, 1, JQ, 1])
         u_aug = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1, 1])
         if h_mask is None:
@@ -73,7 +74,6 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
 
 def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
     with tf.variable_scope(scope or "attention_layer"):
-        N, M, JX, JQ, d = config.batch_size, config.max_num_sents, config.max_sent_size, config.max_ques_size, config.hidden_size
         u_avg, h_a, u_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
         if config.aug_att:
             p0 = tf.concat(3, [h, u_avg, h_a, u_a, h * u_a, h_a * u_avg, u_a * h_a])
@@ -93,14 +93,14 @@ class Model(object):
         N, M, JX, JQ, VW, VC, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.max_word_size
-        self.x = tf.placeholder('int32', [N, M, JX], name='x')
-        self.cx = tf.placeholder('int32', [N, M, JX, W], name='cx')
-        self.x_mask = tf.placeholder('bool', [N, M, JX], name='x_mask')
+        self.x = tf.placeholder('int32', [N, M, None], name='x')
+        self.cx = tf.placeholder('int32', [N, M, None, W], name='cx')
+        self.x_mask = tf.placeholder('bool', [N, M, None], name='x_mask')
         self.q = tf.placeholder('int32', [N, JQ], name='q')
         self.cq = tf.placeholder('int32', [N, JQ, W], name='cq')
         self.q_mask = tf.placeholder('bool', [N, JQ], name='q_mask')
-        self.y = tf.placeholder('bool', [N, M, JX], name='y')
-        self.y2 = tf.placeholder('bool', [N, M, JX], name='y2')
+        self.y = tf.placeholder('bool', [N, M, None], name='y')
+        self.y2 = tf.placeholder('bool', [N, M, None], name='y2')
         self.is_train = tf.placeholder('bool', [], name='is_train')
         self.new_emb_mat = tf.placeholder('float', [None, config.word_emb_size], name='new_emb_mat')
 
@@ -129,6 +129,7 @@ class Model(object):
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, \
             config.max_word_size
+        JX = tf.shape(self.x)[2]
         dc, dw, dco = config.char_emb_size, config.word_emb_size, config.char_out_size
 
         with tf.variable_scope("emb"):
@@ -265,6 +266,7 @@ class Model(object):
         N, M, JX, JQ, VW, VC = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size
+        JX = tf.shape(self.x)[2]
         loss_mask = tf.reduce_max(tf.cast(self.q_mask, 'float'), 1)
         losses = tf.nn.softmax_cross_entropy_with_logits(
             self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float'))
@@ -307,6 +309,15 @@ class Model(object):
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, config.max_word_size
         feed_dict = {}
+
+        if config.len_opt:
+            """
+            Note that this optimization results in variable GPU RAM usage (i.e. can cause OOM in the middle of training.)
+            First test without len_opt and make sure no OOM, and use len_opt
+            """
+            new_JX = max(len(sent) for para in batch.data['x'] for sent in para)
+            JX = min(JX, new_JX)
+        # print(JX)
 
         x = np.zeros([N, M, JX], dtype='int32')
         cx = np.zeros([N, M, JX, W], dtype='int32')
