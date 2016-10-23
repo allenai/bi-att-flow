@@ -31,6 +31,12 @@ class Data(object):
     def get_one(self, idx):
         raise NotImplementedError()
 
+    def get_empty(self):
+        raise NotImplementedError()
+
+    def __add__(self, other):
+        raise NotImplementedError()
+
 
 class DataSet(object):
     def __init__(self, data, data_type, shared=None, valid_idxs=None):
@@ -113,18 +119,24 @@ class DataSet(object):
         return batches
 
     def get_empty(self):
-        data = {key: [] for key in self.data}
+        if isinstance(self.data, dict):
+            data = {key: [] for key in self.data}
+        elif isinstance(self.data, Data):
+            data = self.data.get_empty()
+        else:
+            raise Exception()
         return DataSet(data, self.data_type, shared=self.shared)
 
     def __add__(self, other):
-        data = {key: val + other.data[key] for key, val in self.data.items()}
+        if isinstance(self.data, dict):
+            data = {key: val + other.data[key] for key, val in self.data.items()}
+        elif isinstance(self.data, Data):
+            data = self.data + other.data
+        else:
+            raise Exception()
+
         valid_idxs = list(self.valid_idxs) + [valid_idx + self.num_examples for valid_idx in other.valid_idxs]
         return DataSet(data, self.data_type, shared=self.shared, valid_idxs=valid_idxs)
-
-
-class SquadDataSet(DataSet):
-    def __init__(self, data, data_type, shared=None, valid_idxs=None):
-        super(SquadDataSet, self).__init__(data, data_type, shared=shared, valid_idxs=valid_idxs)
 
 
 def load_metadata(config, data_type):
