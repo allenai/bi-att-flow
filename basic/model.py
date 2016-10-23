@@ -56,12 +56,12 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
 
         else:
             h_logits = get_logits([h, u_avg], None, True, wd=config.wd, mask=h_mask,
-                                  is_train=is_train, func='linear', scope='h_logits')  # [N, M, JX]
+                                  is_train=is_train, func=config.logit_func, scope='h_logits')  # [N, M, JX]
             h_a = softsel(h, h_logits)  # [N, M, d]
             h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
 
         u_logits = get_logits([h_aug, u_aug], None, True, wd=config.wd, mask=and_mask,
-                              is_train=is_train, func='linear', scope='u_logits')  # [N, M, JX, JQ]
+                              is_train=is_train, func=config.logit_func, scope='u_logits')  # [N, M, JX, JQ]
         u_a = softsel(u_aug, u_logits)  # [N, M, JX, d]
         if tensor_dict is not None:
             # a_h = tf.nn.softmax(h_logits)  # [N, M, JX]
@@ -78,7 +78,7 @@ def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None
         if config.aug_att:
             p0 = tf.concat(3, [h, u_avg, h_a, u_a, h * u_a, h_a * u_avg, u_a * h_a])
         else:
-            p0 = tf.concat(3, [h , u_avg, h_a, u_a])
+            p0 = tf.concat(3, [h , h_a, u_a, h * h_a, h * u_a])
         return p0
 
 
@@ -216,7 +216,7 @@ class Model(object):
             g1 = tf.concat(3, [fw_g1, bw_g1])
             # logits = u_logits(config, self.is_train, g1, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits")
             # [N, M, JX]
-            logits = get_logits([xx, g1], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
+            logits = get_logits([g1, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
             a1i = softsel(tf.reshape(g1, [N, M*JX, 2*d]), tf.reshape(logits, [N, M*JX]))
 
             if config.feed_gt:
@@ -242,10 +242,10 @@ class Model(object):
                 prev = g1yp
             else:
                 raise Exception()
-            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, tf.concat(3, [p0, g1, prev]), x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
+            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, tf.concat(3, [p0, g1, prev, g1 * prev]), x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
             g2 = tf.concat(3, [fw_g2, bw_g2])
             # logits2 = u_logits(config, self.is_train, tf.concat(3, [g1, a1i]), u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits2")
-            logits2 = get_logits([xx, g2], None, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask,
+            logits2 = get_logits([g2, p0], None, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask,
                                  is_train=self.is_train, func=config.answer_func, scope='logits2')
 
             flat_logits2 = tf.reshape(logits2, [-1, M * JX])
@@ -265,8 +265,10 @@ class Model(object):
         N, M, JX, JQ, VW, VC = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size
-        ce_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-            self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float')))
+        loss_mask = tf.reduce_max(tf.cast(self.q_mask, 'float'), 1)
+        losses = tf.nn.softmax_cross_entropy_with_logits(
+            self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float'))
+        ce_loss = tf.reduce_mean(loss_mask * losses)
         tf.add_to_collection('losses', ce_loss)
         ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
             self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
