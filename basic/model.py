@@ -48,7 +48,7 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
             u_avg = tf.reduce_sum(u_aug * tf.cast(tf.expand_dims(u_mask_aug, -1), 'float'), 3)
 
         if config.sh:
-            cell = SHCell(h.get_shape()[3], logit_func=config.logit_func)
+            cell = SHCell(h.get_shape()[3], logit_func=config.sh_logit_func)
             d_cell = SwitchableDropoutWrapper(cell, is_train, input_keep_prob=config.input_keep_prob)
             h_len = tf.reduce_sum(tf.cast(h_mask, 'int32'), 2)  # [N, M, JX]
             in_ = tf.concat(3, [h, u_avg])
@@ -78,7 +78,7 @@ def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None
         if config.aug_att:
             p0 = tf.concat(3, [h, u_avg, h_a, u_a, h * u_a, h_a * u_avg, u_a * h_a])
         else:
-            p0 = tf.concat(3, [h , h_a, u_a, h * h_a, h * u_a])
+            p0 = tf.concat(3, [h , h_a, u_a, h_a * u_a, h * u_a])
         return p0
 
 
@@ -246,7 +246,7 @@ class Model(object):
             (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, tf.concat(3, [p0, g1, prev, g1 * prev]), x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
             g2 = tf.concat(3, [fw_g2, bw_g2])
             # logits2 = u_logits(config, self.is_train, tf.concat(3, [g1, a1i]), u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits2")
-            logits2 = get_logits([g2, p0], None, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask,
+            logits2 = get_logits([g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask,
                                  is_train=self.is_train, func=config.answer_func, scope='logits2')
 
             flat_logits2 = tf.reshape(logits2, [-1, M * JX])

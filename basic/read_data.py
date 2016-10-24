@@ -115,7 +115,6 @@ class DataSet(object):
         batch_size_per_step = batch_size * num_batches_per_step
         num_batches = None if num_steps is None else num_batches_per_step * num_steps
         batches = self.get_batches(batch_size_per_step, num_batches=num_batches, shuffle=shuffle, cluster=cluster)
-        # TODO : the problem is that if idxs is very short, it will only output batch for the first gpu, and zip ignores the second even if dataset div provides it
         multi_batches = (tuple(zip(grouper(idxs, batch_size, shorten=True, num_groups=num_batches_per_step),
                          data_set.divide(num_batches_per_step))) for idxs, data_set in batches)
         return multi_batches

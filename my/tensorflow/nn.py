@@ -119,7 +119,7 @@ def get_logits(args, size, bias, bias_start=0.0, scope=None, mask=None, wd=0.0, 
     elif func == 'proj':
         assert len(args) == 2
         d = args[1].get_shape()[-1]
-        proj = linear([args[0]], d, bias, bias_start=bias_start, scope=scope, wd=wd, input_keep_prob=input_keep_prob,
+        proj = linear([args[0]], d, False, bias_start=bias_start, scope=scope, wd=wd, input_keep_prob=input_keep_prob,
                       is_train=is_train)
         return sum_logits([proj * args[1]], mask=mask)
     elif func == 'tri_linear':
