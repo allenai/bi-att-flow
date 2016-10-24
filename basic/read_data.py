@@ -115,8 +115,9 @@ class DataSet(object):
         batch_size_per_step = batch_size * num_batches_per_step
         num_batches = None if num_steps is None else num_batches_per_step * num_steps
         batches = self.get_batches(batch_size_per_step, num_batches=num_batches, shuffle=shuffle, cluster=cluster)
-        multi_batches = (list(zip(grouper(idxs, batch_size, shorten=True),
-                              data_set.divide(num_batches_per_step))) for idxs, data_set in batches)
+        # TODO : the problem is that if idxs is very short, it will only output batch for the first gpu, and zip ignores the second even if dataset div provides it
+        multi_batches = (tuple(zip(grouper(idxs, batch_size, shorten=True, num_groups=num_batches_per_step),
+                         data_set.divide(num_batches_per_step))) for idxs, data_set in batches)
         return multi_batches
 
     def get_empty(self):
@@ -141,7 +142,7 @@ class DataSet(object):
 
     def divide(self, integer):
         batch_size = int(math.ceil(self.num_examples / integer))
-        idxs_gen = grouper(self.valid_idxs, batch_size, shorten=True)
+        idxs_gen = grouper(self.valid_idxs, batch_size, shorten=True, num_groups=integer)
         data_gen = (self.get_by_idxs(idxs) for idxs in idxs_gen)
         ds_tuple = tuple(DataSet(data, self.data_type, shared=self.shared) for data in data_gen)
         return ds_tuple
