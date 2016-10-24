@@ -112,12 +112,12 @@ class DataSet(object):
             yield batch_idxs, batch_ds
 
     def get_multi_batches(self, batch_size, num_batches_per_step, num_steps=None, shuffle=False, cluster=False):
+        batch_size_per_step = batch_size * num_batches_per_step
         num_batches = None if num_steps is None else num_batches_per_step * num_steps
-        flat_batches = self.get_batches(batch_size, num_batches=num_batches, shuffle=shuffle, cluster=cluster)
-
-        empty = next(self.get_batches(batch_size, num_batches=1))[1].get_empty()
-        batches = grouper(flat_batches, num_batches_per_step, fillvalue=((), empty))
-        return batches
+        batches = self.get_batches(batch_size_per_step, num_batches=num_batches, shuffle=shuffle, cluster=cluster)
+        multi_batches = (list(zip(grouper(idxs, batch_size, shorten=True),
+                              data_set.divide(num_batches_per_step))) for idxs, data_set in batches)
+        return multi_batches
 
     def get_empty(self):
         if isinstance(self.data, dict):
@@ -138,6 +138,13 @@ class DataSet(object):
 
         valid_idxs = list(self.valid_idxs) + [valid_idx + self.num_examples for valid_idx in other.valid_idxs]
         return DataSet(data, self.data_type, shared=self.shared, valid_idxs=valid_idxs)
+
+    def divide(self, integer):
+        batch_size = int(math.ceil(self.num_examples / integer))
+        idxs_gen = grouper(self.valid_idxs, batch_size, shorten=True)
+        data_gen = (self.get_by_idxs(idxs) for idxs in idxs_gen)
+        ds_tuple = tuple(DataSet(data, self.data_type, shared=self.shared) for data in data_gen)
+        return ds_tuple
 
 
 def load_metadata(config, data_type):

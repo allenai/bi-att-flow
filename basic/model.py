@@ -388,7 +388,9 @@ class Model(object):
                 for k, xijk in enumerate(xij):
                     if k == config.max_sent_size:
                         break
-                    x[i, j, k] = _get_word(xijk)
+                    each = _get_word(xijk)
+                    assert isinstance(each, int), each
+                    x[i, j, k] = each
                     x_mask[i, j, k] = True
 
         for i, cxi in enumerate(CX):

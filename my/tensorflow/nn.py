@@ -29,9 +29,11 @@ def linear(args, output_size, bias, bias_start=0.0, scope=None, squeeze=False, w
 
 def dropout(x, keep_prob, is_train, noise_shape=None, seed=None, name=None):
     with tf.name_scope(name or "dropout"):
-        d = tf.nn.dropout(x, keep_prob, noise_shape=noise_shape, seed=seed)
-        out = tf.cond(is_train, lambda: d, lambda: x)
-        return out
+        if keep_prob < 1.0:
+            d = tf.nn.dropout(x, keep_prob, noise_shape=noise_shape, seed=seed)
+            out = tf.cond(is_train, lambda: d, lambda: x)
+            return out
+        return x
 
 
 def softmax(logits, mask=None, scope=None):

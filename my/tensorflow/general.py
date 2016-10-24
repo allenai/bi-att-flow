@@ -150,6 +150,10 @@ def add_wd(wd, scope=None):
             tf.add_to_collection('losses', weight_decay)
 
 
-def grouper(iterable, n, fillvalue=None):
+def grouper(iterable, n, fillvalue=None, shorten=False):
     args = [iter(iterable)] * n
-    return zip_longest(*args, fillvalue=fillvalue)
+    out = zip_longest(*args, fillvalue=fillvalue)
+    if shorten:
+        assert fillvalue is None
+        out = (tuple(e for e in each if e is not None) for each in out)
+    return out
