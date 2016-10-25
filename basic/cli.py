@@ -78,7 +78,7 @@ flags.DEFINE_bool("aug_att", False, "Augment attention layers with more features
 flags.DEFINE_integer("max_to_keep", 20, "Max recent saves to keep [20]")
 flags.DEFINE_bool("vis", False, "output visualization numbers? [False]")
 flags.DEFINE_bool("dump_pickle", True, "Dump pickle instead of json? [True]")
-flags.DEFINE_float("keep_prob", 1.0, "keep prob [1.0]")
+flags.DEFINE_float("keep_prob", 0.8, "keep prob [0.8]")
 flags.DEFINE_string("prev_mode", "a", "prev mode gy | y | a [a]")
 flags.DEFINE_string("logit_func", "tri_linear", "logit func [tri_linear]")
 flags.DEFINE_bool("sh", False, "use superhighway [False]")

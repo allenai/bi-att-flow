@@ -69,16 +69,13 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
             a_u = tf.nn.softmax(u_logits)  # [N, M, JX, JQ]
             # tensor_dict['a_h'] = a_h
             tensor_dict['a_u'] = a_u
-        return u_avg, h_a, u_a
+        return u_avg, u_a, h_a
 
 
 def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
     with tf.variable_scope(scope or "attention_layer"):
-        u_avg, h_a, u_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
-        if config.aug_att:
-            p0 = tf.concat(3, [h, u_avg, h_a, u_a, h * u_a, h_a * u_avg, u_a * h_a])
-        else:
-            p0 = tf.concat(3, [h , h_a, u_a, h_a * u_a, h * u_a])
+        u_avg, u_a, h_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
+        p0 = tf.concat(3, [h , h_a, u_a, h * h_a, h * u_a])
         return p0
 
 
