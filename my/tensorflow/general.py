@@ -162,3 +162,7 @@ def grouper(iterable, n, fillvalue=None, shorten=False, num_groups=None):
         assert fillvalue is None
         out = (tuple(e for e in each if e is not None) for each in out)
     return out
+
+def padded_reshape(tensor, shape, mode='CONSTANT', name=None):
+    paddings = [[0, shape[i] - tf.shape(tensor)[i]] for i in range(len(shape))]
+    return tf.pad(tensor, paddings, mode=mode, name=name)

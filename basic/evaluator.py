@@ -5,6 +5,7 @@ import os
 
 from basic.read_data import DataSet
 from my.nltk_utils import span_f1
+from my.tensorflow import padded_reshape
 from my.utils import argmax
 
 
@@ -323,8 +324,9 @@ class MultiGPUF1Evaluator(F1Evaluator):
         super(MultiGPUF1Evaluator, self).__init__(config, models[0], tensor_dict=tensor_dict)
         self.models = models
         with tf.name_scope("eval_concat"):
-            self.yp = tf.concat(0, [model.yp for model in models])
-            self.yp2 = tf.concat(0, [model.yp2 for model in models])
+            N, M, JX = config.batch_size, config.max_num_sents, config.max_sent_size
+            self.yp = tf.concat(0, [padded_reshape(model.yp, [N, M, JX]) for model in models])
+            self.yp2 = tf.concat(0, [padded_reshape(model.yp2, [N, M, JX]) for model in models])
             self.loss = tf.add_n([model.loss for model in models])/len(models)
 
     def _split_batch(self, batches):

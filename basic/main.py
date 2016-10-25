@@ -138,7 +138,7 @@ def _test(config):
         num_steps = config.eval_num_batches
 
     e = None
-    for multi_batch in tqdm(test_data.get_multi_batches(config.batch_size, config.num_gpus, num_steps=num_steps), total=num_steps):
+    for multi_batch in tqdm(test_data.get_multi_batches(config.batch_size, config.num_gpus, num_steps=num_steps, cluster=config.cluster), total=num_steps):
         ei = evaluator.get_evaluation(sess, multi_batch)
         e = ei if e is None else e + ei
         if config.vis:
