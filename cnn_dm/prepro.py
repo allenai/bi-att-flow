@@ -41,8 +41,8 @@ def get_args():
 
 
 def prepro(args):
-    prepro_each(args, 'training')
-    prepro_each(args, 'validation')
+    prepro_each(args, 'train')
+    prepro_each(args, 'dev')
     prepro_each(args, 'test')
 
 
@@ -72,17 +72,20 @@ def get_word2vec(args, word_counter):
 def prepro_each(args, mode):
     source_dir = os.path.join(args.source_dir, mode)
     word_counter = Counter()
+    lower_word_counter = Counter()
     ent_counter = Counter()
     char_counter = Counter()
-    lower_word2vec_dit = {}
+    max_sent_size = 0
+    max_word_size = 0
+    max_ques_size = 0
 
     file_names = list(os.listdir(source_dir))
     if args.debug:
         file_names = file_names[:1000]
     lens = []
 
-    num_ques = len(file_names)
-    for file_name in tqdm(file_names, total=num_ques):
+    num_examples = len(file_names)
+    for file_name in tqdm(file_names, total=num_examples):
         if file_name.endswith(".question"):
             with open(os.path.join(source_dir, file_name), 'r') as fh:
                 url = fh.readline().strip()
@@ -97,19 +100,28 @@ def prepro_each(args, mode):
                 cand_ents = list(cand.split(":")[0] for cand in cands)
                 words = para.split(" ")
                 ques_words = ques.split(" ")
+
+                max_sent_size = max(len(words), max_sent_size)
+                max_ques_size = max(len(ques_words), max_ques_size)
+                max_word_size = max(max(len(word) for word in words), max_word_size)
+
                 for word in ques_words:
                     if word.startswith("@"):
                         ent_counter[word] += 1
+                        word_counter[word] += 1
                     else:
                         word_counter[word] += 1
+                        lower_word_counter[word.lower()] += 1
                         for c in word:
                             char_counter[c] += 1
 
                 for word in words:
                     if word.startswith("@"):
                         ent_counter[word] += 1
+                        word_counter[word] += 1
                     else:
                         word_counter[word] += 1
+                        lower_word_counter[word.lower()] += 1
                         for c in word:
                             char_counter[c] += 1
 
@@ -118,9 +130,14 @@ def prepro_each(args, mode):
     sorted_file_names, _ = zip(*sorted(zip(file_names, lens), key=lambda each: each[1]))
 
     word2vec_dict = get_word2vec(args, word_counter)
+    lower_word2vec_dit = get_word2vec(args, lower_word_counter)
 
     shared = {'word_counter': word_counter, 'ent_counter': ent_counter, 'char_counter': char_counter,
-              'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dit, 'sorted': sorted_file_names}
+              'lower_word_counter': lower_word_counter,
+              'max_num_sents': 1, 'max_sent_size': max_sent_size, 'max_word_size': max_word_size,
+              'max_ques_size': max_ques_size,
+              'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dit, 'sorted': sorted_file_names,
+              'num_examples': num_examples}
 
     if not os.path.exists(args.target_dir):
         os.makedirs(args.target_dir)

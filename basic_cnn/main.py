@@ -14,7 +14,7 @@ from basic_cnn.graph_handler import GraphHandler
 from basic_cnn.model import Model, get_multi_gpu_models
 from basic_cnn.trainer import Trainer, MultiGPUTrainer
 
-from basic_cnn.read_data import load_metadata, read_data, get_squad_data_filter, update_config
+from basic_cnn.read_data import read_data, get_cnn_data_filter, update_config
 
 
 def main(config):
@@ -42,7 +42,7 @@ def _config_draft(config):
 def _train(config):
     # load_metadata(config, 'train')  # this updates the config file according to metadata file
 
-    data_filter = get_squad_data_filter(config)
+    data_filter = get_cnn_data_filter(config)
     train_data = read_data(config, 'train', config.load, data_filter=data_filter)
     dev_data = read_data(config, 'dev', True, data_filter=data_filter)
     # test_data = read_data(config, 'test', True, data_filter=data_filter)
@@ -65,7 +65,7 @@ def _train(config):
     models = get_multi_gpu_models(config)
     model = models[0]
     trainer = MultiGPUTrainer(config, models)
-    evaluator = MultiGPUF1Evaluator(config, models, tensor_dict=model.tensor_dict if config.vis else None)
+    # evaluator = MultiGPUF1Evaluator(config, models, tensor_dict=model.tensor_dict if config.vis else None)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     # Variables

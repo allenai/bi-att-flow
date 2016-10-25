@@ -99,8 +99,7 @@ class Model(object):
         self.q = tf.placeholder('int32', [N, JQ], name='q')
         self.cq = tf.placeholder('int32', [N, JQ, W], name='cq')
         self.q_mask = tf.placeholder('bool', [N, JQ], name='q_mask')
-        self.y = tf.placeholder('bool', [N, M, None], name='y')
-        self.y2 = tf.placeholder('bool', [N, M, None], name='y2')
+        self.y = tf.placeholder('bool', [N], name='y')
         self.is_train = tf.placeholder('bool', [], name='is_train')
         self.new_emb_mat = tf.placeholder('float', [None, config.word_emb_size], name='new_emb_mat')
 
@@ -232,34 +231,10 @@ class Model(object):
             flat_yp = tf.nn.softmax(flat_logits)  # [-1, M*JX]
             yp = tf.reshape(flat_yp, [-1, M, JX])
 
-            a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
-            yp_aug = tf.expand_dims(yp, -1)
-            g1yp = g1 * yp_aug
-            if config.prev_mode == 'a':
-                prev = a1i
-            elif config.prev_mode == 'y':
-                prev = yp_aug
-            elif config.prev_mode == 'gy':
-                prev = g1yp
-            else:
-                raise Exception()
-            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, tf.concat(3, [p0, g1, prev, g1 * prev]), x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
-            g2 = tf.concat(3, [fw_g2, bw_g2])
-            # logits2 = u_logits(config, self.is_train, tf.concat(3, [g1, a1i]), u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits2")
-            logits2 = get_logits([g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask,
-                                 is_train=self.is_train, func=config.answer_func, scope='logits2')
-
-            flat_logits2 = tf.reshape(logits2, [-1, M * JX])
-            flat_yp2 = tf.nn.softmax(flat_logits2)
-            yp2 = tf.reshape(flat_yp2, [-1, M, JX])
-
             self.tensor_dict['g1'] = g1
-            self.tensor_dict['g2'] = g2
 
             self.logits = flat_logits
-            self.logits2 = flat_logits2
             self.yp = yp
-            self.yp2 = yp2
 
     def _build_loss(self):
         config = self.config
@@ -268,13 +243,10 @@ class Model(object):
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size
         JX = tf.shape(self.x)[2]
         loss_mask = tf.reduce_max(tf.cast(self.q_mask, 'float'), 1)
-        losses = tf.nn.softmax_cross_entropy_with_logits(
-            self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float'))
+        y_mask = self.x == self.y  # [N, M, JX]
+        losses = tf.log(tf.reduce_sum(self.yp * tf.cast(y_mask, 'float'), [1, 2]) + VERY_SMALL_NUMBER)
         ce_loss = tf.reduce_mean(loss_mask * losses)
         tf.add_to_collection('losses', ce_loss)
-        ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-            self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
-        tf.add_to_collection("losses", ce_loss2)
 
         self.loss = tf.add_n(tf.get_collection('losses', scope=self.scope), name='loss')
         tf.scalar_summary(self.loss.op.name, self.loss)
@@ -339,28 +311,6 @@ class Model(object):
         X = batch.data['x']
         CX = batch.data['cx']
 
-        if supervised:
-            y = np.zeros([N, M, JX], dtype='bool')
-            y2 = np.zeros([N, M, JX], dtype='bool')
-            feed_dict[self.y] = y
-            feed_dict[self.y2] = y2
-
-            for i, (xi, cxi, yi) in enumerate(zip(X, CX, batch.data['y'])):
-                start_idx, stop_idx = random.choice(yi)
-                j, k = start_idx
-                j2, k2 = stop_idx
-                if config.single:
-                    X[i] = [xi[j]]
-                    CX[i] = [cxi[j]]
-                    j, j2 = 0, 0
-                if config.squash:
-                    offset = sum(map(len, xi[:j]))
-                    j, k = 0, k + offset
-                    offset = sum(map(len, xi[:j2]))
-                    j2, k2 = 0, k2 + offset
-                y[i, j, k] = True
-                y2[i, j2, k2-1] = True
-
         def _get_word(word):
             d = batch.shared['word2idx']
             for each in (word, word.lower(), word.capitalize(), word.upper()):
@@ -379,33 +329,26 @@ class Model(object):
                 return d[char]
             return 1
 
+
+        if supervised:
+            y = np.zeros([N], dtype='int32')
+            feed_dict[self.y] = y
+
+            for i, yi in enumerate(batch.data['y']):
+                y[i] = _get_word(yi)
+
         for i, xi in enumerate(X):
-            if self.config.squash:
-                xi = [list(itertools.chain(*xi))]
-            for j, xij in enumerate(xi):
-                if j == config.max_num_sents:
-                    break
-                for k, xijk in enumerate(xij):
-                    if k == config.max_sent_size:
-                        break
-                    each = _get_word(xijk)
-                    assert isinstance(each, int), each
-                    x[i, j, k] = each
-                    x_mask[i, j, k] = True
+            for k, xik in enumerate(xi):
+                each = _get_word(xik)
+                x[i, 0, k] = each
+                x_mask[i, 0, k] = True
 
         for i, cxi in enumerate(CX):
-            if self.config.squash:
-                cxi = [list(itertools.chain(*cxi))]
-            for j, cxij in enumerate(cxi):
-                if j == config.max_num_sents:
-                    break
-                for k, cxijk in enumerate(cxij):
-                    if k == config.max_sent_size:
+            for k, cxijk in enumerate(cxi):
+                for l, cxijkl in enumerate(cxijk):
+                    cx[i, 0, k, l] = _get_char(cxijkl)
+                    if l + 1 == config.max_word_size:
                         break
-                    for l, cxijkl in enumerate(cxijk):
-                        if l == config.max_word_size:
-                            break
-                        cx[i, j, k, l] = _get_char(cxijkl)
 
         for i, qi in enumerate(batch.data['q']):
             for j, qij in enumerate(qi):

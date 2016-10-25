@@ -37,6 +37,47 @@ class Data(object):
     def __add__(self, other):
         raise NotImplementedError()
 
+class MyData(Data):
+    def __init__(self, root_dir, file_names):
+        self.root_dir = root_dir
+        self.file_names = file_names
+
+    def get_one(self, idx):
+        file_name = self.file_names[idx]
+        with open(os.path.join(self.root_dir, file_name), 'r') as fh:
+            url = fh.readline().strip()
+            _ = fh.readline()
+            para = fh.readline().strip()
+            _ = fh.readline()
+            ques = fh.readline().strip()
+            _ = fh.readline()
+            answer = fh.readline().strip()
+            _ = fh.readline()
+            cands = list(line.strip() for line in fh)
+            cand_ents = list(cand.split(":")[0] for cand in cands)
+            words = para.split(" ")
+            ques_words = ques.split(" ")
+
+            x = words
+            cx = [list(word) for word in words]
+            q = ques_words
+            cq = [list(word) for word in ques_words]
+            y = answer
+            c = cand_ents
+
+            data = {'x': x, 'cx': cx, 'q': q, 'cq': cq, 'y': y, 'c': c}
+            return data
+
+    def get_empty(self):
+        return {'x': [], 'cx': [], 'q': [], 'cq': [], 'y': [], 'c': []}
+
+    def __add__(self, other):
+        file_names = self.file_names + other.file_names
+        return MyData(self.root_dir, file_names)
+
+    def get_size(self):
+        return len(self.file_names)
+
 
 class DataSet(object):
     def __init__(self, data, data_type, shared=None, valid_idxs=None):
@@ -147,34 +188,21 @@ class DataSet(object):
         return ds_tuple
 
 
-def load_metadata(config, data_type):
-    metadata_path = os.path.join(config.data_dir, "metadata_{}.json".format(data_type))
-    with open(metadata_path, 'r') as fh:
-        metadata = json.load(fh)
-        for key, val in metadata.items():
-            config.__setattr__(key, val)
-        return metadata
+class MyDataSet(DataSet):
+    def _sort_key(self, idx):
+        return idx
 
 
 def read_data(config, data_type, ref, data_filter=None):
-    data_path = os.path.join(config.data_dir, "data_{}.json".format(data_type))
     shared_path = os.path.join(config.data_dir, "shared_{}.json".format(data_type))
-    with open(data_path, 'r') as fh:
-        data = json.load(fh)
     with open(shared_path, 'r') as fh:
         shared = json.load(fh)
 
-    num_examples = len(next(iter(data.values())))
+    num_examples = shared['num_examples']
     if data_filter is None:
         valid_idxs = range(num_examples)
     else:
-        mask = []
-        keys = data.keys()
-        values = data.values()
-        for vals in zip(*values):
-            each = {key: val for key, val in zip(keys, vals)}
-            mask.append(data_filter(each, shared))
-        valid_idxs = [idx for idx in range(len(mask)) if mask[idx]]
+        valid_idxs = range(num_examples)
 
     print("Loaded {}/{} examples from {}".format(len(valid_idxs), num_examples, data_type))
 
@@ -221,88 +249,25 @@ def read_data(config, data_type, ref, data_filter=None):
         new_emb_mat = np.array([idx2vec_dict[idx] for idx in range(len(idx2vec_dict))], dtype='float32')
         shared['new_emb_mat'] = new_emb_mat
 
+    data = MyData(os.path.join(config.root_dir, data_type), shared['sorted'])
     data_set = DataSet(data, data_type, shared=shared, valid_idxs=valid_idxs)
     return data_set
 
 
-def get_squad_data_filter(config):
-    def data_filter(data_point, shared):
-        assert shared is not None
-        rx, rcx, q, cq, y = (data_point[key] for key in ('*x', '*cx', 'q', 'cq', 'y'))
-        x, cx = shared['x'], shared['cx']
-        if len(q) > config.ques_size_th:
-            return False
-
-        # x filter
-        xi = x[rx[0]][rx[1]]
-        if config.squash:
-            for start, stop in y:
-                stop_offset = sum(map(len, xi[:stop[0]]))
-                if stop_offset + stop[1] > config.para_size_th:
-                    return False
-            return True
-
-        if config.single:
-            for start, stop in y:
-                if start[0] != stop[0]:
-                    return False
-
-        if config.data_filter == 'max':
-            for start, stop in y:
-                    if stop[0] >= config.num_sents_th:
-                        return False
-                    if start[0] != stop[0]:
-                        return False
-                    if stop[1] >= config.sent_size_th:
-                        return False
-        elif config.data_filter == 'valid':
-            if len(xi) > config.num_sents_th:
-                return False
-            if any(len(xij) > config.sent_size_th for xij in xi):
-                return False
-        elif config.data_filter == 'semi':
-            """
-            Only answer sentence needs to be valid.
-            """
-            for start, stop in y:
-                if stop[0] >= config.num_sents_th:
-                    return False
-                if start[0] != start[0]:
-                    return False
-                if len(xi[start[0]]) > config.sent_size_th:
-                    return False
-        else:
-            raise Exception()
-
-        return True
-    return data_filter
+def get_cnn_data_filter(config):
+    return True
 
 
 def update_config(config, data_sets):
-    config.max_num_sents = 0
+    config.max_num_sents = 1
     config.max_sent_size = 0
     config.max_ques_size = 0
     config.max_word_size = 0
-    config.max_para_size = 0
     for data_set in data_sets:
-        data = data_set.data
         shared = data_set.shared
-        for idx in data_set.valid_idxs:
-            rx = data['*x'][idx]
-            q = data['q'][idx]
-            sents = shared['x'][rx[0]][rx[1]]
-            config.max_para_size = max(config.max_para_size, sum(map(len, sents)))
-            config.max_num_sents = max(config.max_num_sents, len(sents))
-            config.max_sent_size = max(config.max_sent_size, max(map(len, sents)))
-            config.max_word_size = max(config.max_word_size, max(len(word) for sent in sents for word in sent))
-            if len(q) > 0:
-                config.max_ques_size = max(config.max_ques_size, len(q))
-                config.max_word_size = max(config.max_word_size, max(len(word) for word in q))
-
-    if config.mode == 'train':
-        config.max_num_sents = min(config.max_num_sents, config.num_sents_th)
-        config.max_sent_size = min(config.max_sent_size, config.sent_size_th)
-        config.max_para_size = min(config.max_para_size, config.para_size_th)
+        config.max_sent_size = max(config.max_sent_size, shared['max_sent_size'])
+        config.max_ques_size = max(config.max_ques_size, shared['max_ques_size'])
+        config.max_word_size = max(config.max_word_size, shared['max_word_size'])
 
     config.max_word_size = min(config.max_word_size, config.word_size_th)
 
@@ -310,8 +275,3 @@ def update_config(config, data_sets):
     config.word_emb_size = len(next(iter(data_sets[0].shared['word2vec'].values())))
     config.word_vocab_size = len(data_sets[0].shared['word2idx'])
 
-    if config.single:
-        config.max_num_sents = 1
-    if config.squash:
-        config.max_sent_size = config.max_para_size
-        config.max_num_sents = 1
