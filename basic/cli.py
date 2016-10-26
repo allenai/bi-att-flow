@@ -86,6 +86,7 @@ flags.DEFINE_string("answer_func", "linear", "answer logit func [linear]")
 flags.DEFINE_bool("cluster", False, "Cluster data for faster training [False]")
 flags.DEFINE_bool("len_opt", False, "Length optimization? [False]")
 flags.DEFINE_string("sh_logit_func", "tri_linear", "sh logit func [tri_linear]")
+flags.DEFINE_bool("bi", False, "bi direcitonal attention? [False]")
 
 
 def main(_):
