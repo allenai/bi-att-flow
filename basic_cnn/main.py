@@ -9,7 +9,8 @@ import tensorflow as tf
 from tqdm import tqdm
 import numpy as np
 
-from basic_cnn.evaluator import F1Evaluator, Evaluator, ForwardEvaluator, MultiGPUF1Evaluator
+from basic_cnn.evaluator import F1Evaluator, Evaluator, ForwardEvaluator, MultiGPUF1Evaluator, CNNAccuracyEvaluator, \
+    MultiGPUCNNAccuracyEvaluator
 from basic_cnn.graph_handler import GraphHandler
 from basic_cnn.model import Model, get_multi_gpu_models
 from basic_cnn.trainer import Trainer, MultiGPUTrainer
@@ -65,7 +66,7 @@ def _train(config):
     models = get_multi_gpu_models(config)
     model = models[0]
     trainer = MultiGPUTrainer(config, models)
-    # evaluator = MultiGPUF1Evaluator(config, models, tensor_dict=model.tensor_dict if config.vis else None)
+    evaluator = MultiGPUCNNAccuracyEvaluator(config, models, tensor_dict=model.tensor_dict if config.vis else None)
     graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
 
     # Variables

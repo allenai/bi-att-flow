@@ -69,7 +69,7 @@ class MyData(Data):
             return data
 
     def get_empty(self):
-        return {'x': [], 'cx': [], 'q': [], 'cq': [], 'y': [], 'c': []}
+        return MyData(self.root_dir, [])
 
     def __add__(self, other):
         file_names = self.file_names + other.file_names
@@ -109,6 +109,13 @@ class DataSet(object):
         elif isinstance(self.data, Data):
             return self.data.get_by_idxs(idxs)
         raise Exception()
+
+    def get_one(self, idx):
+        if isinstance(self.data, dict):
+            out = {key: [val[idx]] for key, val in self.data.items()}
+            return out
+        elif isinstance(self.data, Data):
+            return self.data.get_one(idx)
 
     def get_batches(self, batch_size, num_batches=None, shuffle=False, cluster=False):
         """
@@ -154,8 +161,7 @@ class DataSet(object):
 
     def get_multi_batches(self, batch_size, num_batches_per_step, num_steps=None, shuffle=False, cluster=False):
         batch_size_per_step = batch_size * num_batches_per_step
-        num_batches = None if num_steps is None else num_batches_per_step * num_steps
-        batches = self.get_batches(batch_size_per_step, num_batches=num_batches, shuffle=shuffle, cluster=cluster)
+        batches = self.get_batches(batch_size_per_step, num_batches=num_steps, shuffle=shuffle, cluster=cluster)
         multi_batches = (tuple(zip(grouper(idxs, batch_size, shorten=True, num_groups=num_batches_per_step),
                          data_set.divide(num_batches_per_step))) for idxs, data_set in batches)
         return multi_batches

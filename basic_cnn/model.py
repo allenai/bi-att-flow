@@ -40,26 +40,10 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
         u_aug = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1, 1])
         if h_mask is None:
             and_mask = None
-            u_avg = tf.reduce_sum(u_aug, 3)
         else:
             h_mask_aug = tf.tile(tf.expand_dims(h_mask, 3), [1, 1, 1, JQ])
             u_mask_aug = tf.tile(tf.expand_dims(tf.expand_dims(u_mask, 1), 1), [1, M, JX, 1])
             and_mask = h_mask_aug & u_mask_aug
-            u_avg = tf.reduce_sum(u_aug * tf.cast(tf.expand_dims(u_mask_aug, -1), 'float'), 3)
-
-        if config.sh:
-            cell = SHCell(h.get_shape()[3], logit_func=config.sh_logit_func)
-            d_cell = SwitchableDropoutWrapper(cell, is_train, input_keep_prob=config.input_keep_prob)
-            h_len = tf.reduce_sum(tf.cast(h_mask, 'int32'), 2)  # [N, M, JX]
-            in_ = tf.concat(3, [h, u_avg])
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(d_cell, d_cell, in_, h_len, dtype='float', scope='u1')  # [N, M, JX, 2d]
-            h_a = fw_h + bw_h
-
-        else:
-            h_logits = get_logits([h, u_avg], None, True, wd=config.wd, mask=h_mask,
-                                  is_train=is_train, func=config.logit_func, scope='h_logits')  # [N, M, JX]
-            h_a = softsel(h, h_logits)  # [N, M, d]
-            h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
 
         u_logits = get_logits([h_aug, u_aug], None, True, wd=config.wd, mask=and_mask,
                               is_train=is_train, func=config.logit_func, scope='u_logits')  # [N, M, JX, JQ]
@@ -69,16 +53,13 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
             a_u = tf.nn.softmax(u_logits)  # [N, M, JX, JQ]
             # tensor_dict['a_h'] = a_h
             tensor_dict['a_u'] = a_u
-        return u_avg, h_a, u_a
+        return u_a
 
 
 def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
     with tf.variable_scope(scope or "attention_layer"):
-        u_avg, h_a, u_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
-        if config.aug_att:
-            p0 = tf.concat(3, [h, u_avg, h_a, u_a, h * u_a, h_a * u_avg, u_a * h_a])
-        else:
-            p0 = tf.concat(3, [h , h_a, u_a, h_a * u_a, h * u_a])
+        u_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
+        p0 = tf.concat(3, [h , u_a, h * u_a])
         return p0
 
 
@@ -287,7 +268,10 @@ class Model(object):
             Note that this optimization results in variable GPU RAM usage (i.e. can cause OOM in the middle of training.)
             First test without len_opt and make sure no OOM, and use len_opt
             """
-            new_JX = max(len(sent) for para in batch.data['x'] for sent in para)
+            if sum(len(sent) for para in batch.data['x'] for sent in para) == 0:
+                new_JX = 1
+            else:
+                new_JX = max(len(sent) for para in batch.data['x'] for sent in para)
             JX = min(JX, new_JX)
         # print(JX)
 
@@ -297,6 +281,7 @@ class Model(object):
         q = np.zeros([N, JQ], dtype='int32')
         cq = np.zeros([N, JQ, W], dtype='int32')
         q_mask = np.zeros([N, JQ], dtype='bool')
+
 
         feed_dict[self.x] = x
         feed_dict[self.x_mask] = x_mask

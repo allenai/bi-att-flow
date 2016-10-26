@@ -1,4 +1,6 @@
 import itertools
+from collections import defaultdict
+
 import numpy as np
 import tensorflow as tf
 import os
@@ -141,23 +143,45 @@ class AccuracyEvaluator(LabeledEvaluator):
         self.loss = model.loss
 
     def get_evaluation(self, sess, batch):
-        idxs, data_set = batch
+        idxs, data_set = self._split_batch(batch)
         assert isinstance(data_set, DataSet)
-        feed_dict = self.model.get_feed_dict(data_set, False)
-        global_step, yp, loss, vals = sess.run([self.global_step, self.yp, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
+        feed_dict = self._get_feed_dict(batch)
         y = data_set.data['y']
+        global_step, yp, loss, vals = sess.run([self.global_step, self.yp, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
         yp = yp[:data_set.num_examples]
-        correct = [self.__class__.compare(yi, ypi) for yi, ypi in zip(y, yp)]
+        correct = [self.__class__.compare(data_set.get_one(idx), ypi) for idx, ypi in zip(data_set.valid_idxs, yp)]
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
         e = AccuracyEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y, correct, float(loss), tensor_dict=tensor_dict)
         return e
 
     @staticmethod
-    def compare(yi, ypi):
+    def compare(data, ypi):
+        yi = data['y']
         for start, stop in yi:
             if start == int(np.argmax(ypi)):
                 return True
         return False
+
+    def _split_batch(self, batch):
+        return batch
+
+    def _get_feed_dict(self, batch):
+        return self.model.get_feed_dict(batch[1], False)
+
+
+class CNNAccuracyEvaluator(AccuracyEvaluator):
+    @staticmethod
+    def compare(data, ypi):
+        # ypi: [N, M, JX] numbers
+        yi = data['y']  # entity
+        xi = data['x']  # [N, M, JX] words
+        dist = defaultdict(int)
+        for ypij, xij in zip(ypi, xi):
+            for ypijk, xijk in zip(ypij, xij):
+                if xijk.startswith("@"):
+                    dist[xijk] += ypijk
+        pred = max(dist.items(), key=lambda item: item[1])[0]
+        return pred == yi
 
 
 class AccuracyEvaluator2(AccuracyEvaluator):
@@ -327,6 +351,28 @@ class MultiGPUF1Evaluator(F1Evaluator):
             N, M, JX = config.batch_size, config.max_num_sents, config.max_sent_size
             self.yp = tf.concat(0, [padded_reshape(model.yp, [N, M, JX]) for model in models])
             self.yp2 = tf.concat(0, [padded_reshape(model.yp2, [N, M, JX]) for model in models])
+            self.loss = tf.add_n([model.loss for model in models])/len(models)
+
+    def _split_batch(self, batches):
+        idxs_list, data_sets = zip(*batches)
+        idxs = sum(idxs_list, ())
+        data_set = sum(data_sets, data_sets[0].get_empty())
+        return idxs, data_set
+
+    def _get_feed_dict(self, batches):
+        feed_dict = {}
+        for model, (_, data_set) in zip(self.models, batches):
+            feed_dict.update(model.get_feed_dict(data_set, False))
+        return feed_dict
+
+
+class MultiGPUCNNAccuracyEvaluator(CNNAccuracyEvaluator):
+    def __init__(self, config, models, tensor_dict=None):
+        super(MultiGPUCNNAccuracyEvaluator, self).__init__(config, models[0], tensor_dict=tensor_dict)
+        self.models = models
+        with tf.name_scope("eval_concat"):
+            N, M, JX = config.batch_size, config.max_num_sents, config.max_sent_size
+            self.yp = tf.concat(0, [padded_reshape(model.yp, [N, M, JX]) for model in models])
             self.loss = tf.add_n([model.loss for model in models])/len(models)
 
     def _split_batch(self, batches):
