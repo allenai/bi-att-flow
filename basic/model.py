@@ -76,6 +76,7 @@ def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None
     with tf.variable_scope(scope or "attention_layer"):
         u_avg, u_a, h_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
         p0 = tf.concat(3, [h , h_a, u_a, h * h_a, h * u_a])
+        # p0 = tf.concat(3, [h + 0 * h_a, u_a, h * u_a])
         return p0
 
 
@@ -313,7 +314,7 @@ class Model(object):
             First test without len_opt and make sure no OOM, and use len_opt
             """
             new_JX = max(len(sent) for para in batch.data['x'] for sent in para)
-            JX = min(JX, new_JX)
+            JX = max(min(JX, new_JX), 1)
         # print(JX)
 
         x = np.zeros([N, M, JX], dtype='int32')

@@ -116,8 +116,14 @@ def get_word_span(context, wordss, start, stop):
         for word_idx, span in enumerate(spans):
             if not (stop <= span[0] or start >= span[1]):
                 idxs.append((sent_idx, word_idx))
+
     assert len(idxs) > 0, "{} {} {} {}".format(context, spanss, start, stop)
     return idxs[0], (idxs[-1][0], idxs[-1][1] + 1)
+
+
+def get_word_idx(context, wordss, idx):
+    spanss = get_2d_spans(context, wordss)
+    return spanss[idx[0]][idx[1]][0]
 
 
 def process_tokens(temp_tokens):
@@ -127,8 +133,9 @@ def process_tokens(temp_tokens):
             tokens.append('"')
         else:
             flag = False
-            for char in ("-", "\u2212", "\u2014", "\u2013", "/", "~", '"', "'", ":", "\u2044",
-                         "\u201C", "\u2019", "\u201D", "\u2018", "\u00B0"):
+            # l = ("-", "\u2212", "\u2014", "\u2013", "/", "~", '"', "'", "\u201C", "\u2019", "\u201D", "\u2018", "\u00B0")
+            l = ("-", "\u2212", "\u2014", "\u2013")
+            for char in l:
                 if char in token:
                     tokens.extend(re.split("({})".format(char), token))
                     flag = True

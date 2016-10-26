@@ -8,7 +8,7 @@ from collections import Counter
 
 from tqdm import tqdm
 
-from my.utils import get_word_span, process_tokens
+from my.utils import get_word_span, process_tokens, get_word_idx
 
 
 def bool_(arg):
@@ -134,6 +134,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     source_data = json.load(open(source_path, 'r'))
 
     q, cq, y, rx, rcx, ids, idxs = [], [], [], [], [], [], []
+    cy = []
     x, cx = [], []
     answerss = []
     word_counter, char_counter, lower_word_counter = Counter(), Counter(), Counter()
@@ -171,6 +172,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
                 qi = word_tokenize(qa['question'])
                 cqi = [list(qij) for qij in qi]
                 yi = []
+                cyi = []
                 answers = []
                 for answer in qa['answers']:
                     answer_text = answer['text']
@@ -183,7 +185,20 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
                     # yi1 = answer['answer_word_stop'] or [0, 1]
                     assert len(xi[yi0[0]]) > yi0[1]
                     assert len(xi[yi1[0]]) >= yi1[1]
+                    w0 = xi[yi0[0]][yi0[1]]
+                    w1 = xi[yi1[0]][yi1[1]-1]
+                    i0 = get_word_idx(context, xi, yi0)
+                    i1 = get_word_idx(context, xi, (yi1[0], yi1[1]-1))
+                    cyi0 = answer_start - i0
+                    cyi1 = answer_stop - i1 - 1
+                    # print(answer_text, w0[cyi0:], w1[:cyi1+1])
+                    assert answer_text[0] == w0[cyi0], (answer_text, w0, cyi0)
+                    assert answer_text[-1] == w1[cyi1]
+                    assert cyi0 < 32, (answer_text, w0)
+                    assert cyi1 < 32, (answer_text, w1)
+
                     yi.append([yi0, yi1])
+                    cyi.append([cyi0, cyi1])
 
                 for qij in qi:
                     word_counter[qij] += 1
@@ -194,6 +209,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
                 q.append(qi)
                 cq.append(cqi)
                 y.append(yi)
+                cy.append(cyi)
                 rx.append(rxi)
                 rcx.append(rxi)
                 ids.append(qa['id'])
@@ -206,7 +222,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     word2vec_dict = get_word2vec(args, word_counter)
     lower_word2vec_dict = get_word2vec(args, lower_word_counter)
 
-    data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx,
+    data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, 'cy': cy,
             'idxs': idxs, 'ids': ids, 'answerss': answerss}
     shared = {'x': x, 'cx': cx,
               'word_counter': word_counter, 'char_counter': char_counter, 'lower_word_counter': lower_word_counter,
