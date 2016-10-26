@@ -256,7 +256,7 @@ def read_data(config, data_type, ref, data_filter=None):
         shared['new_emb_mat'] = new_emb_mat
 
     data = MyData(os.path.join(config.root_dir, data_type), shared['sorted'])
-    data_set = DataSet(data, data_type, shared=shared, valid_idxs=valid_idxs)
+    data_set = MyDataSet(data, data_type, shared=shared, valid_idxs=valid_idxs)
     return data_set
 
 
