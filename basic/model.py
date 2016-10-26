@@ -313,9 +313,11 @@ class Model(object):
             Note that this optimization results in variable GPU RAM usage (i.e. can cause OOM in the middle of training.)
             First test without len_opt and make sure no OOM, and use len_opt
             """
-            new_JX = max(len(sent) for para in batch.data['x'] for sent in para)
-            JX = max(min(JX, new_JX), 1)
-        # print(JX)
+            if sum(len(sent) for para in batch.data['x'] for sent in para) == 0:
+                new_JX = 1
+            else:
+                new_JX = max(len(sent) for para in batch.data['x'] for sent in para)
+            JX = min(JX, new_JX)
 
         x = np.zeros([N, M, JX], dtype='int32')
         cx = np.zeros([N, M, JX, W], dtype='int32')

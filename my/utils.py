@@ -129,17 +129,8 @@ def get_word_idx(context, wordss, idx):
 def process_tokens(temp_tokens):
     tokens = []
     for token in temp_tokens:
-        if token in ("``", "''"):
-            tokens.append('"')
-        else:
-            flag = False
-            # l = ("-", "\u2212", "\u2014", "\u2013", "/", "~", '"', "'", "\u201C", "\u2019", "\u201D", "\u2018", "\u00B0")
-            l = ("-", "\u2212", "\u2014", "\u2013")
-            for char in l:
-                if char in token:
-                    tokens.extend(re.split("({})".format(char), token))
-                    flag = True
-                    break
-            if not flag:
-                tokens.append(token)
+        flag = False
+        # l = ("-", "\u2212", "\u2014", "\u2013", "/", "~", '"', "'", "\u201C", "\u2019", "\u201D", "\u2018", "\u00B0")
+        l = ("-", "\u2212", "\u2014", "\u2013")
+        tokens.extend(re.split("([{}])".format("".join(l)), token))
     return tokens
