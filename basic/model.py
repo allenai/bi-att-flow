@@ -55,6 +55,7 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
             tensor_dict['a_u'] = a_u
 
         if config.bi:
+            """
             h_tiled_i = tf.tile(tf.expand_dims(h, 3), [1, 1, 1, JX, 1])
             u_a_tiled_i = tf.tile(tf.expand_dims(u_a, 3), [1, 1, 1, JX, 1])
             h_tiled_j = tf.tile(tf.expand_dims(h, 2), [1, 1, JX, 1, 1])
@@ -66,6 +67,11 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
             args.extend([h_tiled_i * h_tiled_j, h_tiled_i * u_a_tiled_i, h_tiled_j * u_a_tiled_j])
             h_logits = get_logits(args, None, True, wd=config.wd, mask=hh_mask, is_train=is_train, func='linear', scope='h_logits')
             h_a = softsel(h_tiled_j, h_logits)
+            """
+            h_logits = get_logits([h_aug, u_aug], None, True, wd=config.wd, mask=hu_mask,
+                                  is_train=is_train, func=config.logit_func, scope='h_logits')  # [N, M, JX, JQ]
+            h_a = softsel(h, tf.reduce_max(h_logits, 3))  # [N, M, d]
+            h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
         else:
             h_a = None
 
@@ -77,7 +83,7 @@ def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None
         u_a, h_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
         # p0 = tf.concat(3, [h , h_a, u_a, h * h_a, h * u_a])
         if config.bi:
-            p0 = tf.concat(3, [h, u_a, h_a, h * u_a, h * h_a, u_a * h_a])
+            p0 = tf.concat(3, [h, u_a, h * u_a, h * h_a])
         else:
             p0 = tf.concat(3, [h, u_a, h * u_a])
         return p0
@@ -174,12 +180,14 @@ class Model(object):
                 qq = tf.concat(2, [qq, Aq])  # [N, JQ, di]
 
         # highway network
+        """
         with tf.variable_scope("highway"):
             xx = highway_network(xx, config.highway_num_layers, True, wd=config.wd, is_train=self.is_train)
             tf.get_variable_scope().reuse_variables()
             qq = highway_network(qq, config.highway_num_layers, True, wd=config.wd, is_train=self.is_train)
-            self.tensor_dict['xx'] = xx
-            self.tensor_dict['qq'] = qq
+        self.tensor_dict['xx'] = xx
+        self.tensor_dict['qq'] = qq
+        """
 
         cell = BasicLSTMCell(d, state_is_tuple=True)
         d_cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
@@ -345,8 +353,10 @@ class Model(object):
         if supervised:
             y = np.zeros([N, M, JX], dtype='bool')
             y2 = np.zeros([N, M, JX], dtype='bool')
+            yy = np.zeros([N, M, JX], dtype='bool')
             feed_dict[self.y] = y
             feed_dict[self.y2] = y2
+            # feed_dict[self.yy] = yy
 
             for i, (xi, cxi, yi) in enumerate(zip(X, CX, batch.data['y'])):
                 start_idx, stop_idx = random.choice(yi)

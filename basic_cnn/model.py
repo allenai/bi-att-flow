@@ -80,7 +80,7 @@ class Model(object):
         self.q = tf.placeholder('int32', [N, JQ], name='q')
         self.cq = tf.placeholder('int32', [N, JQ, W], name='cq')
         self.q_mask = tf.placeholder('bool', [N, JQ], name='q_mask')
-        self.y = tf.placeholder('bool', [N], name='y')
+        self.y = tf.placeholder('bool', [N, M, JX], name='y')
         self.is_train = tf.placeholder('bool', [], name='is_train')
         self.new_emb_mat = tf.placeholder('float', [None, config.word_emb_size], name='new_emb_mat')
 
@@ -224,8 +224,7 @@ class Model(object):
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size
         JX = tf.shape(self.x)[2]
         loss_mask = tf.reduce_max(tf.cast(self.q_mask, 'float'), 1)
-        y_mask = self.x == self.y  # [N, M, JX]
-        losses = tf.log(tf.reduce_sum(self.yp * tf.cast(y_mask, 'float'), [1, 2]) + VERY_SMALL_NUMBER)
+        losses = -tf.log(tf.reduce_sum(self.yp * tf.cast(self.y, 'float'), [1, 2]) + VERY_SMALL_NUMBER)
         ce_loss = tf.reduce_mean(loss_mask * losses)
         tf.add_to_collection('losses', ce_loss)
 
@@ -268,10 +267,10 @@ class Model(object):
             Note that this optimization results in variable GPU RAM usage (i.e. can cause OOM in the middle of training.)
             First test without len_opt and make sure no OOM, and use len_opt
             """
-            if sum(len(sent) for para in batch.data['x'] for sent in para) == 0:
+            if sum(len(para) for para in batch.data['x']) == 0:
                 new_JX = 1
             else:
-                new_JX = max(len(sent) for para in batch.data['x'] for sent in para)
+                new_JX = max(len(para) for para in batch.data['x'])
             JX = min(JX, new_JX)
         # print(JX)
 
@@ -281,7 +280,6 @@ class Model(object):
         q = np.zeros([N, JQ], dtype='int32')
         cq = np.zeros([N, JQ, W], dtype='int32')
         q_mask = np.zeros([N, JQ], dtype='bool')
-
 
         feed_dict[self.x] = x
         feed_dict[self.x_mask] = x_mask
@@ -297,6 +295,8 @@ class Model(object):
         CX = batch.data['cx']
 
         def _get_word(word):
+            if word.startswith("@"):
+                return 2
             d = batch.shared['word2idx']
             for each in (word, word.lower(), word.capitalize(), word.upper()):
                 if each in d:
@@ -314,26 +314,33 @@ class Model(object):
                 return d[char]
             return 1
 
-
         if supervised:
-            y = np.zeros([N], dtype='int32')
+            y = np.zeros([N, M, JX], dtype='int32')
             feed_dict[self.y] = y
 
-            for i, yi in enumerate(batch.data['y']):
-                y[i] = _get_word(yi)
+            for i, (xi, yi) in enumerate(zip(batch.data['x'], batch.data['y'])):
+                count = 0
+                for j, xij in enumerate(xi):
+                    for k, xijk in enumerate(xij):
+                        if xijk == yi:
+                            y[i, j, k] = True
+                            count += 1
+                assert count > 0
 
         for i, xi in enumerate(X):
-            for k, xik in enumerate(xi):
-                each = _get_word(xik)
-                x[i, 0, k] = each
-                x_mask[i, 0, k] = True
+            for j, xij in enumerate(xi):
+                for k, xijk in enumerate(xij):
+                    each = _get_word(xijk)
+                    x[i, j, k] = each
+                    x_mask[i, j, k] = True
 
         for i, cxi in enumerate(CX):
-            for k, cxijk in enumerate(cxi):
-                for l, cxijkl in enumerate(cxijk):
-                    cx[i, 0, k, l] = _get_char(cxijkl)
-                    if l + 1 == config.max_word_size:
-                        break
+            for j, cxij in enumerate(cxi):
+                for k, cxijk in enumerate(cxij):
+                    for l, cxijkl in enumerate(cxijk):
+                        cx[i, j, k, l] = _get_char(cxijkl)
+                        if l + 1 == config.max_word_size:
+                            break
 
         for i, qi in enumerate(batch.data['q']):
             for j, qij in enumerate(qi):

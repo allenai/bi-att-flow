@@ -7,6 +7,7 @@ from collections import defaultdict
 
 import numpy as np
 
+from cnn_dm.prepro import para2sents
 from my.tensorflow import grouper
 from my.utils import index
 
@@ -55,11 +56,11 @@ class MyData(Data):
             _ = fh.readline()
             cands = list(line.strip() for line in fh)
             cand_ents = list(cand.split(":")[0] for cand in cands)
-            words = para.split(" ")
+            wordss = para2sents(para)
             ques_words = ques.split(" ")
 
-            x = words
-            cx = [list(word) for word in words]
+            x = wordss
+            cx = [[list(word) for word in words] for words in wordss]
             q = ques_words
             cq = [list(word) for word in ques_words]
             y = answer
@@ -86,7 +87,7 @@ class DataSet(object):
         self.shared = shared
         total_num_examples = self.get_data_size()
         self.valid_idxs = range(total_num_examples) if valid_idxs is None else valid_idxs
-        self.num_examples = len(self.valid_idxs)
+        self.num_examples = total_num_examples
 
     def _sort_key(self, idx):
         rx = self.data['*x'][idx]
@@ -195,6 +196,10 @@ class DataSet(object):
 
 
 class MyDataSet(DataSet):
+    def __init__(self, data, data_type, shared=None, valid_idxs=None):
+        super(MyDataSet, self).__init__(data, data_type, shared=shared, valid_idxs=valid_idxs)
+        shared['max_num_sents'] = len(self.get_one(self.num_examples-1)['x'])
+
     def _sort_key(self, idx):
         return idx
 
@@ -204,11 +209,12 @@ def read_data(config, data_type, ref, data_filter=None):
     with open(shared_path, 'r') as fh:
         shared = json.load(fh)
 
-    num_examples = shared['num_examples']
-    if data_filter is None:
-        valid_idxs = range(num_examples)
-    else:
-        valid_idxs = range(num_examples)
+    paths = shared['sorted']
+    if config.filter_ratio < 1.0:
+        stop = int(round(len(paths) * config.filter_ratio))
+        paths = paths[:stop]
+    num_examples = len(paths)
+    valid_idxs = range(num_examples)
 
     print("Loaded {}/{} examples from {}".format(len(valid_idxs), num_examples, data_type))
 
@@ -218,13 +224,13 @@ def read_data(config, data_type, ref, data_filter=None):
         word_counter = shared['lower_word_counter'] if config.lower_word else shared['word_counter']
         char_counter = shared['char_counter']
         if config.finetune:
-            shared['word2idx'] = {word: idx + 2 for idx, word in
+            shared['word2idx'] = {word: idx + 3 for idx, word in
                                   enumerate(word for word, count in word_counter.items()
                                             if count > config.word_count_th or (config.known_if_glove and word in word2vec_dict))}
         else:
             assert config.known_if_glove
             assert config.use_glove_for_unk
-            shared['word2idx'] = {word: idx + 2 for idx, word in
+            shared['word2idx'] = {word: idx + 3 for idx, word in
                                   enumerate(word for word, count in word_counter.items()
                                             if count > config.word_count_th and word not in word2vec_dict)}
         shared['char2idx'] = {char: idx + 2 for idx, char in
@@ -232,10 +238,13 @@ def read_data(config, data_type, ref, data_filter=None):
                                         if count > config.char_count_th)}
         NULL = "-NULL-"
         UNK = "-UNK-"
+        ENT = "-ENT-"
         shared['word2idx'][NULL] = 0
         shared['word2idx'][UNK] = 1
+        shared['word2idx'][ENT] = 2
         shared['char2idx'][NULL] = 0
         shared['char2idx'][UNK] = 1
+
         json.dump({'word2idx': shared['word2idx'], 'char2idx': shared['char2idx']}, open(shared_path, 'w'))
     else:
         new_shared = json.load(open(shared_path, 'r'))
@@ -255,7 +264,7 @@ def read_data(config, data_type, ref, data_filter=None):
         new_emb_mat = np.array([idx2vec_dict[idx] for idx in range(len(idx2vec_dict))], dtype='float32')
         shared['new_emb_mat'] = new_emb_mat
 
-    data = MyData(os.path.join(config.root_dir, data_type), shared['sorted'])
+    data = MyData(os.path.join(config.root_dir, data_type), paths)
     data_set = MyDataSet(data, data_type, shared=shared, valid_idxs=valid_idxs)
     return data_set
 
@@ -265,7 +274,7 @@ def get_cnn_data_filter(config):
 
 
 def update_config(config, data_sets):
-    config.max_num_sents = 1
+    config.max_num_sents = 0
     config.max_sent_size = 0
     config.max_ques_size = 0
     config.max_word_size = 0
@@ -274,6 +283,7 @@ def update_config(config, data_sets):
         config.max_sent_size = max(config.max_sent_size, shared['max_sent_size'])
         config.max_ques_size = max(config.max_ques_size, shared['max_ques_size'])
         config.max_word_size = max(config.max_word_size, shared['max_word_size'])
+        config.max_num_sents = max(config.max_num_sents, shared['max_num_sents'])
 
     config.max_word_size = min(config.max_word_size, config.word_size_th)
 

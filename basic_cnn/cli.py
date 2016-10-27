@@ -46,7 +46,7 @@ flags.DEFINE_bool("single", False, "supervise only the answer sentence? [False]"
 flags.DEFINE_integer("word_count_th", 10, "word count th [100]")
 flags.DEFINE_integer("char_count_th", 50, "char count th [500]")
 flags.DEFINE_integer("sent_size_th", 60, "sent size th [64]")
-flags.DEFINE_integer("num_sents_th", 8, "num sents th [8]")
+flags.DEFINE_integer("num_sents_th", 200, "num sents th [8]")
 flags.DEFINE_integer("ques_size_th", 30, "ques size th [32]")
 flags.DEFINE_integer("word_size_th", 16, "word size th [16]")
 flags.DEFINE_integer("para_size_th", 256, "para size th [256]")
@@ -87,6 +87,7 @@ flags.DEFINE_string("answer_func", "linear", "answer logit func [linear]")
 flags.DEFINE_bool("cluster", False, "Cluster data for faster training [False]")
 flags.DEFINE_bool("len_opt", False, "Length optimization? [False]")
 flags.DEFINE_string("sh_logit_func", "tri_linear", "sh logit func [tri_linear]")
+flags.DEFINE_float("filter_ratio", 1.0, "filter ratio [1.0]")
 
 
 def main(_):

@@ -36,6 +36,8 @@ def get_args():
     parser.add_argument("--glove_corpus", default='6B')
     parser.add_argument("--glove_vec_size", default=100, type=int)
     parser.add_argument("--debug", default=False, type=bool_)
+    parser.add_argument("--num_sents_th", default=200, type=int)
+    parser.add_argument("--ques_size_th", default=30, type=int)
     # TODO : put more args here
     return parser.parse_args()
 
@@ -44,6 +46,24 @@ def prepro(args):
     prepro_each(args, 'train')
     prepro_each(args, 'dev')
     prepro_each(args, 'test')
+
+
+def para2sents(para):
+    """
+    Turn para into double array of words (wordss)
+    Where each sentence is up to 5 word neighbors of each entity
+    :param para:
+    :return:
+    """
+    words = para.split(" ")
+    sents = []
+    for i, word in enumerate(words):
+        if word.startswith("@"):
+            start = max(i - 5, 0)
+            stop = min(i + 6, len(words))
+            sent = words[start:stop]
+            sents.append(sent)
+    return sents
 
 
 def get_word2vec(args, word_counter):
@@ -78,14 +98,15 @@ def prepro_each(args, mode):
     max_sent_size = 0
     max_word_size = 0
     max_ques_size = 0
+    max_num_sents = 0
 
     file_names = list(os.listdir(source_dir))
     if args.debug:
         file_names = file_names[:1000]
     lens = []
 
-    num_examples = len(file_names)
-    for file_name in tqdm(file_names, total=num_examples):
+    out_file_names = []
+    for file_name in tqdm(file_names, total=len(file_names)):
         if file_name.endswith(".question"):
             with open(os.path.join(source_dir, file_name), 'r') as fh:
                 url = fh.readline().strip()
@@ -98,12 +119,17 @@ def prepro_each(args, mode):
                 _ = fh.readline()
                 cands = list(line.strip() for line in fh)
                 cand_ents = list(cand.split(":")[0] for cand in cands)
-                words = para.split(" ")
+                sents = para2sents(para)
                 ques_words = ques.split(" ")
 
-                max_sent_size = max(len(words), max_sent_size)
+                # Filtering
+                if len(sents) > args.num_sents_th or len(ques_words) > args.ques_size_th:
+                    continue
+
+                max_sent_size = max(max(map(len, sents)), max_sent_size)
                 max_ques_size = max(len(ques_words), max_ques_size)
-                max_word_size = max(max(len(word) for word in words), max_word_size)
+                max_word_size = max(max(len(word) for sent in sents for word in sent), max_word_size)
+                max_num_sents = max(len(sents), max_num_sents)
 
                 for word in ques_words:
                     if word.startswith("@"):
@@ -114,30 +140,37 @@ def prepro_each(args, mode):
                         lower_word_counter[word.lower()] += 1
                         for c in word:
                             char_counter[c] += 1
+                for sent in sents:
+                    for word in sent:
+                        if word.startswith("@"):
+                            ent_counter[word] += 1
+                            word_counter[word] += 1
+                        else:
+                            word_counter[word] += 1
+                            lower_word_counter[word.lower()] += 1
+                            for c in word:
+                                char_counter[c] += 1
 
-                for word in words:
-                    if word.startswith("@"):
-                        ent_counter[word] += 1
-                        word_counter[word] += 1
-                    else:
-                        word_counter[word] += 1
-                        lower_word_counter[word.lower()] += 1
-                        for c in word:
-                            char_counter[c] += 1
+                out_file_names.append(file_name)
+                lens.append(len(sents))
+    num_examples = len(out_file_names)
 
-                lens.append(len(words))
-
-    sorted_file_names, _ = zip(*sorted(zip(file_names, lens), key=lambda each: each[1]))
+    assert len(out_file_names) == len(lens)
+    sorted_file_names, lens = zip(*sorted(zip(out_file_names, lens), key=lambda each: each[1]))
+    assert lens[-1] == max_num_sents
 
     word2vec_dict = get_word2vec(args, word_counter)
     lower_word2vec_dit = get_word2vec(args, lower_word_counter)
 
     shared = {'word_counter': word_counter, 'ent_counter': ent_counter, 'char_counter': char_counter,
               'lower_word_counter': lower_word_counter,
-              'max_num_sents': 1, 'max_sent_size': max_sent_size, 'max_word_size': max_word_size,
+              'max_num_sents': max_num_sents, 'max_sent_size': max_sent_size, 'max_word_size': max_word_size,
               'max_ques_size': max_ques_size,
               'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dit, 'sorted': sorted_file_names,
               'num_examples': num_examples}
+
+    print("max num sents: {}".format(max_num_sents))
+    print("max ques size: {}".format(max_ques_size))
 
     if not os.path.exists(args.target_dir):
         os.makedirs(args.target_dir)

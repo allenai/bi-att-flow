@@ -173,14 +173,16 @@ class CNNAccuracyEvaluator(AccuracyEvaluator):
     @staticmethod
     def compare(data, ypi):
         # ypi: [N, M, JX] numbers
-        yi = data['y']  # entity
-        xi = data['x']  # [N, M, JX] words
+        yi = data['y'][0]  # entity
+        xi = data['x'][0]  # [N, M, JX] words
         dist = defaultdict(int)
         for ypij, xij in zip(ypi, xi):
             for ypijk, xijk in zip(ypij, xij):
                 if xijk.startswith("@"):
                     dist[xijk] += ypijk
         pred = max(dist.items(), key=lambda item: item[1])[0]
+        assert pred.startswith("@")
+        assert yi.startswith("@")
         return pred == yi
 
 
