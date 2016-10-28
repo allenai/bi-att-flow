@@ -36,6 +36,8 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
     with tf.variable_scope(scope or "bi_attention"):
         N, M, JX, JQ, d = config.batch_size, config.max_num_sents, config.max_sent_size, config.max_ques_size, config.hidden_size
         JX = tf.shape(h)[2]
+        M = tf.shape(h)[1]
+        JQ = tf.shape(u)[1]
         h_aug = tf.tile(tf.expand_dims(h, 3), [1, 1, 1, JQ, 1])
         u_aug = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1, 1])
         if h_mask is None:
@@ -100,14 +102,14 @@ class Model(object):
         N, M, JX, JQ, VW, VC, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.max_word_size
-        self.x = tf.placeholder('int32', [N, M, None], name='x')
-        self.cx = tf.placeholder('int32', [N, M, None, W], name='cx')
-        self.x_mask = tf.placeholder('bool', [N, M, None], name='x_mask')
-        self.q = tf.placeholder('int32', [N, JQ], name='q')
-        self.cq = tf.placeholder('int32', [N, JQ, W], name='cq')
-        self.q_mask = tf.placeholder('bool', [N, JQ], name='q_mask')
-        self.y = tf.placeholder('bool', [N, M, None], name='y')
-        self.y2 = tf.placeholder('bool', [N, M, None], name='y2')
+        self.x = tf.placeholder('int32', [N, None, None], name='x')
+        self.cx = tf.placeholder('int32', [N, None, None, W], name='cx')
+        self.x_mask = tf.placeholder('bool', [N, None, None], name='x_mask')
+        self.q = tf.placeholder('int32', [N, None], name='q')
+        self.cq = tf.placeholder('int32', [N, None, W], name='cq')
+        self.q_mask = tf.placeholder('bool', [N, None], name='q_mask')
+        self.y = tf.placeholder('bool', [N, None, None], name='y')
+        self.y2 = tf.placeholder('bool', [N, None, None], name='y2')
         self.is_train = tf.placeholder('bool', [], name='is_train')
         self.new_emb_mat = tf.placeholder('float', [None, config.word_emb_size], name='new_emb_mat')
 
@@ -137,6 +139,8 @@ class Model(object):
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, \
             config.max_word_size
         JX = tf.shape(self.x)[2]
+        JQ = tf.shape(self.q)[1]
+        M = tf.shape(self.x)[1]
         dc, dw, dco = config.char_emb_size, config.word_emb_size, config.char_out_size
 
         with tf.variable_scope("emb"):
@@ -239,30 +243,70 @@ class Model(object):
             else:
                 raise Exception()
             """
-            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, tf.concat(3, [g1, p0]), x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
-            g2 = tf.concat(3, [fw_g2, bw_g2])
-            # logits2 = u_logits(config, self.is_train, tf.concat(3, [g1, a1i]), u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits2")
+            if config.late:
+                (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, tf.concat(3, [g1, p0]), x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
+                g2 = tf.concat(3, [fw_g2, bw_g2])
+                # logits2 = u_logits(config, self.is_train, tf.concat(3, [g1, a1i]), u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits2")
 
-            logits = get_logits([g1, g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
+                logits = get_logits([g1, g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
 
-            if config.feed_gt:
-                logy = tf.log(tf.cast(self.y, 'float') + VERY_SMALL_NUMBER)
-                logits = tf.cond(self.is_train, lambda: logy, lambda: logits)
-            if config.feed_hard:
-                hard_yp = tf.argmax(tf.reshape(logits, [N, M*JX]), 1)
-                hard_logits = tf.reshape(tf.one_hot(hard_yp, M*JX), [N, M, JX])  # [N, M, JX]
-                logits = tf.cond(self.is_train, lambda: logits, lambda: hard_logits)
+                if config.feed_gt:
+                    logy = tf.log(tf.cast(self.y, 'float') + VERY_SMALL_NUMBER)
+                    logits = tf.cond(self.is_train, lambda: logy, lambda: logits)
+                if config.feed_hard:
+                    hard_yp = tf.argmax(tf.reshape(logits, [N, M*JX]), 1)
+                    hard_logits = tf.reshape(tf.one_hot(hard_yp, M*JX), [N, M, JX])  # [N, M, JX]
+                    logits = tf.cond(self.is_train, lambda: logits, lambda: hard_logits)
 
-            flat_logits = tf.reshape(logits, [-1, M * JX])
-            flat_yp = tf.nn.softmax(flat_logits)  # [-1, M*JX]
-            yp = tf.reshape(flat_yp, [-1, M, JX])
+                flat_logits = tf.reshape(logits, [-1, M * JX])
+                flat_yp = tf.nn.softmax(flat_logits)  # [-1, M*JX]
+                yp = tf.reshape(flat_yp, [-1, M, JX])
 
-            logits2 = get_logits([g1, g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask,
-                                 is_train=self.is_train, func=config.answer_func, scope='logits2')
+                logits2 = get_logits([g1, g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask,
+                                     is_train=self.is_train, func=config.answer_func, scope='logits2')
 
-            flat_logits2 = tf.reshape(logits2, [-1, M * JX])
-            flat_yp2 = tf.nn.softmax(flat_logits2)
-            yp2 = tf.reshape(flat_yp2, [-1, M, JX])
+                flat_logits2 = tf.reshape(logits2, [-1, M * JX])
+                flat_yp2 = tf.nn.softmax(flat_logits2)
+                yp2 = tf.reshape(flat_yp2, [-1, M, JX])
+            else:
+                logits = get_logits([g1, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
+                                    mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
+                a1i = softsel(tf.reshape(g1, [N, M * JX, 2 * d]), tf.reshape(logits, [N, M * JX]))
+
+                if config.feed_gt:
+                    logy = tf.log(tf.cast(self.y, 'float') + VERY_SMALL_NUMBER)
+                    logits = tf.cond(self.is_train, lambda: logy, lambda: logits)
+                if config.feed_hard:
+                    hard_yp = tf.argmax(tf.reshape(logits, [N, M * JX]), 1)
+                    hard_logits = tf.reshape(tf.one_hot(hard_yp, M * JX), [N, M, JX])  # [N, M, JX]
+                    logits = tf.cond(self.is_train, lambda: logits, lambda: hard_logits)
+
+                flat_logits = tf.reshape(logits, [-1, M * JX])
+                flat_yp = tf.nn.softmax(flat_logits)  # [-1, M*JX]
+                yp = tf.reshape(flat_yp, [-1, M, JX])
+
+                a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
+                yp_aug = tf.expand_dims(yp, -1)
+                g1yp = g1 * yp_aug
+                if config.prev_mode == 'a':
+                    prev = a1i
+                elif config.prev_mode == 'y':
+                    prev = yp_aug
+                elif config.prev_mode == 'gy':
+                    prev = g1yp
+                else:
+                    raise Exception()
+                (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, tf.concat(3, [p0, g1, prev, g1 * prev]),
+                                                              x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
+                g2 = tf.concat(3, [fw_g2, bw_g2])
+                # logits2 = u_logits(config, self.is_train, tf.concat(3, [g1, a1i]), u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits2")
+                logits2 = get_logits([g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
+                                     mask=self.x_mask,
+                                     is_train=self.is_train, func=config.answer_func, scope='logits2')
+
+                flat_logits2 = tf.reshape(logits2, [-1, M * JX])
+                flat_yp2 = tf.nn.softmax(flat_logits2)
+                yp2 = tf.reshape(flat_yp2, [-1, M, JX])
 
             self.tensor_dict['g1'] = g1
             self.tensor_dict['g2'] = g2
@@ -278,6 +322,8 @@ class Model(object):
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size
         JX = tf.shape(self.x)[2]
+        M = tf.shape(self.x)[1]
+        JQ = tf.shape(self.q)[1]
         loss_mask = tf.reduce_max(tf.cast(self.q_mask, 'float'), 1)
         losses = tf.nn.softmax_cross_entropy_with_logits(
             self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float'))
@@ -331,6 +377,19 @@ class Model(object):
             else:
                 new_JX = max(len(sent) for para in batch.data['x'] for sent in para)
             JX = min(JX, new_JX)
+
+            if sum(len(ques) for ques in batch.data['q']) == 0:
+                new_JQ = 1
+            else:
+                new_JQ = max(len(ques) for ques in batch.data['q'])
+            JQ = min(JQ, new_JQ)
+
+        if config.cpu_opt:
+            if sum(len(para) for para in batch.data['x']) == 0:
+                new_M = 1
+            else:
+                new_M = max(len(para) for para in batch.data['x'])
+            M = min(M, new_M)
 
         x = np.zeros([N, M, JX], dtype='int32')
         cx = np.zeros([N, M, JX, W], dtype='int32')
