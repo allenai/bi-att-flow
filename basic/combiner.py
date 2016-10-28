@@ -16,7 +16,7 @@ for key in others[0].keys():
         continue
     probs = [other['scores'][key] for other in others]
     vals = [other[key] for other in others]
-    shortest_val = max(zip(vals, probs), key=lambda pair: pair[1])[0]
-    c[key] = shortest_val
+    largest_val = max(zip(vals, probs), key=lambda pair: pair[1])[0]
+    c[key] = largest_val
 
 json.dump(c, open(third_path, 'w'))

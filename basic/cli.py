@@ -87,6 +87,7 @@ flags.DEFINE_bool("cluster", False, "Cluster data for faster training [False]")
 flags.DEFINE_bool("len_opt", False, "Length optimization? [False]")
 flags.DEFINE_string("sh_logit_func", "tri_linear", "sh logit func [tri_linear]")
 flags.DEFINE_bool("bi", False, "bi direcitonal attention? [False]")
+flags.DEFINE_bool("highway", True, "highway? [True]")
 
 
 def main(_):

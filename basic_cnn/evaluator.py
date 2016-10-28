@@ -82,7 +82,8 @@ class AccuracyEvaluation(LabeledEvaluation):
         self.summaries = [loss_summary, acc_summary]
 
     def __repr__(self):
-        return "{} step {}: accuracy={}, loss={}".format(self.data_type, self.global_step, self.acc, self.loss)
+        return "{} step {}: accuracy={}={}/{}, loss={}".format(self.data_type, self.global_step, self.acc,
+                                                               sum(self.correct), self.num_examples, self.loss)
 
     def __add__(self, other):
         if other == 0:

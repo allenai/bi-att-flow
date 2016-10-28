@@ -180,10 +180,11 @@ class Model(object):
                 qq = tf.concat(2, [qq, Aq])  # [N, JQ, di]
 
         # highway network
-        with tf.variable_scope("highway"):
-            xx = highway_network(xx, config.highway_num_layers, True, wd=config.wd, is_train=self.is_train)
-            tf.get_variable_scope().reuse_variables()
-            qq = highway_network(qq, config.highway_num_layers, True, wd=config.wd, is_train=self.is_train)
+        if config.highway:
+            with tf.variable_scope("highway"):
+                xx = highway_network(xx, config.highway_num_layers, True, wd=config.wd, is_train=self.is_train)
+                tf.get_variable_scope().reuse_variables()
+                qq = highway_network(qq, config.highway_num_layers, True, wd=config.wd, is_train=self.is_train)
         self.tensor_dict['xx'] = xx
         self.tensor_dict['qq'] = qq
 
@@ -224,8 +225,25 @@ class Model(object):
             g1 = tf.concat(3, [fw_g1, bw_g1])
             # logits = u_logits(config, self.is_train, g1, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits")
             # [N, M, JX]
-            logits = get_logits([g1, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
+            """
             a1i = softsel(tf.reshape(g1, [N, M*JX, 2*d]), tf.reshape(logits, [N, M*JX]))
+            a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
+            yp_aug = tf.expand_dims(yp, -1)
+            g1yp = g1 * yp_aug
+            if config.prev_mode == 'a':
+                prev = a1i
+            elif config.prev_mode == 'y':
+                prev = yp_aug
+            elif config.prev_mode == 'gy':
+                prev = g1yp
+            else:
+                raise Exception()
+            """
+            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, tf.concat(3, [g1, p0]), x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
+            g2 = tf.concat(3, [fw_g2, bw_g2])
+            # logits2 = u_logits(config, self.is_train, tf.concat(3, [g1, a1i]), u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits2")
+
+            logits = get_logits([g1, g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
 
             if config.feed_gt:
                 logy = tf.log(tf.cast(self.y, 'float') + VERY_SMALL_NUMBER)
@@ -239,21 +257,7 @@ class Model(object):
             flat_yp = tf.nn.softmax(flat_logits)  # [-1, M*JX]
             yp = tf.reshape(flat_yp, [-1, M, JX])
 
-            a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
-            yp_aug = tf.expand_dims(yp, -1)
-            g1yp = g1 * yp_aug
-            if config.prev_mode == 'a':
-                prev = a1i
-            elif config.prev_mode == 'y':
-                prev = yp_aug
-            elif config.prev_mode == 'gy':
-                prev = g1yp
-            else:
-                raise Exception()
-            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, tf.concat(3, [p0, g1, prev, g1 * prev]), x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
-            g2 = tf.concat(3, [fw_g2, bw_g2])
-            # logits2 = u_logits(config, self.is_train, tf.concat(3, [g1, a1i]), u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits2")
-            logits2 = get_logits([g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask,
+            logits2 = get_logits([g1, g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask,
                                  is_train=self.is_train, func=config.answer_func, scope='logits2')
 
             flat_logits2 = tf.reshape(logits2, [-1, M * JX])
