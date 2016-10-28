@@ -36,7 +36,7 @@ def _config_draft(config):
         config.eval_period = 1
         config.log_period = 1
         config.save_period = 1
-        config.eval_num_batches = 1
+        config.eval_num_batches = 2
 
 
 def _train(config):

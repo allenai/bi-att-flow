@@ -190,6 +190,8 @@ class ForwardEvaluation(Evaluation):
         new_yp2 = self.yp2 + other.yp2
         new_loss = (self.loss * self.num_examples + other.loss * other.num_examples) / len(new_yp)
         new_id2answer_dict = dict(list(self.id2answer_dict.items()) + list(other.id2answer_dict.items()))
+        new_id2score_dict = dict(list(self.id2answer_dict['scores'].items()) + list(other.id2answer_dict['scores'].items()))
+        new_id2answer_dict['scores'] = new_id2score_dict
         if self.tensor_dict is not None:
             new_tensor_dict = {key: np.concatenate((val, other.tensor_dict[key]), axis=0) for key, val in self.tensor_dict.items()}
         return ForwardEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_loss, new_id2answer_dict, tensor_dict=new_tensor_dict)
@@ -224,6 +226,8 @@ class F1Evaluation(AccuracyEvaluation):
         new_f1s = self.f1s + other.f1s
         new_loss = (self.loss * self.num_examples + other.loss * other.num_examples) / len(new_correct)
         new_id2answer_dict = dict(list(self.id2answer_dict.items()) + list(other.id2answer_dict.items()))
+        new_id2score_dict = dict(list(self.id2answer_dict['scores'].items()) + list(other.id2answer_dict['scores'].items()))
+        new_id2answer_dict['scores'] = new_id2score_dict
         return F1Evaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_y, new_correct, new_loss, new_f1s, new_id2answer_dict)
 
     def __repr__(self):
@@ -266,7 +270,7 @@ class F1Evaluator(LabeledEvaluator):
             y = new_y
 
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
-        spans = [get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)]
+        spans, scores = zip(*[get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)])
 
         def _get(xi, span):
             if len(xi) <= span[0][0]:
@@ -277,6 +281,8 @@ class F1Evaluator(LabeledEvaluator):
 
         id2answer_dict = {id_: " ".join(_get(xi, span))
                           for id_, xi, span in zip(data_set.data['ids'], data_set.data['x'], spans)}
+        id2score_dict = {id_: score for id_, score in zip(data_set.data['ids'], scores)}
+        id2answer_dict['scores'] = id2score_dict
         correct = [self.__class__.compare2(yi, span) for yi, span in zip(y, spans)]
         f1s = [self.__class__.span_f1(yi, span) for yi, span in zip(y, spans)]
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
@@ -355,7 +361,7 @@ class ForwardEvaluator(Evaluator):
         global_step, yp, yp2, loss, vals = sess.run([self.global_step, self.yp, self.yp2, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
 
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
-        spans = [get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)]
+        spans, scores = zip(*[get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)])
 
         def _get(xi, span):
             if len(xi) <= span[0][0]:
@@ -366,6 +372,8 @@ class ForwardEvaluator(Evaluator):
 
         id2answer_dict = {id_: " ".join(_get(xi, span))
                           for id_, xi, span in zip(data_set.data['ids'], data_set.data['x'], spans)}
+        id2score_dict = {id_: score for id_, score in zip(data_set.data['ids'], scores)}
+        id2answer_dict['scores'] = id2score_dict
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
         e = ForwardEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), float(loss), id2answer_dict, tensor_dict=tensor_dict)
         return e
@@ -400,7 +408,6 @@ class ForwardEvaluator(Evaluator):
 
 
 def get_best_span(ypi, yp2i):
-
     max_val = 0
     best_word_span = (0, 1)
     best_sent_idx = 0
@@ -417,7 +424,7 @@ def get_best_span(ypi, yp2i):
                 best_word_span = (argmax_j1, j)
                 best_sent_idx = f
                 max_val = val1 * val2
-    return (best_sent_idx, best_word_span[0]), (best_sent_idx, best_word_span[1] + 1)
+    return ((best_sent_idx, best_word_span[0]), (best_sent_idx, best_word_span[1] + 1)), float(max_val)
 
 
 def get_span_score_pairs(ypi, yp2i):
