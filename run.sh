@@ -15,7 +15,7 @@ out_path3="$inter_dir/64.json"
 load_path4="$root_dir/65/basic-16000"
 shared_path4="$root_dir/65/shared.json"
 out_path4="$inter_dir/65.json"
-debug=True
+debug=False
 python3 -m squad.prepro --mode single --single_path $source_path --debug $debug --target_dir $inter_dir --glove_dir .
 python3 -m basic.cli --data_dir $inter_dir --nodump_eval --answer_path $out_path --load_path $load_path --shared_path $shared_path --draft $debug --eval_num_batches 0 --mode forward --batch_size 1 --bi --len_opt --cluster --cpu_opt --nolate &
 python3 -m basic.cli --data_dir $inter_dir --nodump_eval --answer_path $out_path2 --load_path $load_path2 --shared_path $shared_path2 --draft $debug --eval_num_batches 0 --mode forward --batch_size 1 --bi --len_opt --cluster --cpu_opt --nolate &
