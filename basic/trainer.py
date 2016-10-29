@@ -47,7 +47,7 @@ class MultiGPUTrainer(object):
         losses = []
         grads_list = []
         for gpu_idx, model in enumerate(models):
-            with tf.name_scope("grads_{}".format(gpu_idx)), tf.device("/gpu:{}".format(gpu_idx)):
+            with tf.name_scope("grads_{}".format(gpu_idx)), tf.device("/{}:{}".format(config.device_type, gpu_idx)):
                 loss = model.get_loss()
                 grads = self.opt.compute_gradients(loss, var_list=self.var_list)
                 losses.append(loss)

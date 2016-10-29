@@ -499,7 +499,7 @@ class Model(object):
 def get_multi_gpu_models(config):
     models = []
     for gpu_idx in range(config.num_gpus):
-        with tf.name_scope("model_{}".format(gpu_idx)) as scope, tf.device("/gpu:{}".format(gpu_idx)):
+        with tf.name_scope("model_{}".format(gpu_idx)) as scope, tf.device("/{}:{}".format(config.device_type, gpu_idx)):
             model = Model(config, scope)
             tf.get_variable_scope().reuse_variables()
             models.append(model)
