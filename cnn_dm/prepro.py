@@ -38,6 +38,7 @@ def get_args():
     parser.add_argument("--debug", default=False, type=bool_)
     parser.add_argument("--num_sents_th", default=200, type=int)
     parser.add_argument("--ques_size_th", default=30, type=int)
+    parser.add_argument("--width", default=5, type=int)
     # TODO : put more args here
     return parser.parse_args()
 
@@ -48,7 +49,7 @@ def prepro(args):
     prepro_each(args, 'test')
 
 
-def para2sents(para):
+def para2sents(para, width):
     """
     Turn para into double array of words (wordss)
     Where each sentence is up to 5 word neighbors of each entity
@@ -59,8 +60,8 @@ def para2sents(para):
     sents = []
     for i, word in enumerate(words):
         if word.startswith("@"):
-            start = max(i - 5, 0)
-            stop = min(i + 6, len(words))
+            start = max(i - width, 0)
+            stop = min(i + width + 1, len(words))
             sent = words[start:stop]
             sents.append(sent)
     return sents
@@ -119,7 +120,7 @@ def prepro_each(args, mode):
                 _ = fh.readline()
                 cands = list(line.strip() for line in fh)
                 cand_ents = list(cand.split(":")[0] for cand in cands)
-                sents = para2sents(para)
+                sents = para2sents(para, args.width)
                 ques_words = ques.split(" ")
 
                 # Filtering

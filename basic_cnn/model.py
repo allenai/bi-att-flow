@@ -53,13 +53,21 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
             a_u = tf.nn.softmax(u_logits)  # [N, M, JX, JQ]
             # tensor_dict['a_h'] = a_h
             tensor_dict['a_u'] = a_u
-        return u_a
+        if config.bi:
+            h_a = softsel(h, tf.reduce_max(u_logits, 3))  # [N, M, d]
+            h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
+        else:
+            h_a = None
+        return u_a, h_a
 
 
 def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
     with tf.variable_scope(scope or "attention_layer"):
-        u_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
-        p0 = tf.concat(3, [h , u_a, h * u_a])
+        u_a, h_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
+        if config.bi:
+            p0 = tf.concat(3, [h , u_a, h * u_a, h * h_a])
+        else:
+            p0 = tf.concat(3, [h , u_a, h * u_a])
         return p0
 
 

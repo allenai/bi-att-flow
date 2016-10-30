@@ -23,7 +23,7 @@ def main(config):
     with tf.device(config.device):
         if config.mode == 'train':
             _train(config)
-        elif config.mode == 'test':
+        elif config.mode == 'test' or config.mode == 'dev':
             _test(config)
         elif config.mode == 'forward':
             _forward(config)
@@ -114,7 +114,7 @@ def _train(config):
 
 def _test(config):
     assert config.load
-    test_data = read_data(config, 'test', True)
+    test_data = read_data(config, config.mode, True)
     update_config(config, [test_data])
 
     _config_draft(config)

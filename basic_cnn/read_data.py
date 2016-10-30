@@ -39,9 +39,10 @@ class Data(object):
         raise NotImplementedError()
 
 class MyData(Data):
-    def __init__(self, root_dir, file_names):
+    def __init__(self, config, root_dir, file_names):
         self.root_dir = root_dir
         self.file_names = file_names
+        self.config = config
 
     def get_one(self, idx):
         file_name = self.file_names[idx]
@@ -56,7 +57,7 @@ class MyData(Data):
             _ = fh.readline()
             cands = list(line.strip() for line in fh)
             cand_ents = list(cand.split(":")[0] for cand in cands)
-            wordss = para2sents(para)
+            wordss = para2sents(para, self.config.width)
             ques_words = ques.split(" ")
 
             x = wordss
@@ -70,11 +71,11 @@ class MyData(Data):
             return data
 
     def get_empty(self):
-        return MyData(self.root_dir, [])
+        return MyData(self.config, self.root_dir, [])
 
     def __add__(self, other):
         file_names = self.file_names + other.file_names
-        return MyData(self.root_dir, file_names)
+        return MyData(self.config, self.root_dir, file_names)
 
     def get_size(self):
         return len(self.file_names)
@@ -264,7 +265,7 @@ def read_data(config, data_type, ref, data_filter=None):
         new_emb_mat = np.array([idx2vec_dict[idx] for idx in range(len(idx2vec_dict))], dtype='float32')
         shared['new_emb_mat'] = new_emb_mat
 
-    data = MyData(os.path.join(config.root_dir, data_type), paths)
+    data = MyData(config, os.path.join(config.root_dir, data_type), paths)
     data_set = MyDataSet(data, data_type, shared=shared, valid_idxs=valid_idxs)
     return data_set
 

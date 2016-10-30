@@ -20,7 +20,7 @@ flags.DEFINE_integer("eval_num_batches", 100, "eval num batches [100]")
 flags.DEFINE_integer("load_step", 0, "load step [0]")
 flags.DEFINE_integer("early_stop", 4, "early stop [4]")
 
-flags.DEFINE_string("mode", "test", "trains | test | forward [test]")
+flags.DEFINE_string("mode", "test", "train | dev | test | forward [test]")
 flags.DEFINE_boolean("load", True, "load saved data? [True]")
 flags.DEFINE_boolean("progress", True, "Show progress? [True]")
 flags.DEFINE_integer("log_period", 100, "Log period [100]")
@@ -88,6 +88,8 @@ flags.DEFINE_bool("cluster", False, "Cluster data for faster training [False]")
 flags.DEFINE_bool("len_opt", False, "Length optimization? [False]")
 flags.DEFINE_string("sh_logit_func", "tri_linear", "sh logit func [tri_linear]")
 flags.DEFINE_float("filter_ratio", 1.0, "filter ratio [1.0]")
+flags.DEFINE_bool("bi", False, "bi-directional attention? [False]")
+flags.DEFINE_integer("width", 5, "width around entity [5]")
 
 
 def main(_):

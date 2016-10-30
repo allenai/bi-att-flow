@@ -43,7 +43,7 @@ python -m basic.cli --mode train --noload
 ## 3. Testing
 To Test (~30 mins):
 ```
-python -m basic.cli --mode test --batch_size 8
+python -m basic.cli --mode test --batch_size 8 --eval_num_batches 0
 ```
 
 This command loads the most recently saved model during training and begins testing on the test data.
