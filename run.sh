@@ -15,7 +15,7 @@ out_path2="$inter_dir/35.json"
 
 debug=False
 python3 -m squad.prepro --mode single --single_path $source_path --debug $debug --target_dir $split_dir --glove_dir .
-python3 -m squad.prepro --mode single --single_path $source_path --debug $debug --target_dir $merge_dir --glove_dir .
+python3 -m squad.prepro --mode single --single_path $source_path --debug $debug --target_dir $merge_dir --glove_dir . --merge True
 
 python3 -m basic.cli --data_dir $split_dir --nodump_eval --answer_path $out_path --load_path $load_path --shared_path $shared_path --draft $debug --eval_num_batches 0 --mode forward --batch_size 1 --len_opt --cluster --cpu_opt &
 python3 -m basic.cli --data_dir $split_dir --nodump_eval --answer_path $out_path2 --load_path $load_path2 --shared_path $shared_path2 --draft $debug --eval_num_batches 0 --mode forward --batch_size 1 --len_opt --cluster --cpu_opt &
