@@ -34,7 +34,6 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
     :return: [N, M, d], [N, M, JX, d]
     """
     with tf.variable_scope(scope or "bi_attention"):
-        N, M, JX, JQ, d = config.batch_size, config.max_num_sents, config.max_sent_size, config.max_ques_size, config.hidden_size
         JX = tf.shape(h)[2]
         M = tf.shape(h)[1]
         JQ = tf.shape(u)[1]
@@ -50,41 +49,30 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
         u_logits = get_logits([h_aug, u_aug], None, True, wd=config.wd, mask=hu_mask,
                               is_train=is_train, func=config.logit_func, scope='u_logits')  # [N, M, JX, JQ]
         u_a = softsel(u_aug, u_logits)  # [N, M, JX, d]
-        if tensor_dict is not None:
-            # a_h = tf.nn.softmax(h_logits)  # [N, M, JX]
-            a_u = tf.nn.softmax(u_logits)  # [N, M, JX, JQ]
-            # tensor_dict['a_h'] = a_h
-            tensor_dict['a_u'] = a_u
+        h_a = softsel(h, tf.reduce_max(u_logits, 3))  # [N, M, d]
+        h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
 
-        if config.bi:
-            """
-            h_tiled_i = tf.tile(tf.expand_dims(h, 3), [1, 1, 1, JX, 1])
-            u_a_tiled_i = tf.tile(tf.expand_dims(u_a, 3), [1, 1, 1, JX, 1])
-            h_tiled_j = tf.tile(tf.expand_dims(h, 2), [1, 1, JX, 1, 1])
-            u_a_tiled_j = tf.tile(tf.expand_dims(u_a, 2), [1, 1, JX, 1, 1])
-            h_mask_tiled_i = tf.tile(tf.expand_dims(h_mask, 3), [1, 1, 1, JX])
-            h_mask_tiled_j = tf.tile(tf.expand_dims(h_mask, 2), [1, 1, JX, 1])
-            hh_mask = h_mask_tiled_i & h_mask_tiled_j
-            args = [h_tiled_i, u_a_tiled_i, h_tiled_j, u_a_tiled_j]
-            args.extend([h_tiled_i * h_tiled_j, h_tiled_i * u_a_tiled_i, h_tiled_j * u_a_tiled_j])
-            h_logits = get_logits(args, None, True, wd=config.wd, mask=hh_mask, is_train=is_train, func='linear', scope='h_logits')
-            h_a = softsel(h_tiled_j, h_logits)
-            h_logits = get_logits([h_aug, u_aug], None, True, wd=config.wd, mask=hu_mask,
-                                  is_train=is_train, func=config.logit_func, scope='h_logits')  # [N, M, JX, JQ]
-            """
-            h_a = softsel(h, tf.reduce_max(u_logits, 3))  # [N, M, d]
-            h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
-        else:
-            h_a = None
+        if tensor_dict is not None:
+            a_u = tf.nn.softmax(u_logits)  # [N, M, JX, JQ]
+            a_h = tf.nn.softmax(tf.reduce_max(u_logits, 3))
+            tensor_dict['a_u'] = a_u
+            tensor_dict['a_h'] = a_h
 
         return u_a, h_a
 
 
 def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
     with tf.variable_scope(scope or "attention_layer"):
-        u_a, h_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
-        # p0 = tf.concat(3, [h , h_a, u_a, h * h_a, h * u_a])
-        if config.bi:
+        JX = tf.shape(h)[2]
+        M = tf.shape(h)[1]
+        JQ = tf.shape(u)[1]
+        if config.c2q_att or config.q2c_att:
+            u_a, h_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
+        else:
+            u_a = tf.tile(tf.expand_dims(tf.expand_dims(tf.reduce_mean(u, 1), 1), 1), [1, M, JX, 1])
+            h_a = None
+
+        if config.q2c_att:
             p0 = tf.concat(3, [h, u_a, h * u_a, h * h_a])
         else:
             p0 = tf.concat(3, [h, u_a, h * u_a])
@@ -144,27 +132,28 @@ class Model(object):
         dc, dw, dco = config.char_emb_size, config.word_emb_size, config.char_out_size
 
         with tf.variable_scope("emb"):
-            with tf.variable_scope("emb_var"), tf.device("/cpu:0"):
-                char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
+            if config.use_char_emb:
+                with tf.variable_scope("emb_var"), tf.device("/cpu:0"):
+                    char_emb_mat = tf.get_variable("char_emb_mat", shape=[VC, dc], dtype='float')
 
-            with tf.variable_scope("char"):
-                Acx = tf.nn.embedding_lookup(char_emb_mat, self.cx)  # [N, M, JX, W, dc]
-                Acq = tf.nn.embedding_lookup(char_emb_mat, self.cq)  # [N, JQ, W, dc]
-                Acx = tf.reshape(Acx, [-1, JX, W, dc])
-                Acq = tf.reshape(Acq, [-1, JQ, W, dc])
+                with tf.variable_scope("char"):
+                    Acx = tf.nn.embedding_lookup(char_emb_mat, self.cx)  # [N, M, JX, W, dc]
+                    Acq = tf.nn.embedding_lookup(char_emb_mat, self.cq)  # [N, JQ, W, dc]
+                    Acx = tf.reshape(Acx, [-1, JX, W, dc])
+                    Acq = tf.reshape(Acq, [-1, JQ, W, dc])
 
-                filter_sizes = list(map(int, config.out_channel_dims.split(',')))
-                heights = list(map(int, config.filter_heights.split(',')))
-                assert sum(filter_sizes) == dco
-                with tf.variable_scope("conv"):
-                    xx = multi_conv1d(Acx, filter_sizes, heights, "VALID",  self.is_train, config.keep_prob, scope="xx")
-                    if config.share_cnn_weights:
-                        tf.get_variable_scope().reuse_variables()
-                        qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", self.is_train, config.keep_prob, scope="xx")
-                    else:
-                        qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", self.is_train, config.keep_prob, scope="qq")
-                    xx = tf.reshape(xx, [-1, M, JX, dco])
-                    qq = tf.reshape(qq, [-1, JQ, dco])
+                    filter_sizes = list(map(int, config.out_channel_dims.split(',')))
+                    heights = list(map(int, config.filter_heights.split(',')))
+                    assert sum(filter_sizes) == dco
+                    with tf.variable_scope("conv"):
+                        xx = multi_conv1d(Acx, filter_sizes, heights, "VALID",  self.is_train, config.keep_prob, scope="xx")
+                        if config.share_cnn_weights:
+                            tf.get_variable_scope().reuse_variables()
+                            qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", self.is_train, config.keep_prob, scope="xx")
+                        else:
+                            qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", self.is_train, config.keep_prob, scope="qq")
+                        xx = tf.reshape(xx, [-1, M, JX, dco])
+                        qq = tf.reshape(qq, [-1, JQ, dco])
 
             if config.use_word_emb:
                 with tf.variable_scope("emb_var"), tf.device("/cpu:0"):
@@ -180,8 +169,12 @@ class Model(object):
                     Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
                     self.tensor_dict['x'] = Ax
                     self.tensor_dict['q'] = Aq
-                xx = tf.concat(3, [xx, Ax])  # [N, M, JX, di]
-                qq = tf.concat(2, [qq, Aq])  # [N, JQ, di]
+                if config.use_char_emb:
+                    xx = tf.concat(3, [xx, Ax])  # [N, M, JX, di]
+                    qq = tf.concat(2, [qq, Aq])  # [N, JQ, di]
+                else:
+                    xx = Ax
+                    qq = Aq
 
         # highway network
         if config.highway:
@@ -189,6 +182,7 @@ class Model(object):
                 xx = highway_network(xx, config.highway_num_layers, True, wd=config.wd, is_train=self.is_train)
                 tf.get_variable_scope().reuse_variables()
                 qq = highway_network(qq, config.highway_num_layers, True, wd=config.wd, is_train=self.is_train)
+
         self.tensor_dict['xx'] = xx
         self.tensor_dict['qq'] = qq
 
