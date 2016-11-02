@@ -162,7 +162,8 @@ class AttentionCell(RNNCell):
             :param memory: [N, M, m]
             :return: [N, M]
             """
-            _memory_size = memory.get_shape().as_list()[-2]
+            rank = len(memory.get_shape())
+            _memory_size = tf.shape(memory)[rank-2]
             tiled_inputs = tf.tile(tf.expand_dims(inputs, 1), [1, _memory_size, 1])
             if isinstance(state, tuple):
                 tiled_states = [tf.tile(tf.expand_dims(each, 1), [1, _memory_size, 1])
@@ -180,7 +181,8 @@ class AttentionCell(RNNCell):
     @staticmethod
     def get_linear_controller(bias, input_keep_prob=1.0, is_train=None):
         def linear_controller(inputs, state, memory):
-            _memory_size = memory.get_shape().as_list()[-2]
+            rank = len(memory.get_shape())
+            _memory_size = tf.shape(memory)[rank-2]
             tiled_inputs = tf.tile(tf.expand_dims(inputs, 1), [1, _memory_size, 1])
             if isinstance(state, tuple):
                 tiled_states = [tf.tile(tf.expand_dims(each, 1), [1, _memory_size, 1])

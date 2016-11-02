@@ -66,12 +66,10 @@ def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None
         JX = tf.shape(h)[2]
         M = tf.shape(h)[1]
         JQ = tf.shape(u)[1]
-        if config.c2q_att or config.q2c_att:
+        if config.q2c_att or config.c2q_att:
             u_a, h_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
-        else:
+        if not config.c2q_att:
             u_a = tf.tile(tf.expand_dims(tf.expand_dims(tf.reduce_mean(u, 1), 1), 1), [1, M, JX, 1])
-            h_a = None
-
         if config.q2c_att:
             p0 = tf.concat(3, [h, u_a, h * u_a, h * h_a])
         else:
@@ -215,28 +213,20 @@ class Model(object):
             self.tensor_dict['h'] = h
 
         with tf.variable_scope("main"):
-            p0 = attention_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0", tensor_dict=self.tensor_dict)
-            (fw_g0, bw_g0), _ = bidirectional_dynamic_rnn(d_cell, d_cell, p0, x_len, dtype='float', scope='g0')  # [N, M, JX, 2d]
-            g0 = tf.concat(3, [fw_g0, bw_g0])
-            # p1 = attention_layer(config, self.is_train, g0, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p1")
-            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(d_cell, d_cell, g0, x_len, dtype='float', scope='g1')  # [N, M, JX, 2d]
-            g1 = tf.concat(3, [fw_g1, bw_g1])
-            # logits = u_logits(config, self.is_train, g1, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits")
-            # [N, M, JX]
-            """
-            a1i = softsel(tf.reshape(g1, [N, M*JX, 2*d]), tf.reshape(logits, [N, M*JX]))
-            a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
-            yp_aug = tf.expand_dims(yp, -1)
-            g1yp = g1 * yp_aug
-            if config.prev_mode == 'a':
-                prev = a1i
-            elif config.prev_mode == 'y':
-                prev = yp_aug
-            elif config.prev_mode == 'gy':
-                prev = g1yp
+            if config.dynamic_att:
+                p0 = h
+                u = tf.reshape(tf.tile(tf.expand_dims(u, 1), [1, M, 1, 1]), [N * M, JQ, 2 * d])
+                q_mask = tf.reshape(tf.tile(tf.expand_dims(self.q_mask, 1), [1, M, 1]), [N * M, JQ])
+                first_cell = AttentionCell(cell, u, mask=q_mask, mapper='sim',
+                                           input_keep_prob=self.config.input_keep_prob, is_train=self.is_train)
             else:
-                raise Exception()
-            """
+                p0 = attention_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0", tensor_dict=self.tensor_dict)
+                first_cell = d_cell
+            (fw_g0, bw_g0), _ = bidirectional_dynamic_rnn(first_cell, first_cell, p0, x_len, dtype='float', scope='g0')  # [N, M, JX, 2d]
+            g0 = tf.concat(3, [fw_g0, bw_g0])
+            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(first_cell, first_cell, g0, x_len, dtype='float', scope='g1')  # [N, M, JX, 2d]
+            g1 = tf.concat(3, [fw_g1, bw_g1])
+
             if config.late:
                 (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, tf.concat(3, [g1, p0]), x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
                 g2 = tf.concat(3, [fw_g2, bw_g2])

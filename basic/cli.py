@@ -94,6 +94,7 @@ flags.DEFINE_bool("c2q_att", True, "context-to-question attention? [True]")
 flags.DEFINE_bool("highway", True, "highway? [True]")
 flags.DEFINE_bool("late", False, "Late fusion? [False]")
 flags.DEFINE_string("device_type", "gpu", "cpu | gpu [gpu]")
+flags.DEFINE_bool("dynamic_att", False, "Dynamic attention [False]")
 
 
 def main(_):
