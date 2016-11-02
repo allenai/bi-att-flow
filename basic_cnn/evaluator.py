@@ -50,10 +50,11 @@ class Evaluation(object):
 
 
 class LabeledEvaluation(Evaluation):
-    def __init__(self, data_type, global_step, idxs, yp, y, tensor_dict=None):
+    def __init__(self, data_type, global_step, idxs, yp, y, id2answer_dict, tensor_dict=None):
         super(LabeledEvaluation, self).__init__(data_type, global_step, idxs, yp, tensor_dict=tensor_dict)
         self.y = y
         self.dict['y'] = y
+        self.id2answer_dict = id2answer_dict
 
     def __add__(self, other):
         if other == 0:
@@ -63,16 +64,20 @@ class LabeledEvaluation(Evaluation):
         new_yp = self.yp + other.yp
         new_y = self.y + other.y
         new_idxs = self.idxs + other.idxs
+        new_id2answer_dict = dict(list(self.id2answer_dict.items()) + list(other.id2answer_dict.items()))
+        new_id2score_dict = dict(list(self.id2answer_dict['scores'].items()) + list(other.id2answer_dict['scores'].items()))
+        new_id2answer_dict['scores'] = new_id2score_dict
         if self.tensor_dict is not None:
             new_tensor_dict = {key: np.concatenate((val, other.tensor_dict[key]), axis=0) for key, val in self.tensor_dict.items()}
-        return LabeledEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_y, tensor_dict=new_tensor_dict)
+        return LabeledEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_y, new_id2answer_dict, tensor_dict=new_tensor_dict)
 
 
 class AccuracyEvaluation(LabeledEvaluation):
-    def __init__(self, data_type, global_step, idxs, yp, y, correct, loss, tensor_dict=None):
-        super(AccuracyEvaluation, self).__init__(data_type, global_step, idxs, yp, y, tensor_dict=tensor_dict)
+    def __init__(self, data_type, global_step, idxs, yp, y, id2answer_dict, correct, loss, tensor_dict=None):
+        super(AccuracyEvaluation, self).__init__(data_type, global_step, idxs, yp, y, id2answer_dict, tensor_dict=tensor_dict)
         self.loss = loss
         self.correct = correct
+        self.id2answer_dict = id2answer_dict
         self.acc = sum(correct) / len(correct)
         self.dict['loss'] = loss
         self.dict['correct'] = correct
@@ -95,9 +100,13 @@ class AccuracyEvaluation(LabeledEvaluation):
         new_y = self.y + other.y
         new_correct = self.correct + other.correct
         new_loss = (self.loss * self.num_examples + other.loss * other.num_examples) / len(new_correct)
+        new_id2answer_dict = dict(list(self.id2answer_dict.items()) + list(other.id2answer_dict.items()))
+        new_id2score_dict = dict(list(self.id2answer_dict['scores'].items()) + list(other.id2answer_dict['scores'].items()))
+        new_id2answer_dict['scores'] = new_id2score_dict
+        new_tensor_dict = None
         if self.tensor_dict is not None:
             new_tensor_dict = {key: np.concatenate((val, other.tensor_dict[key]), axis=0) for key, val in self.tensor_dict.items()}
-        return AccuracyEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_y, new_correct, new_loss, tensor_dict=new_tensor_dict)
+        return AccuracyEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_y, new_id2answer_dict, new_correct, new_loss, tensor_dict=new_tensor_dict)
 
 
 class Evaluator(object):
@@ -150,18 +159,23 @@ class AccuracyEvaluator(LabeledEvaluator):
         y = data_set.data['y']
         global_step, yp, loss, vals = sess.run([self.global_step, self.yp, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
         yp = yp[:data_set.num_examples]
-        correct = [self.__class__.compare(data_set.get_one(idx), ypi) for idx, ypi in zip(data_set.valid_idxs, yp)]
+        correct, probs, preds = zip(*[self.__class__.compare(data_set.get_one(idx), ypi) for idx, ypi in zip(data_set.valid_idxs, yp)])
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
-        e = AccuracyEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y, correct, float(loss), tensor_dict=tensor_dict)
+        ids = data_set.data['ids']
+        id2score_dict = {id_: prob for id_, prob in zip(ids, probs)}
+        id2answer_dict = {id_: pred for id_, pred in zip(ids, preds)}
+        id2answer_dict['scores'] = id2score_dict
+        e = AccuracyEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y, id2answer_dict, correct, float(loss), tensor_dict=tensor_dict)
         return e
 
     @staticmethod
     def compare(data, ypi):
+        prob = float(np.max(ypi))
         yi = data['y']
         for start, stop in yi:
             if start == int(np.argmax(ypi)):
-                return True
-        return False
+                return True, prob, " "
+        return False, prob, " "
 
     def _split_batch(self, batch):
         return batch
@@ -181,10 +195,10 @@ class CNNAccuracyEvaluator(AccuracyEvaluator):
             for ypijk, xijk in zip(ypij, xij):
                 if xijk.startswith("@"):
                     dist[xijk] += ypijk
-        pred = max(dist.items(), key=lambda item: item[1])[0]
+        pred, prob = max(dist.items(), key=lambda item: item[1])
         assert pred.startswith("@")
         assert yi.startswith("@")
-        return pred == yi
+        return pred == yi, prob, pred
 
 
 class AccuracyEvaluator2(AccuracyEvaluator):

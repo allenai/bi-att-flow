@@ -67,7 +67,7 @@ class MyData(Data):
             y = answer
             c = cand_ents
 
-            data = {'x': x, 'cx': cx, 'q': q, 'cq': cq, 'y': y, 'c': c}
+            data = {'x': x, 'cx': cx, 'q': q, 'cq': cq, 'y': y, 'c': c, 'ids': file_name}
             return data
 
     def get_empty(self):
