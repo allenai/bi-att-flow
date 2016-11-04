@@ -58,10 +58,10 @@ python squad/evaluate-v1.1.py $HOME/data/squad/dev-v1.1.json out/basic/00/answer
 
 
 ## Results
+See [SQuAD Leaderboard][squad]
 
-F1=74.4%, EM=64.0% on dev data
 
-
+<!--
 ## Using Pre-trained Model
 
 If you would like to use pre-trained model, it's very easy! 
@@ -69,8 +69,9 @@ You can download the model weights [here][save] (make sure that its commit id ma
 Extract them and put them in `$PWD/out/basic/00/save` directory, with names unchanged.
 Then do the testing again, but you need to specify the step # that you are loading from:
 ```
-abc
+python -m basic.cli --mode test --batch_size 8 --eval_num_batches 0 --load_step ####
 ```
+-->
 
 
 ## Multi-GPU Training & Testing
@@ -91,3 +92,4 @@ python -m basic.cli --mode test --batch_size 2 --num_gpus 3
 
 [multi-gpu]: https://www.tensorflow.org/versions/r0.11/tutorials/deep_cnn/index.html#training-a-model-using-multiple-gpu-cards
 [save]: #
+[squad]: http://stanford-qa.com
