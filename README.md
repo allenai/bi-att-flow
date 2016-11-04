@@ -1,6 +1,5 @@
-# Co-Attention Model for Stanford QA
+# Bi-directional Attention Flow for Machine Comprehension
 
-A simple model.
 Follow three simple steps.
 For more advanced usages, see below.
 
