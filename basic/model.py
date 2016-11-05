@@ -14,7 +14,7 @@ from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
 
 
-def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
+def attention_flow(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
     """
     h_a:
     all u attending on h
@@ -34,50 +34,59 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
     :return: [N, M, d], [N, M, JX, d]
     """
     with tf.variable_scope(scope or "bi_attention"):
-        JX = tf.shape(h)[2]
-        M = tf.shape(h)[1]
+        d = config.hidden_size
+        JX = tf.shape(h)[1]
         JQ = tf.shape(u)[1]
-        h_aug = tf.tile(tf.expand_dims(h, 3), [1, 1, 1, JQ, 1])
-        u_aug = tf.tile(tf.expand_dims(tf.expand_dims(u, 1), 1), [1, M, JX, 1, 1])
+        h_aug = tf.tile(tf.expand_dims(h, 2), [1, 1, JQ, 1])
+        u_aug = tf.tile(tf.expand_dims(u, 1), [1, JX, 1, 1])
         if h_mask is None:
             hu_mask = None
         else:
-            h_mask_aug = tf.tile(tf.expand_dims(h_mask, 3), [1, 1, 1, JQ])
-            u_mask_aug = tf.tile(tf.expand_dims(tf.expand_dims(u_mask, 1), 1), [1, M, JX, 1])
+            h_mask_aug = tf.tile(tf.expand_dims(h_mask, 2), [1, 1, JQ])
+            u_mask_aug = tf.tile(tf.expand_dims(u_mask, 1), [1, JX, 1])
             hu_mask = h_mask_aug & u_mask_aug
 
         u_logits = get_logits([h_aug, u_aug], None, True, wd=config.wd, mask=hu_mask,
-                              is_train=is_train, func=config.logit_func, scope='u_logits')  # [N, M, JX, JQ]
-        u_a = softsel(u_aug, u_logits)  # [N, M, JX, d]
-        h_a = softsel(h, tf.reduce_max(u_logits, 3))  # [N, M, d]
-        h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
+                              is_train=is_train, func=config.logit_func, scope='u_logits')  # [N, JX, JQ]
+        u_a = softsel(u_aug, u_logits)  # [N, JX, d]
 
         if tensor_dict is not None:
-            a_u = tf.nn.softmax(u_logits)  # [N, M, JX, JQ]
-            a_h = tf.nn.softmax(tf.reduce_max(u_logits, 3))
+            a_u = tf.nn.softmax(u_logits)  # [N, JX, JQ]
             tensor_dict['a_u'] = a_u
-            tensor_dict['a_h'] = a_h
             variables = tf.get_collection(tf.GraphKeys.VARIABLES, scope=tf.get_variable_scope().name)
             for var in variables:
                 tensor_dict[var.name] = var
 
-        return u_a, h_a
+        p = tf.concat(2, [h, u_a, h * u_a])  # [N, JX, d]
+        cell = BasicLSTMCell(d, state_is_tuple=True)
+        d_cell = SwitchableDropoutWrapper(cell, is_train, input_keep_prob=config.input_keep_prob)
+        h_len = tf.reduce_sum(tf.cast(h_mask, 'int32'), 1)
+        (fw_g, bw_g), _ = bidirectional_dynamic_rnn(d_cell, d_cell, p, h_len, dtype='float', scope='g0')  # [N*M, JX, 2d]
+        g = tf.concat(2, [fw_g, bw_g])
+
+        return p, g
 
 
-def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
+def bi_attention_flow_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
     with tf.variable_scope(scope or "attention_layer"):
         JX = tf.shape(h)[2]
         M = tf.shape(h)[1]
         JQ = tf.shape(u)[1]
-        if config.q2c_att or config.c2q_att:
-            u_a, h_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
-        if not config.c2q_att:
-            u_a = tf.tile(tf.expand_dims(tf.expand_dims(tf.reduce_mean(u, 1), 1), 1), [1, M, JX, 1])
-        if config.q2c_att:
-            p0 = tf.concat(3, [h, u_a, h * u_a, h * h_a])
-        else:
-            p0 = tf.concat(3, [h, u_a, h * u_a])
-        return p0
+        d = config.hidden_size
+        h = tf.reshape(h, [-1, JX, 2*d])
+        h_mask  = tf.reshape(h_mask, [-1, JX])
+        u = tf.tile(tf.expand_dims(u, 1), [1, M, 1, 1])  # [N, M, JQ, 2d]
+        u = tf.reshape(u, [-1, JQ, 2*d])  # [N*M, JQ, 2d]
+        u_mask = tf.tile(tf.expand_dims(u_mask, 1), [1, M, 1])
+        u_mask = tf.reshape(u_mask, [-1, JQ])
+
+        _, c2q = attention_flow(config, is_train, u, h, h_mask=u_mask, u_mask=h_mask, scope='c2q')  # [N * M, JQ, 2d]
+        p, q2c = attention_flow(config, is_train, h, c2q, h_mask=h_mask, u_mask=u_mask, scope='q2c')  # [N * M, JX, 2d]
+        p = tf.reshape(p, [-1, M, JX, 6*d])
+        q2c = tf.reshape(q2c, [-1, M, JX, 2*d])
+        out = tf.concat(3, [p, q2c])
+        return out
+
 
 
 class Model(object):
@@ -216,87 +225,35 @@ class Model(object):
             self.tensor_dict['h'] = h
 
         with tf.variable_scope("main"):
-            if config.dynamic_att:
-                p0 = h
-                u = tf.reshape(tf.tile(tf.expand_dims(u, 1), [1, M, 1, 1]), [N * M, JQ, 2 * d])
-                q_mask = tf.reshape(tf.tile(tf.expand_dims(self.q_mask, 1), [1, M, 1]), [N * M, JQ])
-                first_cell = AttentionCell(cell, u, mask=q_mask, mapper='sim',
-                                           input_keep_prob=self.config.input_keep_prob, is_train=self.is_train)
-            else:
-                p0 = attention_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0", tensor_dict=self.tensor_dict)
-                first_cell = d_cell
-            (fw_g0, bw_g0), _ = bidirectional_dynamic_rnn(first_cell, first_cell, p0, x_len, dtype='float', scope='g0')  # [N, M, JX, 2d]
-            g0 = tf.concat(3, [fw_g0, bw_g0])
-            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(first_cell, first_cell, g0, x_len, dtype='float', scope='g1')  # [N, M, JX, 2d]
-            g1 = tf.concat(3, [fw_g1, bw_g1])
+            out = bi_attention_flow_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask)
+            logits = get_logits([out], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
+                                mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
+            a1i = softsel(tf.reshape(out, [N, M * JX, 8 * d]), tf.reshape(logits, [N, M * JX]))
 
-            if config.late:
-                (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, tf.concat(3, [g1, p0]), x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
-                g2 = tf.concat(3, [fw_g2, bw_g2])
-                # logits2 = u_logits(config, self.is_train, tf.concat(3, [g1, a1i]), u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits2")
+            if config.feed_gt:
+                logy = tf.log(tf.cast(self.y, 'float') + VERY_SMALL_NUMBER)
+                logits = tf.cond(self.is_train, lambda: logy, lambda: logits)
+            if config.feed_hard:
+                hard_yp = tf.argmax(tf.reshape(logits, [N, M * JX]), 1)
+                hard_logits = tf.reshape(tf.one_hot(hard_yp, M * JX), [N, M, JX])  # [N, M, JX]
+                logits = tf.cond(self.is_train, lambda: logits, lambda: hard_logits)
 
-                logits = get_logits([g1, g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
+            flat_logits = tf.reshape(logits, [-1, M * JX])
+            flat_yp = tf.nn.softmax(flat_logits)  # [-1, M*JX]
+            yp = tf.reshape(flat_yp, [-1, M, JX])
 
-                if config.feed_gt:
-                    logy = tf.log(tf.cast(self.y, 'float') + VERY_SMALL_NUMBER)
-                    logits = tf.cond(self.is_train, lambda: logy, lambda: logits)
-                if config.feed_hard:
-                    hard_yp = tf.argmax(tf.reshape(logits, [N, M*JX]), 1)
-                    hard_logits = tf.reshape(tf.one_hot(hard_yp, M*JX), [N, M, JX])  # [N, M, JX]
-                    logits = tf.cond(self.is_train, lambda: logits, lambda: hard_logits)
+            a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
+            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, out,
+                                                          x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
+            g2 = tf.concat(3, [fw_g2, bw_g2])
+            # logits2 = u_logits(config, self.is_train, tf.concat(3, [g1, a1i]), u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits2")
+            logits2 = get_logits([out, g2, a1i], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
+                                 mask=self.x_mask,
+                                 is_train=self.is_train, func=config.answer_func, scope='logits2')
 
-                flat_logits = tf.reshape(logits, [-1, M * JX])
-                flat_yp = tf.nn.softmax(flat_logits)  # [-1, M*JX]
-                yp = tf.reshape(flat_yp, [-1, M, JX])
-
-                logits2 = get_logits([g1, g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask,
-                                     is_train=self.is_train, func=config.answer_func, scope='logits2')
-
-                flat_logits2 = tf.reshape(logits2, [-1, M * JX])
-                flat_yp2 = tf.nn.softmax(flat_logits2)
-                yp2 = tf.reshape(flat_yp2, [-1, M, JX])
-            else:
-                logits = get_logits([g1, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
-                                    mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
-                a1i = softsel(tf.reshape(g1, [N, M * JX, 2 * d]), tf.reshape(logits, [N, M * JX]))
-
-                if config.feed_gt:
-                    logy = tf.log(tf.cast(self.y, 'float') + VERY_SMALL_NUMBER)
-                    logits = tf.cond(self.is_train, lambda: logy, lambda: logits)
-                if config.feed_hard:
-                    hard_yp = tf.argmax(tf.reshape(logits, [N, M * JX]), 1)
-                    hard_logits = tf.reshape(tf.one_hot(hard_yp, M * JX), [N, M, JX])  # [N, M, JX]
-                    logits = tf.cond(self.is_train, lambda: logits, lambda: hard_logits)
-
-                flat_logits = tf.reshape(logits, [-1, M * JX])
-                flat_yp = tf.nn.softmax(flat_logits)  # [-1, M*JX]
-                yp = tf.reshape(flat_yp, [-1, M, JX])
-
-                a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
-                yp_aug = tf.expand_dims(yp, -1)
-                g1yp = g1 * yp_aug
-                if config.prev_mode == 'a':
-                    prev = a1i
-                elif config.prev_mode == 'y':
-                    prev = yp_aug
-                elif config.prev_mode == 'gy':
-                    prev = g1yp
-                else:
-                    raise Exception()
-                (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, tf.concat(3, [p0, g1, prev, g1 * prev]),
-                                                              x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
-                g2 = tf.concat(3, [fw_g2, bw_g2])
-                # logits2 = u_logits(config, self.is_train, tf.concat(3, [g1, a1i]), u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits2")
-                logits2 = get_logits([g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
-                                     mask=self.x_mask,
-                                     is_train=self.is_train, func=config.answer_func, scope='logits2')
-
-                flat_logits2 = tf.reshape(logits2, [-1, M * JX])
-                flat_yp2 = tf.nn.softmax(flat_logits2)
-                yp2 = tf.reshape(flat_yp2, [-1, M, JX])
-
-            self.tensor_dict['g1'] = g1
-            self.tensor_dict['g2'] = g2
+            flat_logits2 = tf.reshape(logits2, [-1, M * JX])
+            flat_yp2 = tf.nn.softmax(flat_logits2)
+            yp2 = tf.reshape(flat_yp2, [-1, M, JX])
 
             self.logits = flat_logits
             self.logits2 = flat_logits2
