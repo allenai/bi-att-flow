@@ -57,6 +57,9 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
             a_h = tf.nn.softmax(tf.reduce_max(u_logits, 3))
             tensor_dict['a_u'] = a_u
             tensor_dict['a_h'] = a_h
+            variables = tf.get_collection(tf.GraphKeys.VARIABLES, scope=tf.get_variable_scope().name)
+            for var in variables:
+                tensor_dict[var.name] = var
 
         return u_a, h_a
 
