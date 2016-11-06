@@ -14,7 +14,7 @@ from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
 
 
-def attention_flow(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
+def attention_flow(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None, num_layers=1):
     """
     h_a:
     all u attending on h
@@ -61,9 +61,10 @@ def attention_flow(config, is_train, h, u, h_mask=None, u_mask=None, scope=None,
         cell = BasicLSTMCell(d, state_is_tuple=True)
         d_cell = SwitchableDropoutWrapper(cell, is_train, input_keep_prob=config.input_keep_prob)
         h_len = tf.reduce_sum(tf.cast(h_mask, 'int32'), 1)
-        (fw_g, bw_g), _ = bidirectional_dynamic_rnn(d_cell, d_cell, p, h_len, dtype='float', scope='g0')  # [N*M, JX, 2d]
-        g = tf.concat(2, [fw_g, bw_g])
-
+        g = p
+        for layer_idx in range(num_layers):
+            (fw_g, bw_g), _ = bidirectional_dynamic_rnn(d_cell, d_cell, g, h_len, dtype='float', scope='g{}'.format(layer_idx))  # [N*M, JX, 2d]
+            g = tf.concat(2, [fw_g, bw_g])
         return p, g
 
 
@@ -81,10 +82,10 @@ def bi_attention_flow_layer(config, is_train, h, u, h_mask=None, u_mask=None, sc
         u_mask = tf.reshape(u_mask, [-1, JQ])
 
         _, c2q = attention_flow(config, is_train, u, h, h_mask=u_mask, u_mask=h_mask, scope='c2q')  # [N * M, JQ, 2d]
-        p, q2c = attention_flow(config, is_train, h, c2q, h_mask=h_mask, u_mask=u_mask, scope='q2c')  # [N * M, JX, 2d]
+        p, q2c = attention_flow(config, is_train, h, u + c2q, h_mask=h_mask, u_mask=u_mask, scope='q2c', num_layers=2)  # [N * M, JX, 2d]
         p = tf.reshape(p, [-1, M, JX, 6*d])
         q2c = tf.reshape(q2c, [-1, M, JX, 2*d])
-        out = tf.concat(3, [p, q2c])
+        out = p, q2c
         return out
 
 
@@ -225,10 +226,10 @@ class Model(object):
             self.tensor_dict['h'] = h
 
         with tf.variable_scope("main"):
-            out = bi_attention_flow_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask)
-            logits = get_logits([out], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
+            p, q2c = bi_attention_flow_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask)
+            logits = get_logits([p, q2c], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
                                 mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
-            a1i = softsel(tf.reshape(out, [N, M * JX, 8 * d]), tf.reshape(logits, [N, M * JX]))
+            a1i = softsel(tf.reshape(q2c, [N, M * JX, 2 * d]), tf.reshape(logits, [N, M * JX]))
 
             if config.feed_gt:
                 logy = tf.log(tf.cast(self.y, 'float') + VERY_SMALL_NUMBER)
@@ -243,11 +244,10 @@ class Model(object):
             yp = tf.reshape(flat_yp, [-1, M, JX])
 
             a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
-            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, out,
+            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell, d_cell, tf.concat(3, [p, q2c]),
                                                           x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
             g2 = tf.concat(3, [fw_g2, bw_g2])
-            # logits2 = u_logits(config, self.is_train, tf.concat(3, [g1, a1i]), u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits2")
-            logits2 = get_logits([out, g2, a1i], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
+            logits2 = get_logits([p, g2, a1i], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
                                  mask=self.x_mask,
                                  is_train=self.is_train, func=config.answer_func, scope='logits2')
 
