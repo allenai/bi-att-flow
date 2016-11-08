@@ -5,8 +5,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell, GRUCell
 
-from basic.read_data import DataSet
-from basic.superhighway import SHCell
+from basic_tqa.read_data import DataSet
+from basic_tqa.superhighway import SHCell
 from my.tensorflow import exp_mask, get_initializer, VERY_SMALL_NUMBER
 from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel, dropout, get_logits, softmax, \
     highway_network, multi_conv1d
@@ -309,6 +309,7 @@ class Model(object):
         N, M, JX, JQ, VW, VC, d, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, config.max_word_size
+        JA, MA = config.max_ans_size, config.max_num_anss
         feed_dict = {}
 
         if config.len_opt:
@@ -328,6 +329,12 @@ class Model(object):
                 new_JQ = max(len(ques) for ques in batch.data['q'])
             JQ = min(JQ, new_JQ)
 
+            if sum(len(ans) for anss in batch.data['a'] for ans in anss) == 0:
+                new_JA = 1
+            else:
+                new_JA = max(len(ans) for anss in batch.data['a'] for ans in anss)
+            JA = min(JA, new_JA)
+
         if config.cpu_opt:
             if sum(len(para) for para in batch.data['x']) == 0:
                 new_M = 1
@@ -335,12 +342,21 @@ class Model(object):
                 new_M = max(len(para) for para in batch.data['x'])
             M = min(M, new_M)
 
+            if sum(len(anss) for anss in batch.data['a']) == 0:
+                new_MA = 1
+            else:
+                new_MA = max(len(anss) for anss in batch.data['a'])
+            MA = min(MA, new_MA)
+
         x = np.zeros([N, M, JX], dtype='int32')
         cx = np.zeros([N, M, JX, W], dtype='int32')
         x_mask = np.zeros([N, M, JX], dtype='bool')
         q = np.zeros([N, JQ], dtype='int32')
         cq = np.zeros([N, JQ, W], dtype='int32')
         q_mask = np.zeros([N, JQ], dtype='bool')
+        a = np.zeros([N, MA, JA], dtype='int32')
+        ca = np.zeros([N, MA, JA, W], dtype='int32')
+        a_mask = np.zeros([N, MA, JA], dtype='bool')
 
         feed_dict[self.x] = x
         feed_dict[self.x_mask] = x_mask
@@ -356,28 +372,12 @@ class Model(object):
         CX = batch.data['cx']
 
         if supervised:
-            y = np.zeros([N, M, JX], dtype='bool')
-            y2 = np.zeros([N, M, JX], dtype='bool')
-            yy = np.zeros([N, M, JX], dtype='bool')
+            y = np.zeros([N], dtype='int32')
             feed_dict[self.y] = y
-            feed_dict[self.y2] = y2
             # feed_dict[self.yy] = yy
 
-            for i, (xi, cxi, yi) in enumerate(zip(X, CX, batch.data['y'])):
-                start_idx, stop_idx = random.choice(yi)
-                j, k = start_idx
-                j2, k2 = stop_idx
-                if config.single:
-                    X[i] = [xi[j]]
-                    CX[i] = [cxi[j]]
-                    j, j2 = 0, 0
-                if config.squash:
-                    offset = sum(map(len, xi[:j]))
-                    j, k = 0, k + offset
-                    offset = sum(map(len, xi[:j2]))
-                    j2, k2 = 0, k2 + offset
-                y[i, j, k] = True
-                y2[i, j2, k2-1] = True
+            for i, yi in enumerate(batch.data['y']):
+                y[i] = yi
 
         def _get_word(word):
             d = batch.shared['word2idx']
@@ -436,6 +436,20 @@ class Model(object):
                     cq[i, j, k] = _get_char(cqijk)
                     if k + 1 == config.max_word_size:
                         break
+
+        for i, ai in enumerate(batch.data['a']):
+            for j, aij in enumerate(ai):
+                for k, aijk in enumerate(aij):
+                    a[i, j, k] = _get_word(aijk)
+                    a_mask[i, j, k] = True
+
+        for i, cai in enumerate(batch.data['ca']):
+            for j, caij in enumerate(cai):
+                for k, caijk in enumerate(caij):
+                    for l, caijkl in enumerate(caijk):
+                        ca[i, j, k, l] = caijkl
+                        if l + 1 == config.max_word_size:
+                            break
 
         return feed_dict
 

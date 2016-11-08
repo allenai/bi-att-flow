@@ -21,6 +21,8 @@ def json_pretty_dump(obj, fh):
 
 
 def index(l, i):
+    if not isinstance(i, tuple) and not isinstance(i, list):
+        i = (i,)
     return index(l[i[0]], i[1:]) if len(i) > 1 else l[i[0]]
 
 

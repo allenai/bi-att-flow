@@ -6,8 +6,8 @@ from basic.main import main as m
 
 flags = tf.app.flags
 
-flags.DEFINE_string("model_name", "basic", "Model name [basic]")
-flags.DEFINE_string("data_dir", "data/squad", "Data dir [data/squad]")
+flags.DEFINE_string("model_name", "basic_tqa", "Model name [basic_tqa]")
+flags.DEFINE_string("data_dir", "data/squad", "Data dir [data/tqa]")
 flags.DEFINE_string("run_id", "0", "Run ID [0]")
 flags.DEFINE_string("out_base_dir", "out", "out base dir [out]")
 
@@ -49,6 +49,7 @@ flags.DEFINE_integer("num_sents_th", 8, "num sents th [8]")
 flags.DEFINE_integer("ques_size_th", 30, "ques size th [32]")
 flags.DEFINE_integer("word_size_th", 16, "word size th [16]")
 flags.DEFINE_integer("para_size_th", 256, "para size th [256]")
+flags.DEFINE_integer("ans_size_th", 30, "ans size th [30]")
 
 flags.DEFINE_bool("swap_memory", True, "swap memory? [True]")
 flags.DEFINE_string("data_filter", "max", "max | valid | semi [max]")
