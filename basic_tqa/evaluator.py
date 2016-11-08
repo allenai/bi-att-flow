@@ -80,7 +80,8 @@ class AccuracyEvaluation(LabeledEvaluation):
         self.summaries = [loss_summary, acc_summary]
 
     def __repr__(self):
-        return "{} step {}: accuracy={}, loss={}".format(self.data_type, self.global_step, self.acc, self.loss)
+        return "{} step {}: accuracy={}={}/{}, loss={}".format(self.data_type, self.global_step, self.acc,
+                                                               sum(self.correct), len(self.correct), self.loss)
 
     def __add__(self, other):
         if other == 0:
@@ -134,6 +135,12 @@ class LabeledEvaluator(Evaluator):
         e = LabeledEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y.tolist(), tensor_dict=tensor_dict)
         return e
 
+    def _split_batch(self, batch):
+        return batch
+
+    def _get_feed_dict(self, batch):
+        return self.model.get_feed_dict(batch[1], False)
+
 
 class AccuracyEvaluator(LabeledEvaluator):
     def __init__(self, config, model, tensor_dict=None):
@@ -141,9 +148,8 @@ class AccuracyEvaluator(LabeledEvaluator):
         self.loss = model.loss
 
     def get_evaluation(self, sess, batch):
-        idxs, data_set = batch
-        assert isinstance(data_set, DataSet)
-        feed_dict = self.model.get_feed_dict(data_set, False)
+        idxs, data_set = self._split_batch(batch)
+        feed_dict = self._get_feed_dict(batch)
         global_step, yp, loss, vals = sess.run([self.global_step, self.yp, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
         y = data_set.data['y']
         yp = yp[:data_set.num_examples]
@@ -154,10 +160,7 @@ class AccuracyEvaluator(LabeledEvaluator):
 
     @staticmethod
     def compare(yi, ypi):
-        for start, stop in yi:
-            if start == int(np.argmax(ypi)):
-                return True
-        return False
+        return yi == int(np.argmax(ypi))
 
 
 class AccuracyEvaluator2(AccuracyEvaluator):
@@ -323,6 +326,29 @@ class F1Evaluator(LabeledEvaluator):
                 f1 = span_f1(true_span, pred_span)
                 max_f1 = max(f1, max_f1)
         return max_f1
+
+
+class MultiGPUAccuracyEvaluator(AccuracyEvaluator):
+    def __init__(self, config, models, tensor_dict=None):
+        super(MultiGPUAccuracyEvaluator, self).__init__(config, models[0], tensor_dict=tensor_dict)
+        self.models = models
+        with tf.name_scope("eval_concat"):
+            N, M, JX = config.batch_size, config.max_num_sents, config.max_sent_size
+            MA = config.max_num_anss
+            self.yp = tf.concat(0, [padded_reshape(model.yp, [N, MA]) for model in models])
+            self.loss = tf.add_n([model.loss for model in models])/len(models)
+
+    def _split_batch(self, batches):
+        idxs_list, data_sets = zip(*batches)
+        idxs = sum(idxs_list, ())
+        data_set = sum(data_sets, data_sets[0].get_empty())
+        return idxs, data_set
+
+    def _get_feed_dict(self, batches):
+        feed_dict = {}
+        for model, (_, data_set) in zip(self.models, batches):
+            feed_dict.update(model.get_feed_dict(data_set, False))
+        return feed_dict
 
 
 class MultiGPUF1Evaluator(F1Evaluator):

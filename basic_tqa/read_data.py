@@ -242,6 +242,7 @@ def update_config(config, data_sets):
     config.max_word_size = 0
     config.max_para_size = 0
     config.max_ans_size = 0
+    config.max_num_anss = 0
     for data_set in data_sets:
         data = data_set.data
         shared = data_set.shared
@@ -254,11 +255,13 @@ def update_config(config, data_sets):
             config.max_num_sents = max(config.max_num_sents, len(sents))
             config.max_sent_size = max(config.max_sent_size, max(map(len, sents)))
             config.max_word_size = max(config.max_word_size, max(len(word) for sent in sents for word in sent))
-            config.max_num_anss = max(config.max_ans_size, len(a))
+            config.max_num_anss = max(config.max_num_anss, len(a))
             if len(q) > 0:
                 config.max_ques_size = max(config.max_ques_size, len(q))
                 config.max_word_size = max(config.max_word_size, max(len(word) for word in q))
+            if len(a) > 0:
                 config.max_ans_size = max(config.max_ans_size, max(map(len, a)))
+                config.max_word_size = max(config.max_word_size, max(len(word) for choice in a for word in choice))
 
     if config.mode == 'train':
         config.max_num_sents = min(config.max_num_sents, config.num_sents_th)

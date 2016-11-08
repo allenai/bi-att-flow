@@ -126,9 +126,6 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
 
     for ci, chapter in enumerate(tqdm(source_data[start_ci:stop_ci])):
         # paragraphs
-        xp, cxp = [], []
-        x.append(xp)
-        cx.append(cxp)
 
         context = ""
         for ti, topic in chapter['topics'].items():
@@ -138,8 +135,8 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
             context += cur
         xi = list(map(word_tokenize, sent_tokenize(context)))
         cxi = [[list(xijk) for xijk in xij] for xij in xi]
-        xp.append(xi)
-        cxp.append(cxi)
+        x.append(xi)
+        cx.append(cxi)
 
         for xij in xi:
             for xijk in xij:
@@ -152,6 +149,9 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
         for qid, question in chapter['questions']['nonDiagramQuestions'].items():
             if 'processedText' not in question['correctAnswer']:
                 print("Skipping question '{}' because no processed text ...".format(qid))
+                continue
+            if len(question['answerChoices']) == 0:
+                print("Skipping question '{}' because no answer choices ...".format(qid))
                 continue
             qi = word_tokenize(question['beingAsked']['processedText'])
             for qij in qi:
@@ -166,7 +166,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
             ai = []
             cai = []
             for aid, answer in question['answerChoices'].items():
-                if aid == yi_raw:
+                if aid == yi_raw or (yi_raw in ('true', 'false') and yi_raw == answer['processedText']):
                     yi = len(ai)
                 aij = word_tokenize(answer['processedText'])
                 ai.append(aij)
@@ -177,6 +177,10 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
                     lower_word_counter[aijk.lower()] += 1
                     for aijkl in aijk:
                         char_counter[aijkl] += 1
+
+            if yi is None:
+                print("Skipping question '{}' because answer does not match the choices ...".format(qid))
+                continue
 
             q.append(qi)
             cq.append(cqi)

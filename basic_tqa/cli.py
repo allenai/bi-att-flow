@@ -2,12 +2,12 @@ import os
 
 import tensorflow as tf
 
-from basic.main import main as m
+from basic_tqa.main import main as m
 
 flags = tf.app.flags
 
 flags.DEFINE_string("model_name", "basic_tqa", "Model name [basic_tqa]")
-flags.DEFINE_string("data_dir", "data/squad", "Data dir [data/tqa]")
+flags.DEFINE_string("data_dir", "data/tqa", "Data dir [data/tqa]")
 flags.DEFINE_string("run_id", "0", "Run ID [0]")
 flags.DEFINE_string("out_base_dir", "out", "out base dir [out]")
 
@@ -37,7 +37,7 @@ flags.DEFINE_integer("char_filter_height", 5, "Char filter height [5]")
 flags.DEFINE_float("wd", 0.0, "Weight decay [0.0]")
 flags.DEFINE_bool("lower_word", True, "lower word [True]")
 flags.DEFINE_bool("dump_eval", True, "dump eval? [True]")
-flags.DEFINE_bool("dump_answer", True, "dump answer? [True]")
+flags.DEFINE_bool("dump_answer", False, "dump answer? [False]")
 flags.DEFINE_string("model", "2", "config 1 |2 [2]")
 flags.DEFINE_bool("squash", False, "squash the sentences into one? [False]")
 flags.DEFINE_bool("single", False, "supervise only the answer sentence? [False]")
