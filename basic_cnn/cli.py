@@ -12,10 +12,10 @@ flags.DEFINE_string("root_dir", "/Users/minjoons/data/cnn/questions", "root dir 
 flags.DEFINE_string("run_id", "0", "Run ID [0]")
 flags.DEFINE_string("out_base_dir", "out", "out base dir [out]")
 
-flags.DEFINE_integer("batch_size", 60, "Batch size [60]")
+flags.DEFINE_integer("batch_size", 15, "Batch size [15]")
 flags.DEFINE_float("init_lr", 0.5, "Initial learning rate [0.5]")
 flags.DEFINE_integer("num_epochs", 50, "Total number of epochs for training [50]")
-flags.DEFINE_integer("num_steps", 20000, "Number of steps [20000]")
+flags.DEFINE_integer("num_steps", 100000, "Number of steps [100000]")
 flags.DEFINE_integer("eval_num_batches", 100, "eval num batches [100]")
 flags.DEFINE_integer("load_step", 0, "load step [0]")
 flags.DEFINE_integer("early_stop", 4, "early stop [4]")

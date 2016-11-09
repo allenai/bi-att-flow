@@ -151,3 +151,10 @@ def get_sim_idx(terms, counters):
     return int(np.argmax(avg_tf_idf))
 
 
+def replace(text, rep):
+    rep = dict((re.escape(k), v) for k, v in rep.items())
+    pattern = re.compile("|".join(rep.keys()))
+    out = pattern.sub(lambda m: rep[re.escape(m.group(0))], text)
+    return out
+
+

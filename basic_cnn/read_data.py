@@ -9,7 +9,7 @@ import numpy as np
 
 from cnn_dm.prepro import para2sents
 from my.tensorflow import grouper
-from my.utils import index
+from my.utils import index, replace
 
 
 class Data(object):
@@ -56,16 +56,34 @@ class MyData(Data):
             answer = fh.readline().strip()
             _ = fh.readline()
             cands = list(line.strip() for line in fh)
-            cand_ents = list(cand.split(":")[0] for cand in cands)
+            cands = list(cand.split(":")[0] for cand in cands)
+
             wordss = para2sents(para, self.config.width)
             ques_words = ques.split(" ")
+
+            # SHUFFLING
+            # print(wordss)
+            # print(answer)
+            # print("+" * 20)
+            rand_cands = random.sample(cands, len(cands))
+            cand_map = dict(zip(cands, rand_cands))
+            for i, words in enumerate(wordss):
+                for j, word in enumerate(words):
+                    if word.startswith("@entity"):
+                        wordss[i][j] = cand_map[word]
+            for i, word in enumerate(ques_words):
+                if word.startswith("@entity"):
+                    ques_words[i] = cand_map[word]
+            answer = cand_map[answer]
+            # print(wordss)
+            # print(answer)
 
             x = wordss
             cx = [[list(word) for word in words] for words in wordss]
             q = ques_words
             cq = [list(word) for word in ques_words]
             y = answer
-            c = cand_ents
+            c = cands
 
             data = {'x': x, 'cx': cx, 'q': q, 'cq': cq, 'y': y, 'c': c, 'ids': file_name}
             return data
