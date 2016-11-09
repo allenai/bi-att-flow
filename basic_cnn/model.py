@@ -303,8 +303,10 @@ class Model(object):
         CX = batch.data['cx']
 
         def _get_word(word):
-            if word.startswith("@"):
+            if word.startswith("@entity"):
                 return 2
+            elif word.startswith("@placeholder"):
+                return 3
             d = batch.shared['word2idx']
             for each in (word, word.lower(), word.capitalize(), word.upper()):
                 if each in d:
@@ -345,6 +347,12 @@ class Model(object):
         for i, cxi in enumerate(CX):
             for j, cxij in enumerate(cxi):
                 for k, cxijk in enumerate(cxij):
+                    if _get_word(X[i][j][k]) == 2:
+                        cx[i, j, k, 0] = 2
+                        continue
+                    elif _get_word(X[i][j][k]) == 3:
+                        cx[i, j, k, 0] = 3
+                        continue
                     for l, cxijkl in enumerate(cxijk):
                         cx[i, j, k, l] = _get_char(cxijkl)
                         if l + 1 == config.max_word_size:

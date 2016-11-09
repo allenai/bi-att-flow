@@ -1,20 +1,26 @@
 # Bi-directional Attention Flow for Machine Comprehension
 
-Follow three simple steps.
-For more advanced usages, see below.
+This is the original implementation of the following paper:
 
-## 0. Requirements
-#### General
+[Bi-directional Attention Flow for Machine Comprehension][paper] (Seo et al., 2016) 
+
+Regarding [Stanford Question Answering Dataset][squad] experiment, see Section A.
+Regarding [CNN/DailyMail Dataset][cnn] experiments, see Section B.
+
+## Common Requirements
+### General
 - Python (developed on 3.5.2)
 - unzip
 
-#### Python Packages
+### Python Packages
 - tensorflow (deep learning library, verified on r0.11)
 - nltk (NLP tools, verified on 3.2.1)
 - tqdm (progress bar, verified on 4.7.4)
 - jinja2 (for visaulization; if you only train and test, not needed)
 
-## 1. Pre-processing
+## Section A: Stanford Question Answering
+
+### 1. Pre-processing
 First, prepare data. Donwload SQuAD data and GloVe and nltk corpus
 (~850 MB, this will download files to `$HOME/data`):
 ```
@@ -26,7 +32,7 @@ Second, Preprocess Stanford QA dataset (along with GloVe vectors) and save them 
 python -m squad.prepro
 ```
 
-## 2. Training
+### 2. Training
 The model was trained with NVidia Titan X (Pascal Architecture, 2016).
 The model requires at least 12GB of GPU RAM.
 If your GPU RAM is smaller than 12GB, you can either decrease batch size (performance might degrade),
@@ -39,7 +45,7 @@ To train:
 python -m basic.cli --mode train --noload
 ```
 
-## 3. Testing
+### 3. Testing
 To Test (~30 mins):
 ```
 python -m basic.cli --mode test --batch_size 8 --eval_num_batches 0
@@ -56,9 +62,12 @@ To obtain the official number, use the official evaluator and the output json fi
 python squad/evaluate-v1.1.py $HOME/data/squad/dev-v1.1.json out/basic/00/answer/test-####.json
 ```
 
+### 4. Ensemble
+Ensemble method gives even better performance.
 
-## Results
-See [SQuAD Leaderboard][squad]
+
+### 5. Results
+See [paper][paper] or [SQuAD Leaderboard][squad].
 
 
 <!--
@@ -74,7 +83,7 @@ python -m basic.cli --mode test --batch_size 8 --eval_num_batches 0 --load_step 
 -->
 
 
-## Multi-GPU Training & Testing
+### 6. Multi-GPU Training & Testing
 Our model supports multi-GPU training.
 We follow the parallelization paradigm described in [TensorFlow Tutorial][multi-gpu].
 In short, if you want to use batch size of 60 (default) but if you have 3 GPUs with 4GB of RAM,
@@ -88,8 +97,57 @@ Similarly, you can speed up your testing by (if your GPU's RAM is 4GB, then batc
 ```
 python -m basic.cli --mode test --batch_size 2 --num_gpus 3
 ```
- 
+
+## Section B: CNN/DailyMail 
+
+We show the procedure for CNN data. Similar steps can be taken for DailyMail.
+
+### 1. Pre-processing
+
+First, prepare data. Download the CNN Questions from [here][cho-cnn].
+Extract it in a folder (e.g. `$HOME/data/cnn/`).
+
+Then perform pre-processing script on the data:
+```bash
+python -m cnn_dm.prepro --source_dir $PATH_TO_CNN_DATA/questions --target_dir data/cnn/
+```
+This creates auxilary files in local `data/cnn` folder.
+Note that this filters out some long questions or those with long articles (< 5% of questions) for reduced GPU RAM usage.
+In order to test on the full data, we pre-process without filtering and put it in another folder:
+```bash
+python -m cnn_dm.prepro --source_dir $PATH_TO_CNN_DATA/questions --target_dir data/cnn-all/ --num_sents_th 9999 --ques_size_th 9999
+```
+
+### 2. Training
+Due to very lengthy articles, single GPU of 12GB RAM can only take batch size of 15.
+Since our model needs a batch size of 30, we use two GPUs to resolve this issue (see Section A.2 and A.6).
+First make sure you have access to two GPUs (by setting CUDA_VISIBLE_DEVICES), and run:
+
+```bash
+python -m basic_cnn.cli --mode train --noload --root_dir $PATH_TO_CNN_DATA/questions --data_dir data/cnn/ --num_gpus 2
+```
+
+This will run for 2-3 days on Titan X, though you can early stop at your convenience (saved every 1000 step).
+Monitor the dev accuracy and loss via Tensorboard.
+
+
+### 3. Testing
+As noted in A.1, testing must be done on entire test data without filtering:
+```bash
+python -m basic_cnn.cli --mode test --root_dir $PATH_TO_CNN_DATA\questions --data_dir data/cnn-all/ --num_gpus 2 --batch_size 5 --eval_num_batches 0
+```
+Make sure that the total number of questions by the system matches the true number of questions (so that no question is filtered out).  
+Decrease batch size if you get OOM; the size doesn't have any effect on the accuracy.
+You can use as many GPUs you want to test faster.
+
+
+### 4. Results
+
+See [paper][paper]
 
 [multi-gpu]: https://www.tensorflow.org/versions/r0.11/tutorials/deep_cnn/index.html#training-a-model-using-multiple-gpu-cards
 [save]: #
 [squad]: http://stanford-qa.com
+[paper]: https://arxiv.org/abs/1611.01603
+[cnn]: https://github.com/deepmind/rc-data
+[cho-cnn]: http://cs.nyu.edu/~kcho/DMQA/

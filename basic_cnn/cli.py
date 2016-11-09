@@ -90,6 +90,7 @@ flags.DEFINE_string("sh_logit_func", "tri_linear", "sh logit func [tri_linear]")
 flags.DEFINE_float("filter_ratio", 1.0, "filter ratio [1.0]")
 flags.DEFINE_bool("bi", False, "bi-directional attention? [False]")
 flags.DEFINE_integer("width", 5, "width around entity [5]")
+flags.DEFINE_bool("shuffle_ent", True, "shuffle ent? [True]")
 
 
 def main(_):

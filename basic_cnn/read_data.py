@@ -9,7 +9,7 @@ import numpy as np
 
 from cnn_dm.prepro import para2sents
 from my.tensorflow import grouper
-from my.utils import index, replace
+from my.utils import index
 
 
 class Data(object):
@@ -61,22 +61,23 @@ class MyData(Data):
             wordss = para2sents(para, self.config.width)
             ques_words = ques.split(" ")
 
-            # SHUFFLING
-            # print(wordss)
-            # print(answer)
-            # print("+" * 20)
-            rand_cands = random.sample(cands, len(cands))
-            cand_map = dict(zip(cands, rand_cands))
-            for i, words in enumerate(wordss):
-                for j, word in enumerate(words):
+            if self.config.shuffle_ent:
+                # SHUFFLING
+                # print(wordss)
+                # print(answer)
+                # print("+" * 20)
+                rand_cands = random.sample(cands, len(cands))
+                cand_map = dict(zip(cands, rand_cands))
+                for i, words in enumerate(wordss):
+                    for j, word in enumerate(words):
+                        if word.startswith("@entity"):
+                            wordss[i][j] = cand_map[word]
+                for i, word in enumerate(ques_words):
                     if word.startswith("@entity"):
-                        wordss[i][j] = cand_map[word]
-            for i, word in enumerate(ques_words):
-                if word.startswith("@entity"):
-                    ques_words[i] = cand_map[word]
-            answer = cand_map[answer]
-            # print(wordss)
-            # print(answer)
+                        ques_words[i] = cand_map[word]
+                answer = cand_map[answer]
+                # print(wordss)
+                # print(answer)
 
             x = wordss
             cx = [[list(word) for word in words] for words in wordss]
@@ -249,20 +250,24 @@ def read_data(config, data_type, ref, data_filter=None):
         else:
             assert config.known_if_glove
             assert config.use_glove_for_unk
-            shared['word2idx'] = {word: idx + 3 for idx, word in
+            shared['word2idx'] = {word: idx + 4 for idx, word in
                                   enumerate(word for word, count in word_counter.items()
                                             if count > config.word_count_th and word not in word2vec_dict)}
-        shared['char2idx'] = {char: idx + 2 for idx, char in
+        shared['char2idx'] = {char: idx + 4 for idx, char in
                               enumerate(char for char, count in char_counter.items()
                                         if count > config.char_count_th)}
         NULL = "-NULL-"
         UNK = "-UNK-"
         ENT = "-ENT-"
+        PH = "-PH-"
         shared['word2idx'][NULL] = 0
         shared['word2idx'][UNK] = 1
         shared['word2idx'][ENT] = 2
+        shared['word2idx'][PH] = 3
         shared['char2idx'][NULL] = 0
         shared['char2idx'][UNK] = 1
+        shared['char2idx'][ENT] = 2
+        shared['char2idx'][PH] = 3
 
         json.dump({'word2idx': shared['word2idx'], 'char2idx': shared['char2idx']}, open(shared_path, 'w'))
     else:
