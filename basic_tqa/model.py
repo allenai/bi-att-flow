@@ -295,7 +295,21 @@ class Model(object):
         return self.var_list
 
     def get_feed_dict(self, batch, is_train, supervised=True):
-        assert isinstance(batch, DataSet)
+        # FIXME : tf-idf
+        X = []
+        CX = []
+        for Xi, CXi, Qi in zip(batch.data['x'], batch.data['cx'], batch.data['q']):
+            counters = [Counter(word.lower() for sent in para for word in sent) for para in Xi]
+            question = [word.lower() for word in Qi]
+            idx = get_sim_idx(question, counters)
+            X.append(Xi[idx])
+            CX.append(CXi[idx])
+            """
+            print(len(Xi))
+            print("all:", "\n\n".join(" ".join(" ".join(words) for words in sents) for sents in Xi))
+            print("question:", " ".join(Qi))
+            print("para:", " ".join(" ".join(each) for each in Xi[idx]))
+            """
         config = self.config
         N, M, JX, JQ, VW, VC, d, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
@@ -308,10 +322,10 @@ class Model(object):
             Note that this optimization results in variable GPU RAM usage (i.e. can cause OOM in the middle of training.)
             First test without len_opt and make sure no OOM, and use len_opt
             """
-            if sum(len(sent) for para in batch.data['x'] for sent in para) == 0:
+            if sum(len(sent) for para in X for sent in para) == 0:
                 new_JX = 1
             else:
-                new_JX = max(len(sent) for para in batch.data['x'] for sent in para)
+                new_JX = max(len(sent) for para in X for sent in para)
             JX = min(JX, new_JX)
 
             if sum(len(ques) for ques in batch.data['q']) == 0:
@@ -327,10 +341,10 @@ class Model(object):
             JA = min(JA, new_JA)
 
         if config.cpu_opt:
-            if sum(len(para) for para in batch.data['x']) == 0:
+            if sum(len(para) for para in X) == 0:
                 new_M = 1
             else:
-                new_M = max(len(para) for para in batch.data['x'])
+                new_M = max(len(para) for para in X)
             M = min(M, new_M)
 
             if sum(len(anss) for anss in batch.data['a']) == 0:
@@ -362,21 +376,6 @@ class Model(object):
         if config.use_glove_for_unk:
             feed_dict[self.new_emb_mat] = batch.shared['new_emb_mat']
 
-        # FIXME : tf-idf
-        X = []
-        CX = []
-        for Xi, CXi, Qi in zip(batch.data['x'], batch.data['cx'], batch.data['q']):
-            counters = [Counter(word.lower() for sent in para for word in sent) for para in Xi]
-            question = [word.lower() for word in Qi]
-            idx = get_sim_idx(question, counters)
-            X.append(Xi[idx])
-            CX.append(CXi[idx])
-            """
-            print(len(Xi))
-            print("all:", "\n\n".join(" ".join(" ".join(words) for words in sents) for sents in Xi))
-            print("question:", " ".join(Qi))
-            print("para:", " ".join(" ".join(each) for each in Xi[idx]))
-            """
 
         if supervised:
             y = np.zeros([N], dtype='int32')
@@ -434,11 +433,15 @@ class Model(object):
 
         for i, qi in enumerate(batch.data['q']):
             for j, qij in enumerate(qi):
+                if j == config.max_ques_size:
+                    break
                 q[i, j] = _get_word(qij)
                 q_mask[i, j] = True
 
         for i, cqi in enumerate(batch.data['cq']):
             for j, cqij in enumerate(cqi):
+                if j == config.max_ques_size:
+                    break
                 for k, cqijk in enumerate(cqij):
                     cq[i, j, k] = _get_char(cqijk)
                     if k + 1 == config.max_word_size:

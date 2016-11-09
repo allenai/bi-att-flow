@@ -233,6 +233,7 @@ def get_squad_data_filter(config):
         if len(q) > config.ques_size_th:
             return False
         return True
+    return data_filter
 
 
 def update_config(config, data_sets):

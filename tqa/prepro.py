@@ -127,8 +127,6 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     for ci, chapter in enumerate(tqdm(source_data[start_ci:stop_ci])):
         xi = []
         cxi = []
-        x.append(xi)
-        cx.append(cxi)
         for tj, topic in chapter['topics'].items():
             cur = topic['content']['text']
             cur = cur.replace("''", '" ')
@@ -145,6 +143,14 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
                     lower_word_counter[xijkl.lower()] += l
                     for xijklm in xijkl:
                         char_counter[xijklm] += l
+
+        x.append(xi)
+        cx.append(cxi)
+
+        if len(xi) == 0 or sum(map(len, xi)) == 0:
+            skip_count += len(chapter['questions']['nonDiagramQuestions'])
+            continue
+
 
         for qid, question in chapter['questions']['nonDiagramQuestions'].items():
             if 'processedText' not in question['correctAnswer']:
