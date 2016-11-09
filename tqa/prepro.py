@@ -123,35 +123,37 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
 
     start_ci = int(round(len(source_data) * start_ratio))
     stop_ci = int(round(len(source_data) * stop_ratio))
-
+    skip_count = 0
     for ci, chapter in enumerate(tqdm(source_data[start_ci:stop_ci])):
-        # paragraphs
-
-        context = ""
-        for ti, topic in chapter['topics'].items():
+        xi = []
+        cxi = []
+        x.append(xi)
+        cx.append(cxi)
+        for tj, topic in chapter['topics'].items():
             cur = topic['content']['text']
             cur = cur.replace("''", '" ')
             cur = cur.replace("``", '" ')
-            context += cur
-        xi = list(map(word_tokenize, sent_tokenize(context)))
-        cxi = [[list(xijk) for xijk in xij] for xij in xi]
-        x.append(xi)
-        cx.append(cxi)
+            xij = list(map(word_tokenize, sent_tokenize(cur)))
+            cxij = [[list(xijkl) for xijkl in xijk] for xijk in xij]
+            xi.append(xij)
+            cxi.append(cxij)
 
-        for xij in xi:
             for xijk in xij:
-                l = len(chapter['questions']['nonDiagramQuestions'])
-                word_counter[xijk] += l
-                lower_word_counter[xijk.lower()] += l
                 for xijkl in xijk:
-                    char_counter[xijkl] += l
+                    l = len(chapter['questions']['nonDiagramQuestions'])
+                    word_counter[xijkl] += l
+                    lower_word_counter[xijkl.lower()] += l
+                    for xijklm in xijkl:
+                        char_counter[xijklm] += l
 
         for qid, question in chapter['questions']['nonDiagramQuestions'].items():
             if 'processedText' not in question['correctAnswer']:
-                print("Skipping question '{}' because no processed text ...".format(qid))
+                # print("Skipping question '{}' because no processed text ...".format(qid))
+                skip_count += 1
                 continue
             if len(question['answerChoices']) == 0:
-                print("Skipping question '{}' because no answer choices ...".format(qid))
+                # print("Skipping question '{}' because no answer choices ...".format(qid))
+                skip_count += 1
                 continue
             qi = word_tokenize(question['beingAsked']['processedText'])
             for qij in qi:
@@ -179,7 +181,8 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
                         char_counter[aijkl] += 1
 
             if yi is None:
-                print("Skipping question '{}' because answer does not match the choices ...".format(qid))
+                # print("Skipping question '{}' because answer does not match the choices ...".format(qid))
+                skip_count += 1
                 continue
 
             q.append(qi)
@@ -192,6 +195,8 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
             ids.append(question['globalID'])
         if args.debug:
             break
+
+    print("n={}, skipped={}".format(len(q), skip_count))
 
     word2vec_dict = get_word2vec(args, word_counter)
     lower_word2vec_dict = get_word2vec(args, lower_word_counter)

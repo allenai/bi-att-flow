@@ -136,3 +136,18 @@ def process_tokens(temp_tokens):
         l = ("-", "\u2212", "\u2014", "\u2013")
         tokens.extend(re.split("([{}])".format("".join(l)), token))
     return tokens
+
+
+def get_tf_idf(term, counters):
+    tf = np.array([counter[term] for counter in counters])
+    idf = np.log((1 + len(counters))/(1 + sum(bool(counter[term]) for counter in counters)))
+    tf_idf = tf * idf
+    return tf_idf
+
+
+def get_sim_idx(terms, counters):
+    tf_idf_list = np.array([get_tf_idf(term, counters) for term in terms])
+    avg_tf_idf = np.mean(tf_idf_list, 0)
+    return int(np.argmax(avg_tf_idf))
+
+

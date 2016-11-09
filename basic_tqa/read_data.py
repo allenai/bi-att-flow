@@ -250,11 +250,14 @@ def update_config(config, data_sets):
             rx = data['*x'][idx]
             q = data['q'][idx]
             a = data['a'][idx]
-            sents = shared['x'][rx]
-            config.max_para_size = max(config.max_para_size, sum(map(len, sents)))
-            config.max_num_sents = max(config.max_num_sents, len(sents))
-            config.max_sent_size = max(config.max_sent_size, max(map(len, sents)))
-            config.max_word_size = max(config.max_word_size, max(len(word) for sent in sents for word in sent))
+            paras = shared['x'][rx]
+            for sents in paras:
+                if len(sents) > 0:
+                    config.max_para_size = max(config.max_para_size, sum(map(len, sents)))
+                    config.max_num_sents = max(config.max_num_sents, len(sents))
+                    config.max_sent_size = max(config.max_sent_size, max(map(len, sents)))
+                    config.max_word_size = max(config.max_word_size, max(len(word) for sent in sents for word in sent))
+
             config.max_num_anss = max(config.max_num_anss, len(a))
             if len(q) > 0:
                 config.max_ques_size = max(config.max_ques_size, len(q))

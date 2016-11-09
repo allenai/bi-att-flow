@@ -1,6 +1,8 @@
 import random
 
 import itertools
+from collections import Counter
+
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell, GRUCell
@@ -12,6 +14,7 @@ from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softse
     highway_network, multi_conv1d
 from my.tensorflow.rnn import bidirectional_dynamic_rnn, dynamic_rnn
 from my.tensorflow.rnn_cell import SwitchableDropoutWrapper, AttentionCell
+from my.utils import get_sim_idx
 
 
 def attention_flow(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None, num_layers=1):
@@ -359,8 +362,21 @@ class Model(object):
         if config.use_glove_for_unk:
             feed_dict[self.new_emb_mat] = batch.shared['new_emb_mat']
 
-        X = batch.data['x']
-        CX = batch.data['cx']
+        # FIXME : tf-idf
+        X = []
+        CX = []
+        for Xi, CXi, Qi in zip(batch.data['x'], batch.data['cx'], batch.data['q']):
+            counters = [Counter(word.lower() for sent in para for word in sent) for para in Xi]
+            question = [word.lower() for word in Qi]
+            idx = get_sim_idx(question, counters)
+            X.append(Xi[idx])
+            CX.append(CXi[idx])
+            """
+            print(len(Xi))
+            print("all:", "\n\n".join(" ".join(" ".join(words) for words in sents) for sents in Xi))
+            print("question:", " ".join(Qi))
+            print("para:", " ".join(" ".join(each) for each in Xi[idx]))
+            """
 
         if supervised:
             y = np.zeros([N], dtype='int32')

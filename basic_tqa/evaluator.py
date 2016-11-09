@@ -67,8 +67,10 @@ class LabeledEvaluation(Evaluation):
 
 
 class AccuracyEvaluation(LabeledEvaluation):
-    def __init__(self, data_type, global_step, idxs, yp, y, correct, loss, tensor_dict=None):
+    def __init__(self, data_type, global_step, idxs, yp, y, num_choices_list, correct, loss, tensor_dict=None):
         super(AccuracyEvaluation, self).__init__(data_type, global_step, idxs, yp, y, tensor_dict=tensor_dict)
+        self.num_choices_list = num_choices_list
+        self.expected_acc = float(np.mean([1.0/num for num in num_choices_list]))
         self.loss = loss
         self.correct = correct
         self.acc = sum(correct) / len(correct)
@@ -80,8 +82,8 @@ class AccuracyEvaluation(LabeledEvaluation):
         self.summaries = [loss_summary, acc_summary]
 
     def __repr__(self):
-        return "{} step {}: accuracy={}={}/{}, loss={}".format(self.data_type, self.global_step, self.acc,
-                                                               sum(self.correct), len(self.correct), self.loss)
+        return "{} step {}: accuracy={:.4f}={}/{}, expected={:.4f}, loss={:.4f}".format(self.data_type, self.global_step, self.acc,
+                                                               sum(self.correct), len(self.correct), self.expected_acc, self.loss)
 
     def __add__(self, other):
         if other == 0:
@@ -93,9 +95,11 @@ class AccuracyEvaluation(LabeledEvaluation):
         new_y = self.y + other.y
         new_correct = self.correct + other.correct
         new_loss = (self.loss * self.num_examples + other.loss * other.num_examples) / len(new_correct)
+        new_num_choices_list = (self.num_choices_list + other.num_choices_list)
+        new_tensor_dict = self.tensor_dict
         if self.tensor_dict is not None:
             new_tensor_dict = {key: np.concatenate((val, other.tensor_dict[key]), axis=0) for key, val in self.tensor_dict.items()}
-        return AccuracyEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_y, new_correct, new_loss, tensor_dict=new_tensor_dict)
+        return AccuracyEvaluation(self.data_type, self.global_step, new_idxs, new_yp, new_y, new_num_choices_list, new_correct, new_loss, tensor_dict=new_tensor_dict)
 
 
 class Evaluator(object):
@@ -152,10 +156,11 @@ class AccuracyEvaluator(LabeledEvaluator):
         feed_dict = self._get_feed_dict(batch)
         global_step, yp, loss, vals = sess.run([self.global_step, self.yp, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
         y = data_set.data['y']
+        num_choices_list = [len(each) for each in data_set.data['a']]
         yp = yp[:data_set.num_examples]
         correct = [self.__class__.compare(yi, ypi) for yi, ypi in zip(y, yp)]
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
-        e = AccuracyEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y, correct, float(loss), tensor_dict=tensor_dict)
+        e = AccuracyEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y, num_choices_list, correct, float(loss), tensor_dict=tensor_dict)
         return e
 
     @staticmethod
