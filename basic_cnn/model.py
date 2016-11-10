@@ -297,10 +297,6 @@ class Model(object):
         CX = batch.data['cx']
 
         def _get_word(word):
-            if word.startswith("@entity"):
-                return 2
-            elif word.startswith("@placeholder"):
-                return 3
             d = batch.shared['word2idx']
             for each in (word, word.lower(), word.capitalize(), word.upper()):
                 if each in d:

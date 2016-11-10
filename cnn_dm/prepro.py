@@ -100,6 +100,7 @@ def prepro_each(args, mode):
     max_word_size = 0
     max_ques_size = 0
     max_num_sents = 0
+    max_num_ents = 0
 
     file_names = list(os.listdir(source_dir))
     if args.debug:
@@ -131,11 +132,13 @@ def prepro_each(args, mode):
                 max_ques_size = max(len(ques_words), max_ques_size)
                 max_word_size = max(max(len(word) for sent in sents for word in sent), max_word_size)
                 max_num_sents = max(len(sents), max_num_sents)
+                max_num_ents = max(max_num_ents, len(cand_ents))
 
                 for word in ques_words:
                     if word.startswith("@"):
                         ent_counter[word] += 1
-                        word_counter[word] += 1
+                        # word_counter[word] += 1
+                        # lower_word_counter[word] += 1
                     else:
                         word_counter[word] += 1
                         lower_word_counter[word.lower()] += 1
@@ -145,7 +148,8 @@ def prepro_each(args, mode):
                     for word in sent:
                         if word.startswith("@"):
                             ent_counter[word] += 1
-                            word_counter[word] += 1
+                            # word_counter[word] += 1
+                            # lower_word_counter[word] += 1
                         else:
                             word_counter[word] += 1
                             lower_word_counter[word.lower()] += 1
@@ -166,12 +170,13 @@ def prepro_each(args, mode):
     shared = {'word_counter': word_counter, 'ent_counter': ent_counter, 'char_counter': char_counter,
               'lower_word_counter': lower_word_counter,
               'max_num_sents': max_num_sents, 'max_sent_size': max_sent_size, 'max_word_size': max_word_size,
-              'max_ques_size': max_ques_size,
+              'max_ques_size': max_ques_size, 'max_num_ents': max_num_ents,
               'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dit, 'sorted': sorted_file_names,
               'num_examples': num_examples}
 
     print("max num sents: {}".format(max_num_sents))
     print("max ques size: {}".format(max_ques_size))
+    print("max num ents: {}".format(max_num_ents))
 
     if not os.path.exists(args.target_dir):
         os.makedirs(args.target_dir)

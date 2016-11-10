@@ -66,7 +66,8 @@ class MyData(Data):
                 # print(wordss)
                 # print(answer)
                 # print("+" * 20)
-                rand_cands = random.sample(cands, len(cands))
+                # rand_cands = random.sample(cands, len(cands))
+                rand_cands = ["@entity{}".format(num) for num in random.sample(range(self.config.max_num_ents), len(cands))]
                 cand_map = dict(zip(cands, rand_cands))
                 for i, words in enumerate(wordss):
                     for j, word in enumerate(words):
@@ -243,31 +244,37 @@ def read_data(config, data_type, ref, data_filter=None):
         word2vec_dict = shared['lower_word2vec'] if config.lower_word else shared['word2vec']
         word_counter = shared['lower_word_counter'] if config.lower_word else shared['word_counter']
         char_counter = shared['char_counter']
+
+        offset = 3 + config.max_num_ents
         if config.finetune:
-            shared['word2idx'] = {word: idx + 3 for idx, word in
+            shared['word2idx'] = {word: idx + offset for idx, word in
                                   enumerate(word for word, count in word_counter.items()
                                             if count > config.word_count_th or (config.known_if_glove and word in word2vec_dict))}
         else:
             assert config.known_if_glove
             assert config.use_glove_for_unk
-            shared['word2idx'] = {word: idx + 4 for idx, word in
+            shared['word2idx'] = {word: idx + offset for idx, word in
                                   enumerate(word for word, count in word_counter.items()
                                             if count > config.word_count_th and word not in word2vec_dict)}
         shared['char2idx'] = {char: idx + 4 for idx, char in
                               enumerate(char for char, count in char_counter.items()
                                         if count > config.char_count_th)}
+
         NULL = "-NULL-"
         UNK = "-UNK-"
+        PH = "@placeholder"
         ENT = "-ENT-"
-        PH = "-PH-"
         shared['word2idx'][NULL] = 0
         shared['word2idx'][UNK] = 1
-        shared['word2idx'][ENT] = 2
-        shared['word2idx'][PH] = 3
+        shared['word2idx'][PH] = 2
+        offset = len(shared['word2idx'])
+        for num in range(config.max_num_ents):
+            shared['word2idx']["@entity{}".format(num)] = num + offset
+
         shared['char2idx'][NULL] = 0
         shared['char2idx'][UNK] = 1
-        shared['char2idx'][ENT] = 2
-        shared['char2idx'][PH] = 3
+        shared['char2idx'][PH] = 2
+        shared['char2idx'][ENT] = 3
 
         json.dump({'word2idx': shared['word2idx'], 'char2idx': shared['char2idx']}, open(shared_path, 'w'))
     else:
