@@ -88,6 +88,7 @@ class Model(object):
         self.q = tf.placeholder('int32', [N, JQ], name='q')
         self.cq = tf.placeholder('int32', [N, JQ, W], name='cq')
         self.q_mask = tf.placeholder('bool', [N, JQ], name='q_mask')
+        self.e_mask = tf.placeholder('bool', [N, M, None], name='e_mask')
         self.y = tf.placeholder('bool', [N, M, JX], name='y')
         self.is_train = tf.placeholder('bool', [], name='is_train')
         self.new_emb_mat = tf.placeholder('float', [None, config.word_emb_size], name='new_emb_mat')
@@ -205,16 +206,7 @@ class Model(object):
             g1 = tf.concat(3, [fw_g1, bw_g1])
             # logits = u_logits(config, self.is_train, g1, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="logits")
             # [N, M, JX]
-            logits = get_logits([g1, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
-            a1i = softsel(tf.reshape(g1, [N, M*JX, 2*d]), tf.reshape(logits, [N, M*JX]))
-
-            if config.feed_gt:
-                logy = tf.log(tf.cast(self.y, 'float') + VERY_SMALL_NUMBER)
-                logits = tf.cond(self.is_train, lambda: logy, lambda: logits)
-            if config.feed_hard:
-                hard_yp = tf.argmax(tf.reshape(logits, [N, M*JX]), 1)
-                hard_logits = tf.reshape(tf.one_hot(hard_yp, M*JX), [N, M, JX])  # [N, M, JX]
-                logits = tf.cond(self.is_train, lambda: logits, lambda: hard_logits)
+            logits = get_logits([g1, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob, mask=self.e_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
 
             flat_logits = tf.reshape(logits, [-1, M * JX])
             flat_yp = tf.nn.softmax(flat_logits)  # [-1, M*JX]
@@ -285,6 +277,7 @@ class Model(object):
         x = np.zeros([N, M, JX], dtype='int32')
         cx = np.zeros([N, M, JX, W], dtype='int32')
         x_mask = np.zeros([N, M, JX], dtype='bool')
+        e_mask = np.zeros([N, M, JX], dtype='bool')
         q = np.zeros([N, JQ], dtype='int32')
         cq = np.zeros([N, JQ, W], dtype='int32')
         q_mask = np.zeros([N, JQ], dtype='bool')
@@ -295,6 +288,7 @@ class Model(object):
         feed_dict[self.q] = q
         feed_dict[self.cq] = cq
         feed_dict[self.q_mask] = q_mask
+        feed_dict[self.e_mask] = e_mask
         feed_dict[self.is_train] = is_train
         if config.use_glove_for_unk:
             feed_dict[self.new_emb_mat] = batch.shared['new_emb_mat']
@@ -335,6 +329,8 @@ class Model(object):
                         if xijk == yi:
                             y[i, j, k] = True
                             count += 1
+                        if xijk.startswith("@"):
+                            e_mask[i, j, k] = True
                 assert count > 0
 
         for i, xi in enumerate(X):
