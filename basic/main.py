@@ -73,7 +73,7 @@ def _train(config):
     graph_handler.initialize(sess)
 
     # begin training
-    print(train_data.num_examples)
+    print("train num examples: {}".format(train_data.num_examples))
     num_steps = config.num_steps or int(math.ceil(train_data.num_examples / (config.batch_size * config.num_gpus))) * config.num_epochs
     global_step = 0
     for batches in tqdm(train_data.get_multi_batches(config.batch_size, config.num_gpus,

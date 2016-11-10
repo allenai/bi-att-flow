@@ -58,7 +58,8 @@ def attention_flow(config, is_train, h, u, h_mask=None, u_mask=None, scope=None,
                 tensor_dict[var.name] = var
 
         p = tf.concat(2, [h, u_a, h * u_a])  # [N, JX, d]
-        cell = BasicLSTMCell(d, state_is_tuple=True)
+        # cell = BasicLSTMCell(d, state_is_tuple=True)
+        cell = GRUCell(d)
         d_cell = SwitchableDropoutWrapper(cell, is_train, input_keep_prob=config.input_keep_prob)
         h_len = tf.reduce_sum(tf.cast(h_mask, 'int32'), 1)
         g = p
@@ -81,13 +82,17 @@ def bi_attention_flow_layer(config, is_train, h, u, h_mask=None, u_mask=None, sc
         u_mask = tf.tile(tf.expand_dims(u_mask, 1), [1, M, 1])
         u_mask = tf.reshape(u_mask, [-1, JQ])
 
-        _, c2q = attention_flow(config, is_train, u, h, h_mask=u_mask, u_mask=h_mask, scope='c2q', num_layers=1)  # [N * M, JQ, 2d]
+        _, c2q = attention_flow(config, is_train, u, h, h_mask=u_mask, u_mask=h_mask, scope='c2q', num_layers=2)  # [N * M, JQ, 2d]
         p, q2c = attention_flow(config, is_train, h, c2q, h_mask=h_mask, u_mask=u_mask, scope='q2c', num_layers=2)  # [N * M, JX, 2d]
+        if config.second_att:
+            _, c2q2 = attention_flow(config, is_train, c2q, q2c, h_mask=u_mask, u_mask=h_mask, scope='c2q2', num_layers=1)  # [N * M, JQ, 2d]
+            p, q2c2 = attention_flow(config, is_train, q2c, c2q2, h_mask=h_mask, u_mask=u_mask, scope='q2c2', num_layers=1)  # [N * M, JQ, 2d]
+            c2q = c2q2
+            q2c = q2c2
         p = tf.reshape(p, [-1, M, JX, 6*d])
         q2c = tf.reshape(q2c, [-1, M, JX, 2*d])
         out = p, q2c
         return out
-
 
 
 class Model(object):
@@ -96,7 +101,6 @@ class Model(object):
         self.config = config
         self.global_step = tf.get_variable('global_step', shape=[], dtype='int32',
                                            initializer=tf.constant_initializer(0), trainable=False)
-
         # Define forward inputs here
         N, M, JX, JQ, VW, VC, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
@@ -197,16 +201,17 @@ class Model(object):
         self.tensor_dict['xx'] = xx
         self.tensor_dict['qq'] = qq
 
-        cell = BasicLSTMCell(d, state_is_tuple=True)
+        # cell = BasicLSTMCell(d, state_is_tuple=True)
+        cell = GRUCell(d)
         d_cell = SwitchableDropoutWrapper(cell, self.is_train, input_keep_prob=config.input_keep_prob)
         x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("prepro"):
-            (fw_u, bw_u), ((_, fw_u_f), (_, bw_u_f)) = bidirectional_dynamic_rnn(d_cell, d_cell, qq, q_len, dtype='float', scope='u1')  # [N, J, d], [N, d]
+            (fw_u, bw_u), _ = bidirectional_dynamic_rnn(d_cell, d_cell, qq, q_len, dtype='float', scope='u1')  # [N, J, d], [N, d]
             u = tf.concat(2, [fw_u, bw_u])
             if config.two_prepro_layers:
-                (fw_u, bw_u), ((_, fw_u_f), (_, bw_u_f)) = bidirectional_dynamic_rnn(d_cell, d_cell, u, q_len, dtype='float', scope='u2')  # [N, J, d], [N, d]
+                (fw_u, bw_u), _ = bidirectional_dynamic_rnn(d_cell, d_cell, u, q_len, dtype='float', scope='u2')  # [N, J, d], [N, d]
                 u = tf.concat(2, [fw_u, bw_u])
             if config.share_lstm_weights:
                 tf.get_variable_scope().reuse_variables()
@@ -262,20 +267,30 @@ class Model(object):
 
     def _build_loss(self):
         config = self.config
-        N, M, JX, JQ, VW, VC = \
-            config.batch_size, config.max_num_sents, config.max_sent_size, \
-            config.max_ques_size, config.word_vocab_size, config.char_vocab_size
         JX = tf.shape(self.x)[2]
         M = tf.shape(self.x)[1]
-        JQ = tf.shape(self.q)[1]
         loss_mask = tf.reduce_max(tf.cast(self.q_mask, 'float'), 1)
         losses = tf.nn.softmax_cross_entropy_with_logits(
             self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float'))
         ce_loss = tf.reduce_mean(loss_mask * losses)
         tf.add_to_collection('losses', ce_loss)
-        ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-            self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
+        losses2 = tf.nn.softmax_cross_entropy_with_logits(
+            self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float'))
+        ce_loss2 = tf.reduce_mean(loss_mask * losses2)
         tf.add_to_collection("losses", ce_loss2)
+
+        # common loss
+        if config.third_loss:
+            assert config.single
+            yp_aug = tf.tile(tf.expand_dims(self.yp, 2), [1, 1, JX, 1])
+            yp2_aug = tf.tile(tf.expand_dims(self.yp, -1), [1, 1, 1, JX])
+            yp_mat = yp_aug * yp2_aug  # [N, M, JX, JX]
+            y_aug = tf.cast(tf.tile(tf.expand_dims(self.y, 2), [1, 1, JX, 1]), 'float')
+            y2_aug = tf.cast(tf.tile(tf.expand_dims(self.y2, -1), [1, 1, 1, JX]), 'float')
+            y_mat = y_aug * y2_aug  # [N, M, JX, JX]
+            losses3 = -tf.log(tf.reduce_sum(yp_mat * y_mat, [1, 2, 3]) + VERY_SMALL_NUMBER)
+            ce_loss3 = tf.reduce_mean(loss_mask * losses3)
+            tf.add_to_collection("losses", ce_loss3)
 
         self.loss = tf.add_n(tf.get_collection('losses', scope=self.scope), name='loss')
         tf.scalar_summary(self.loss.op.name, self.loss)
