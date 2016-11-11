@@ -86,9 +86,10 @@ def bi_attention_flow_layer(config, is_train, h, u, h_mask=None, u_mask=None, sc
         p, q2c = attention_flow(config, is_train, h, c2q, h_mask=h_mask, u_mask=u_mask, scope='q2c', num_layers=config.num_lstm_layers)  # [N * M, JX, 2d]
         if config.second_att:
             _, c2q2 = attention_flow(config, is_train, c2q, q2c, h_mask=u_mask, u_mask=h_mask, scope='c2q2', num_layers=1)  # [N * M, JQ, 2d]
-            p, q2c2 = attention_flow(config, is_train, q2c, c2q2, h_mask=h_mask, u_mask=u_mask, scope='q2c2', num_layers=1)  # [N * M, JQ, 2d]
+            p2, q2c2 = attention_flow(config, is_train, q2c, c2q2, h_mask=h_mask, u_mask=u_mask, scope='q2c2', num_layers=1)  # [N * M, JQ, 2d]
             c2q = c2q2
-            q2c = q2c2
+            p += p2
+            q2c += q2c2
         p = tf.reshape(p, [-1, M, JX, 6*d])
         q2c = tf.reshape(q2c, [-1, M, JX, 2*d])
         out = p, q2c
@@ -284,9 +285,14 @@ class Model(object):
         # common loss
         if config.third_loss:
             assert config.single
-            yp_aug = tf.tile(tf.expand_dims(self.yp, 2), [1, 1, JX, 1])
-            yp2_aug = tf.tile(tf.expand_dims(self.yp2, -1), [1, 1, 1, JX])
-            yp_mat = yp_aug * yp2_aug  # [N, M, JX, JX]
+            logits_aug = tf.tile(tf.reshape(self.logits, [-1, M, 1, JX]), [1, 1, JX, 1])
+            logits2_aug = tf.tile(tf.reshape(self.logits2, [-1, M, JX, 1]), [1, 1, 1, JX])
+            mask = tf.slice(tf.constant(np.triu(np.ones(config.max_sent_size))), [0, 0], [JX, JX])
+            logits_mat = exp_mask(logits_aug + logits2_aug, mask)  # [N, M, JX, JX]
+            flat_logits_mat = tf.reshape(logits_mat, [-1, M * JX * JX])
+            flat_yp_mat = tf.nn.softmax(flat_logits_mat)
+            yp_mat = tf.reshape(flat_yp_mat, [-1, M, JX, JX])
+
             y_aug = tf.cast(tf.tile(tf.expand_dims(self.y, 2), [1, 1, JX, 1]), 'float')
             y2_aug = tf.cast(tf.tile(tf.expand_dims(self.y2, -1), [1, 1, 1, JX]), 'float')
             y_mat = y_aug * y2_aug  # [N, M, JX, JX]
