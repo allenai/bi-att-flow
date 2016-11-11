@@ -92,6 +92,7 @@ flags.DEFINE_bool("bi", False, "bi-directional attention? [False]")
 flags.DEFINE_integer("width", 5, "width around entity [5]")
 flags.DEFINE_bool("shuffle_ent", True, "shuffle ent? [True]")
 flags.DEFINE_integer("max_num_ents", 600, "max num ents [600]")
+flags.DEFINE_bool("max_answer", False, "max answer instead of sum? [False]")
 
 
 def main(_):

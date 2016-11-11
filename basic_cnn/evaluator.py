@@ -159,7 +159,7 @@ class AccuracyEvaluator(LabeledEvaluator):
         y = data_set.data['y']
         global_step, yp, loss, vals = sess.run([self.global_step, self.yp, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
         yp = yp[:data_set.num_examples]
-        correct, probs, preds = zip(*[self.__class__.compare(data_set.get_one(idx), ypi) for idx, ypi in zip(data_set.valid_idxs, yp)])
+        correct, probs, preds = zip(*[self.compare(data_set.get_one(idx), ypi) for idx, ypi in zip(data_set.valid_idxs, yp)])
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
         ids = data_set.data['ids']
         id2score_dict = {id_: prob for id_, prob in zip(ids, probs)}
@@ -168,8 +168,7 @@ class AccuracyEvaluator(LabeledEvaluator):
         e = AccuracyEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), y, id2answer_dict, correct, float(loss), tensor_dict=tensor_dict)
         return e
 
-    @staticmethod
-    def compare(data, ypi):
+    def compare(self,data, ypi):
         prob = float(np.max(ypi))
         yi = data['y']
         for start, stop in yi:
@@ -185,8 +184,7 @@ class AccuracyEvaluator(LabeledEvaluator):
 
 
 class CNNAccuracyEvaluator(AccuracyEvaluator):
-    @staticmethod
-    def compare(data, ypi):
+    def compare(self, data, ypi):
         # ypi: [N, M, JX] numbers
         yi = data['y'][0]  # entity
         xi = data['x'][0]  # [N, M, JX] words
@@ -194,7 +192,11 @@ class CNNAccuracyEvaluator(AccuracyEvaluator):
         for ypij, xij in zip(ypi, xi):
             for ypijk, xijk in zip(ypij, xij):
                 if xijk.startswith("@"):
-                    dist[xijk] += ypijk
+                    ypijk = float(ypijk)
+                    if self.config.max_answer:
+                        dist[xijk] = max(dist[xijk], ypijk)
+                    else:
+                        dist[xijk] += ypijk
         pred, prob = max(dist.items(), key=lambda item: item[1])
         assert pred.startswith("@")
         assert yi.startswith("@")
@@ -202,8 +204,7 @@ class CNNAccuracyEvaluator(AccuracyEvaluator):
 
 
 class AccuracyEvaluator2(AccuracyEvaluator):
-    @staticmethod
-    def compare(yi, ypi):
+    def compare(self, yi, ypi):
         for start, stop in yi:
             para_start = int(np.argmax(np.max(ypi, 1)))
             sent_start = int(np.argmax(ypi[para_start]))

@@ -224,7 +224,10 @@ class Model(object):
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size
         JX = tf.shape(self.x)[2]
         loss_mask = tf.reduce_max(tf.cast(self.q_mask, 'float'), 1)
-        losses = -tf.log(tf.reduce_sum(self.yp * tf.cast(self.y, 'float'), [1, 2]) + VERY_SMALL_NUMBER)
+        if config.max_answer:
+            losses = -tf.log(tf.reduce_max(self.yp * tf.cast(self.y, 'float'), [1, 2]) + VERY_SMALL_NUMBER)
+        else:
+            losses = -tf.log(tf.reduce_sum(self.yp * tf.cast(self.y, 'float'), [1, 2]) + VERY_SMALL_NUMBER)
         ce_loss = tf.reduce_mean(loss_mask * losses)
         tf.add_to_collection('losses', ce_loss)
 
