@@ -82,8 +82,8 @@ def bi_attention_flow_layer(config, is_train, h, u, h_mask=None, u_mask=None, sc
         u_mask = tf.tile(tf.expand_dims(u_mask, 1), [1, M, 1])
         u_mask = tf.reshape(u_mask, [-1, JQ])
 
-        _, c2q = attention_flow(config, is_train, u, h, h_mask=u_mask, u_mask=h_mask, scope='c2q', num_layers=2)  # [N * M, JQ, 2d]
-        p, q2c = attention_flow(config, is_train, h, c2q, h_mask=h_mask, u_mask=u_mask, scope='q2c', num_layers=2)  # [N * M, JX, 2d]
+        _, c2q = attention_flow(config, is_train, u, h, h_mask=u_mask, u_mask=h_mask, scope='c2q', num_layers=config.num_lstm_layers)  # [N * M, JQ, 2d]
+        p, q2c = attention_flow(config, is_train, h, c2q, h_mask=h_mask, u_mask=u_mask, scope='q2c', num_layers=config.num_lstm_layers)  # [N * M, JX, 2d]
         if config.second_att:
             _, c2q2 = attention_flow(config, is_train, c2q, q2c, h_mask=u_mask, u_mask=h_mask, scope='c2q2', num_layers=1)  # [N * M, JQ, 2d]
             p, q2c2 = attention_flow(config, is_train, q2c, c2q2, h_mask=h_mask, u_mask=u_mask, scope='q2c2', num_layers=1)  # [N * M, JQ, 2d]
@@ -270,20 +270,22 @@ class Model(object):
         JX = tf.shape(self.x)[2]
         M = tf.shape(self.x)[1]
         loss_mask = tf.reduce_max(tf.cast(self.q_mask, 'float'), 1)
-        losses = tf.nn.softmax_cross_entropy_with_logits(
-            self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float'))
-        ce_loss = tf.reduce_mean(loss_mask * losses)
-        tf.add_to_collection('losses', ce_loss)
-        losses2 = tf.nn.softmax_cross_entropy_with_logits(
-            self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float'))
-        ce_loss2 = tf.reduce_mean(loss_mask * losses2)
-        tf.add_to_collection("losses", ce_loss2)
+
+        if config.two_losses:
+            losses = tf.nn.softmax_cross_entropy_with_logits(
+                self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float'))
+            ce_loss = tf.reduce_mean(loss_mask * losses)
+            tf.add_to_collection('losses', ce_loss)
+            losses2 = tf.nn.softmax_cross_entropy_with_logits(
+                self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float'))
+            ce_loss2 = tf.reduce_mean(loss_mask * losses2)
+            tf.add_to_collection("losses", ce_loss2)
 
         # common loss
         if config.third_loss:
             assert config.single
             yp_aug = tf.tile(tf.expand_dims(self.yp, 2), [1, 1, JX, 1])
-            yp2_aug = tf.tile(tf.expand_dims(self.yp, -1), [1, 1, 1, JX])
+            yp2_aug = tf.tile(tf.expand_dims(self.yp2, -1), [1, 1, 1, JX])
             yp_mat = yp_aug * yp2_aug  # [N, M, JX, JX]
             y_aug = tf.cast(tf.tile(tf.expand_dims(self.y, 2), [1, 1, JX, 1]), 'float')
             y2_aug = tf.cast(tf.tile(tf.expand_dims(self.y2, -1), [1, 1, 1, JX]), 'float')

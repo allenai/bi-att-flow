@@ -97,6 +97,8 @@ flags.DEFINE_string("device_type", "gpu", "cpu | gpu [gpu]")
 flags.DEFINE_bool("dynamic_att", False, "Dynamic attention [False]")
 flags.DEFINE_bool("third_loss", False, "Third loss? [False]")
 flags.DEFINE_bool("second_att", False, "Second att? [False]")
+flags.DEFINE_bool("two_losses", True, "Two losses? [True]")
+flags.DEFINE_integer("num_lstm_layers", 2, "Num lstm layers [2]")
 
 
 def main(_):
