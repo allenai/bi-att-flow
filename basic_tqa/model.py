@@ -113,6 +113,9 @@ class Model(object):
         self.a = tf.placeholder('int32', [N, None, None], name='a')
         self.ca = tf.placeholder('int32', [N, None, None, W], name='ca')
         self.a_mask = tf.placeholder('bool', [N, None, None], name='a_mask')
+        self.d = tf.placeholder('int32', [N, None, None], name='d')
+        self.cd = tf.placeholder('int32', [N, None, None, W], name='cd')
+        self.d_mask = tf.placeholder('bool', [N, None, None], name='d_mask')
         self.y = tf.placeholder('int32', [N], name='y')
         self.is_train = tf.placeholder('bool', [], name='is_train')
         self.new_emb_mat = tf.placeholder('float', [None, config.word_emb_size], name='new_emb_mat')
@@ -298,7 +301,9 @@ class Model(object):
         # FIXME : tf-idf
         X = []
         CX = []
-        for Xi, CXi, Qi in zip(batch.data['x'], batch.data['cx'], batch.data['q']):
+        for Xi, CXi, Qi, Di, CDi in zip(batch.data['x'], batch.data['cx'], batch.data['q'], batch.data['d'], batch.data['cd']):
+            Xi.append(Di)
+            CXi.append(CDi)
             counters = [Counter(word.lower() for sent in para for word in sent) for para in Xi]
             question = [word.lower() for word in Qi]
             idx = get_sim_idx(question, counters)
@@ -315,6 +320,7 @@ class Model(object):
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, config.max_word_size
         JA, MA = config.max_ans_size, config.max_num_anss
+        JD, MD = config.max_desc_size, config.max_num_descs
         feed_dict = {}
 
         if config.len_opt:
@@ -362,6 +368,9 @@ class Model(object):
         a = np.zeros([N, MA, JA], dtype='int32')
         ca = np.zeros([N, MA, JA, W], dtype='int32')
         a_mask = np.zeros([N, MA, JA], dtype='bool')
+        d = np.zeros([N, MD, JD], dtype='int32')
+        cd = np.zeros([N, MD, JD, W], dtype='int32')
+        d_mask = np.zeros([N, MD, JD], dtype='bool')
 
         feed_dict[self.x] = x
         feed_dict[self.x_mask] = x_mask
@@ -372,6 +381,9 @@ class Model(object):
         feed_dict[self.a] = a
         feed_dict[self.ca] = ca
         feed_dict[self.a_mask] = a_mask
+        feed_dict[self.d] = d
+        feed_dict[self.cd] = cd
+        feed_dict[self.d_mask] = d_mask
         feed_dict[self.is_train] = is_train
         if config.use_glove_for_unk:
             feed_dict[self.new_emb_mat] = batch.shared['new_emb_mat']
@@ -430,6 +442,32 @@ class Model(object):
                         if l == config.max_word_size:
                             break
                         cx[i, j, k, l] = _get_char(cxijkl)
+
+        for i, di in enumerate(batch.data['d']):
+            for j, dij in enumerate(di):
+                if j == config.max_num_descs:
+                    break
+                for k, dijk in enumerate(dij):
+                    if k == config.max_desc_size:
+                        break
+                    each = _get_word(dijk)
+                    assert isinstance(each, int), each
+                    d[i, j, k] = each
+                    d_mask[i, j, k] = True
+
+        for i, cdi in enumerate(batch.data['cd']):
+            if self.config.squash:
+                cdi = [list(itertools.chain(*cdi))]
+            for j, cdij in enumerate(cdi):
+                if j == config.max_num_descs:
+                    break
+                for k, cdijk in enumerate(cdij):
+                    if k == config.max_desc_size:
+                        break
+                    for l, cdijkl in enumerate(cdijk):
+                        if l == config.max_word_size:
+                            break
+                        cd[i, j, k, l] = _get_char(cdijkl)
 
         for i, qi in enumerate(batch.data['q']):
             for j, qij in enumerate(qi):

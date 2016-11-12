@@ -50,6 +50,8 @@ flags.DEFINE_integer("ques_size_th", 30, "ques size th [32]")
 flags.DEFINE_integer("word_size_th", 16, "word size th [16]")
 flags.DEFINE_integer("para_size_th", 256, "para size th [256]")
 flags.DEFINE_integer("ans_size_th", 30, "ans size th [30]")
+flags.DEFINE_integer('num_descs_th', 5, "num descs th [5]")
+flags.DEFINE_integer('desc_size_th', 100, 'desc size th [60]')
 
 flags.DEFINE_bool("swap_memory", True, "swap memory? [True]")
 flags.DEFINE_string("data_filter", "max", "max | valid | semi [max]")
@@ -96,6 +98,7 @@ flags.DEFINE_bool("highway", True, "highway? [True]")
 flags.DEFINE_bool("late", False, "Late fusion? [False]")
 flags.DEFINE_string("device_type", "gpu", "cpu | gpu [gpu]")
 flags.DEFINE_bool("dynamic_att", False, "Dynamic attention [False]")
+
 
 
 def main(_):

@@ -4,6 +4,7 @@ import os
 
 from collections import Counter
 
+import itertools
 from tqdm import tqdm
 
 import nltk
@@ -25,7 +26,9 @@ def main():
 def get_args():
     parser = argparse.ArgumentParser()
     home = os.path.expanduser("~")
-    source_path = os.path.join(home, "data", "tqa", "beta5p5.json")
+    source_path = os.path.join(home, "data", "tqa", "beta7.5.json")
+    caption_dir = os.path.join(home, "data", "tqa", "captions")
+    split_path =os.path.join(home, "data", "tqa", "tt_split.json")
     target_dir = "data/tqa"
     glove_dir = os.path.join(home, "data", "glove")
     parser.add_argument("--source_path", default=source_path)
@@ -43,6 +46,10 @@ def get_args():
     parser.add_argument("--url", default="vision-server2.corp.ai2", type=str)
     parser.add_argument("--port", default=8000, type=int)
     parser.add_argument("--merge", default=False, type=bool_)
+    parser.add_argument("--qtype", default='both', type=str)
+    parser.add_argument("--caption_dir", default=caption_dir, type=str)
+    parser.add_argument("--split_path", default=split_path, type=str)
+    parser.add_argument("--mc_only", default=True, type=bool_)
     # TODO : put more args here
     return parser.parse_args()
 
@@ -69,9 +76,13 @@ def prepro(args):
         prepro_each(args, 'dev', out_name='dev')
         prepro_each(args, 'dev', out_name='test')
     elif args.mode =='split':
-        prepro_each(args, 'train', 0.0, args.train_ratio, out_name='train')
-        prepro_each(args, 'train', args.train_ratio, args.train_ratio + args.dev_ratio, out_name='dev')
-        prepro_each(args, 'dev', args.train_ratio + args.dev_ratio, 1.0, out_name='test')
+        with open(args.split_path, 'r') as fh:
+            split = json.load(fh)
+            train_ids = split['train']
+            test_ids = split['test']
+        prepro_each(args, train_ids, out_name='train')
+        prepro_each(args, test_ids, out_name='dev')
+        prepro_each(args, test_ids, out_name='test')
     else:
         raise Exception()
 
@@ -106,7 +117,14 @@ def get_word2vec(args, word_counter):
     return word2vec_dict
 
 
-def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="default", in_path=None):
+def get_diagram(args, image_name):
+    path = os.path.join(args.caption_dir, "{}.json".format(image_name))
+    with open(path, 'r') as fh:
+        dt = json.load(fh)
+        return dt
+
+
+def prepro_each(args, lesson_ids, out_name="default", in_path=None):
     sent_tokenize = nltk.sent_tokenize
     if args.merge:
         sent_tokenize = lambda para: [para]
@@ -119,26 +137,55 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     q, cq, y, rx, rcx, ids = [], [], [], [], [], []
     x, cx = [], []
     a, ca = [], []
+    d, cd = [], []
+    t = []
+
     word_counter, char_counter, lower_word_counter = Counter(), Counter(), Counter()
 
-    start_ci = int(round(len(source_data) * start_ratio))
-    stop_ci = int(round(len(source_data) * stop_ratio))
     skip_count = 0
-    for ci, chapter in enumerate(tqdm(source_data[start_ci:stop_ci])):
+    lesson_ids = set(lesson_ids)
+    chapters = [chapter for chapter in source_data if chapter['globalID'] in lesson_ids]
+    for ci, chapter in enumerate(tqdm(chapters)):
+        if args.qtype == 'diagram':
+            questions = chapter['questions']['diagramQuestions']
+        elif args.qtype == 'text':
+            questions = chapter['questions']['nonDiagramQuestions']
+        elif args.qtype == 'both':
+            questions = dict(itertools.chain(chapter['questions']['diagramQuestions'].items(), chapter['questions']['nonDiagramQuestions'].items()))
+        else:
+            raise Exception()
+        if args.mc_only:
+            questions = {qid: question for qid, question in questions.items() if question['questionType'] == 'Multiple Choice'}
+
         xi = []
         cxi = []
+        paras = []
+        # text
         for tj, topic in chapter['topics'].items():
-            cur = topic['content']['text']
-            cur = cur.replace("''", '" ')
-            cur = cur.replace("``", '" ')
-            xij = list(map(word_tokenize, sent_tokenize(cur)))
+            text = topic['content']['text']
+            paras.append(sent_tokenize(text))
+            for figure in topic['content']['figures']:
+                caption = sent_tokenize(figure['caption'])
+                paras.append(caption)
+
+        # inst diagrams
+        for _, inst in chapter['instructionalDiagrams'].items():
+            image_name = inst['imageName']
+            diagram = get_diagram(args, image_name)
+            inst_text = sent_tokenize(inst['processedText'])
+            paras.append(diagram)
+            paras.append(inst_text)
+
+        for para in paras:
+            para = [sent.replace("''", '" ').replace("``", '" ') for sent in para]
+            xij = list(map(word_tokenize, para))
             cxij = [[list(xijkl) for xijkl in xijk] for xijk in xij]
             xi.append(xij)
             cxi.append(cxij)
 
             for xijk in xij:
                 for xijkl in xijk:
-                    l = len(chapter['questions']['nonDiagramQuestions'])
+                    l = len(questions)
                     word_counter[xijkl] += l
                     lower_word_counter[xijkl.lower()] += l
                     for xijklm in xijkl:
@@ -148,11 +195,10 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
         cx.append(cxi)
 
         if len(xi) == 0 or sum(map(len, xi)) == 0:
-            skip_count += len(chapter['questions']['nonDiagramQuestions'])
+            skip_count += len(questions)
             continue
 
-
-        for qid, question in chapter['questions']['nonDiagramQuestions'].items():
+        for qid, question in questions.items():
             if 'processedText' not in question['correctAnswer']:
                 # print("Skipping question '{}' because no processed text ...".format(qid))
                 skip_count += 1
@@ -161,6 +207,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
                 # print("Skipping question '{}' because no answer choices ...".format(qid))
                 skip_count += 1
                 continue
+
             qi = word_tokenize(question['beingAsked']['processedText'])
             for qij in qi:
                 word_counter[qij] += 1
@@ -169,6 +216,24 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
                     char_counter[qijk] += 1
 
             cqi = list(map(list, qi))
+
+            di = []
+            cdi = []
+            # diagram descriptions
+            if 'imageName' in question:
+                image_name = question['imageName']
+                dt = get_diagram(args, image_name)
+                di = list(map(word_tokenize, dt))
+                cdi = [[list(word) for word in sent] for sent in di]
+                for dij in di:
+                    for dijk in dij:
+                        word_counter[dijk] += 1
+                for cdij in cdi:
+                    for cdijk in cdij:
+                        for cdijkl in cdijk:
+                            char_counter[cdijkl] += 1
+
+            # choices and answers
             yi_raw = question['correctAnswer']['processedText']
             yi = None
             ai = []
@@ -199,6 +264,9 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
             rx.append(ci)
             rcx.append(ci)
             ids.append(question['globalID'])
+            d.append(di)
+            cd.append(cdi)
+            t.append(question['questionType'])
         if args.debug:
             break
 
@@ -207,7 +275,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     word2vec_dict = get_word2vec(args, word_counter)
     lower_word2vec_dict = get_word2vec(args, lower_word_counter)
 
-    data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, 'ids': ids, 'a': a, 'ca': ca}
+    data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, 'ids': ids, 'a': a, 'ca': ca, 'd': d, 'cd': cd}
     shared = {'x': x, 'cx': cx,
               'word_counter': word_counter, 'char_counter': char_counter, 'lower_word_counter': lower_word_counter,
               'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dict}

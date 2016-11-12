@@ -244,6 +244,8 @@ def update_config(config, data_sets):
     config.max_para_size = 0
     config.max_ans_size = 0
     config.max_num_anss = 0
+    config.max_num_descs = 0
+    config.max_desc_size = 0
     for data_set in data_sets:
         data = data_set.data
         shared = data_set.shared
@@ -251,6 +253,7 @@ def update_config(config, data_sets):
             rx = data['*x'][idx]
             q = data['q'][idx]
             a = data['a'][idx]
+            d = data['d'][idx]
             paras = shared['x'][rx]
             for sents in paras:
                 if len(sents) > 0:
@@ -258,6 +261,11 @@ def update_config(config, data_sets):
                     config.max_num_sents = max(config.max_num_sents, len(sents))
                     config.max_sent_size = max(config.max_sent_size, max(map(len, sents)))
                     config.max_word_size = max(config.max_word_size, max(len(word) for sent in sents for word in sent))
+
+            config.max_num_sents = max(config.max_num_sents, len(d))
+            if len(d) > 0:
+                config.max_sent_size = max(config.max_sent_size, max(map(len, d)))
+                config.max_word_size = max(config.max_word_size, max(len(word) for desc in d for word in desc))
 
             config.max_num_anss = max(config.max_num_anss, len(a))
             if len(q) > 0:
@@ -273,6 +281,7 @@ def update_config(config, data_sets):
         config.max_para_size = min(config.max_para_size, config.para_size_th)
         config.max_ans_size = min(config.max_ans_size, config.ans_size_th)
         config.max_ques_size = min(config.max_ques_size, config.ques_size_th)
+        config.max_desc_size = min(config.max_desc_size, config.desc_size_th)
 
     config.max_word_size = min(config.max_word_size, config.word_size_th)
 
