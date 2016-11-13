@@ -283,6 +283,9 @@ def update_config(config, data_sets):
         config.max_ques_size = min(config.max_ques_size, config.ques_size_th)
         config.max_desc_size = min(config.max_desc_size, config.desc_size_th)
 
+    # for performance, absolutely limit max sent size
+    config.max_sent_size = min(config.max_sent_size, 100)
+
     config.max_word_size = min(config.max_word_size, config.word_size_th)
 
     config.char_vocab_size = len(data_sets[0].shared['char2idx'])

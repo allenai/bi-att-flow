@@ -155,7 +155,7 @@ def prepro_each(args, lesson_ids, out_name="default", in_path=None):
         else:
             raise Exception()
         if args.mc_only:
-            questions = {qid: question for qid, question in questions.items() if question['questionType'] == 'Multiple Choice'}
+            questions = {qid: question for qid, question in questions.items() if question['questionType'] in ['Multiple Choice', 'Diagram Multiple Choice']}
 
         xi = []
         cxi = []

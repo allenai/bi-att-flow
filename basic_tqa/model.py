@@ -302,13 +302,20 @@ class Model(object):
         X = []
         CX = []
         for Xi, CXi, Qi, Di, CDi in zip(batch.data['x'], batch.data['cx'], batch.data['q'], batch.data['d'], batch.data['cd']):
-            Xi.append(Di)
-            CXi.append(CDi)
-            counters = [Counter(word.lower() for sent in para for word in sent) for para in Xi]
-            question = [word.lower() for word in Qi]
-            idx = get_sim_idx(question, counters)
-            X.append(Xi[idx])
-            CX.append(CXi[idx])
+            curX = []
+            curCX = []
+            if self.config.include_context:
+                curX.extend(Xi)
+                curCX.extend(CXi)
+            if self.config.include_diagram:
+                curX.append(Di)
+                curCX.append(CDi)
+            if len(curX) > 0:
+                counters = [Counter(word.lower() for sent in para for word in sent) for para in curX]
+                question = [word.lower() for word in Qi]
+                idx = get_sim_idx(question, counters)
+                X.append(curX[idx])
+                CX.append(curCX[idx])
             """
             print(len(Xi))
             print("all:", "\n\n".join(" ".join(" ".join(words) for words in sents) for sents in Xi))
@@ -488,12 +495,16 @@ class Model(object):
         for i, ai in enumerate(batch.data['a']):
             for j, aij in enumerate(ai):
                 for k, aijk in enumerate(aij):
+                    if k == config.max_ans_size:
+                        break
                     a[i, j, k] = _get_word(aijk)
                     a_mask[i, j, k] = True
 
         for i, cai in enumerate(batch.data['ca']):
             for j, caij in enumerate(cai):
                 for k, caijk in enumerate(caij):
+                    if k == config.max_ans_size:
+                        break
                     for l, caijkl in enumerate(caijk):
                         ca[i, j, k, l] = _get_char(caijkl)
                         if l + 1 == config.max_word_size:
