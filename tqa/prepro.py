@@ -49,7 +49,7 @@ def get_args():
     parser.add_argument("--qtype", default='both', type=str)
     parser.add_argument("--caption_dir", default=caption_dir, type=str)
     parser.add_argument("--split_path", default=split_path, type=str)
-    parser.add_argument("--mc_only", default=True, type=bool_)
+    parser.add_argument("--qsubtype", default='all', type=str)
     # TODO : put more args here
     return parser.parse_args()
 
@@ -154,8 +154,16 @@ def prepro_each(args, lesson_ids, out_name="default", in_path=None):
             questions = dict(itertools.chain(chapter['questions']['diagramQuestions'].items(), chapter['questions']['nonDiagramQuestions'].items()))
         else:
             raise Exception()
-        if args.mc_only:
-            questions = {qid: question for qid, question in questions.items() if question['questionType'] in ['Multiple Choice', 'Diagram Multiple Choice']}
+        if args.qsubtype == 'mc':
+            questions = {qid: question for qid, question in questions.items() if (question['questionType']  == 'Multiple Choice' and question['questionSubType'] != 'True or False') or
+                         question['questionType'] == 'Diagram Multiple Choice'}
+        elif args.qsubtype == 'tf':
+            questions = {qid: question for qid, question in questions.items() if question['questionSubType'] == 'True or False'}
+        elif args.qsubtype == 'all':
+            questions = questions
+        else:
+            raise Exception()
+
 
         xi = []
         cxi = []
