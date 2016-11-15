@@ -9,8 +9,7 @@ import tensorflow as tf
 from tqdm import tqdm
 import numpy as np
 
-from basic_cnn.evaluator import F1Evaluator, Evaluator, ForwardEvaluator, MultiGPUF1Evaluator, CNNAccuracyEvaluator, \
-    MultiGPUCNNAccuracyEvaluator
+from basic_cnn.evaluator import ForwardEvaluator, MultiGPUCNNAccuracyEvaluator
 from basic_cnn.graph_handler import GraphHandler
 from basic_cnn.model import Model, get_multi_gpu_models
 from basic_cnn.trainer import Trainer, MultiGPUTrainer

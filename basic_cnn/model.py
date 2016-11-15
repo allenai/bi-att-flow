@@ -324,7 +324,11 @@ class Model(object):
             for i, (xi, yi) in enumerate(zip(batch.data['x'], batch.data['y'])):
                 count = 0
                 for j, xij in enumerate(xi):
+                    if j == config.max_num_sents:
+                        break
                     for k, xijk in enumerate(xij):
+                        if k == config.max_sent_size:
+                            break
                         if xijk == yi:
                             y[i, j, k] = True
                             count += 1
@@ -334,14 +338,22 @@ class Model(object):
 
         for i, xi in enumerate(X):
             for j, xij in enumerate(xi):
+                if j == config.max_num_sents:
+                    break
                 for k, xijk in enumerate(xij):
+                    if k == config.max_sent_size:
+                        break
                     each = _get_word(xijk)
                     x[i, j, k] = each
                     x_mask[i, j, k] = True
 
         for i, cxi in enumerate(CX):
             for j, cxij in enumerate(cxi):
+                if j == config.max_num_sents:
+                    break
                 for k, cxijk in enumerate(cxij):
+                    if k == config.max_sent_size:
+                        break
                     if _get_word(X[i][j][k]) == 2:
                         cx[i, j, k, 0] = 2
                         continue
@@ -349,21 +361,25 @@ class Model(object):
                         cx[i, j, k, 0] = 3
                         continue
                     for l, cxijkl in enumerate(cxijk):
-                        cx[i, j, k, l] = _get_char(cxijkl)
-                        if l + 1 == config.max_word_size:
+                        if l == config.max_word_size:
                             break
+                        cx[i, j, k, l] = _get_char(cxijkl)
 
         for i, qi in enumerate(batch.data['q']):
             for j, qij in enumerate(qi):
+                if j == config.max_ques_size:
+                    break
                 q[i, j] = _get_word(qij)
                 q_mask[i, j] = True
 
         for i, cqi in enumerate(batch.data['cq']):
             for j, cqij in enumerate(cqi):
+                if j == config.max_ques_size:
+                    break
                 for k, cqijk in enumerate(cqij):
-                    cq[i, j, k] = _get_char(cqijk)
-                    if k + 1 == config.max_word_size:
+                    if k == config.max_word_size:
                         break
+                    cq[i, j, k] = _get_char(cqijk)
 
         return feed_dict
 

@@ -26,10 +26,16 @@ for file_name in file_names:
         _ = fh.readline()
         if file_name in id2answer_dict:
             pred = id2answer_dict[file_name]
+            if pred:
+                num_correct += 1
+            else:
+                num_wrong += 1
+            """
             if pred == answer:
                 num_correct += 1
             else:
                 num_wrong += 1
+            """
         else:
             num_wrong += 1
 

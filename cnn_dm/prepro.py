@@ -6,6 +6,7 @@ import os
 # no metadata
 from collections import Counter
 
+import nltk
 from tqdm import tqdm
 
 from my.utils import get_word_span, process_tokens
@@ -36,7 +37,8 @@ def get_args():
     parser.add_argument("--glove_corpus", default='6B')
     parser.add_argument("--glove_vec_size", default=100, type=int)
     parser.add_argument("--debug", default=False, type=bool_)
-    parser.add_argument("--num_sents_th", default=200, type=int)
+    parser.add_argument("--num_sents_th", default=80, type=int)
+    parser.add_argument("--sent_size_th", default=50, type=int)
     parser.add_argument("--ques_size_th", default=30, type=int)
     parser.add_argument("--width", default=5, type=int)
     # TODO : put more args here
@@ -56,6 +58,9 @@ def para2sents(para, width):
     :param para:
     :return:
     """
+    sents = nltk.sent_tokenize(para)
+    wordss = [sent.split(" ") for sent in sents]
+    return wordss
     words = para.split(" ")
     sents = []
     for i, word in enumerate(words):
@@ -108,6 +113,7 @@ def prepro_each(args, mode):
     lens = []
 
     out_file_names = []
+    num_skip = 0
     for file_name in tqdm(file_names, total=len(file_names)):
         if file_name.endswith(".question"):
             with open(os.path.join(source_dir, file_name), 'r') as fh:
@@ -124,8 +130,13 @@ def prepro_each(args, mode):
                 sents = para2sents(para, args.width)
                 ques_words = ques.split(" ")
 
+                max_word_idx = max(j for sent in sents for j, word in enumerate(sent) if word == answer)
+                max_sent_idx = max(i for i, sent in enumerate(sents) for word in sent if word == answer)
+                max_ques_word_idx = max(i for i, word in enumerate(ques_words) if word.startswith("@"))
+
                 # Filtering
-                if len(sents) > args.num_sents_th or len(ques_words) > args.ques_size_th:
+                if max_word_idx > args.sent_size_th or max_sent_idx > args.num_sents_th or max_ques_word_idx > args.ques_size_th:
+                    num_skip += 1
                     continue
 
                 max_sent_size = max(max(map(len, sents)), max_sent_size)
@@ -157,7 +168,7 @@ def prepro_each(args, mode):
                                 char_counter[c] += 1
 
                 out_file_names.append(file_name)
-                lens.append(len(sents))
+                lens.append(max(len(sent) for sent in sents))
     num_examples = len(out_file_names)
 
     assert len(out_file_names) == len(lens)
@@ -166,6 +177,10 @@ def prepro_each(args, mode):
 
     word2vec_dict = get_word2vec(args, word_counter)
     lower_word2vec_dit = get_word2vec(args, lower_word_counter)
+
+    max_num_sents = min(max_num_sents, args.num_sents_th)
+    max_sent_size = min(max_sent_size, args.sent_size_th)
+    max_ques_size = min(max_ques_size, args.ques_size_th)
 
     shared = {'word_counter': word_counter, 'ent_counter': ent_counter, 'char_counter': char_counter,
               'lower_word_counter': lower_word_counter,
@@ -177,6 +192,7 @@ def prepro_each(args, mode):
     print("max num sents: {}".format(max_num_sents))
     print("max ques size: {}".format(max_ques_size))
     print("max num ents: {}".format(max_num_ents))
+    print("{}/{}".format(len(sorted_file_names), len(sorted_file_names) + num_skip))
 
     if not os.path.exists(args.target_dir):
         os.makedirs(args.target_dir)

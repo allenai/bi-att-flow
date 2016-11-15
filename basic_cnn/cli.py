@@ -45,8 +45,8 @@ flags.DEFINE_bool("single", False, "supervise only the answer sentence? [False]"
 
 flags.DEFINE_integer("word_count_th", 10, "word count th [100]")
 flags.DEFINE_integer("char_count_th", 50, "char count th [500]")
-flags.DEFINE_integer("sent_size_th", 60, "sent size th [64]")
-flags.DEFINE_integer("num_sents_th", 200, "num sents th [8]")
+flags.DEFINE_integer("sent_size_th", 50, "sent size th [64]")
+flags.DEFINE_integer("num_sents_th", 80, "num sents th [8]")
 flags.DEFINE_integer("ques_size_th", 30, "ques size th [32]")
 flags.DEFINE_integer("word_size_th", 16, "word size th [16]")
 flags.DEFINE_integer("para_size_th", 256, "para size th [256]")
