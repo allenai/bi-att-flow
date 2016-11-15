@@ -219,7 +219,6 @@ class DataSet(object):
 class MyDataSet(DataSet):
     def __init__(self, data, data_type, shared=None, valid_idxs=None):
         super(MyDataSet, self).__init__(data, data_type, shared=shared, valid_idxs=valid_idxs)
-        shared['max_num_sents'] = len(self.get_one(self.num_examples-1)['x'])
 
     def _sort_key(self, idx):
         return idx

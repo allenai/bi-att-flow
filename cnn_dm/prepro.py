@@ -135,7 +135,7 @@ def prepro_each(args, mode):
                 max_ques_word_idx = max(i for i, word in enumerate(ques_words) if word.startswith("@"))
 
                 # Filtering
-                if max_word_idx > args.sent_size_th or max_sent_idx > args.num_sents_th or max_ques_word_idx > args.ques_size_th:
+                if max_word_idx >= args.sent_size_th or max_sent_idx >= args.num_sents_th or max_ques_word_idx >= args.ques_size_th:
                     num_skip += 1
                     continue
 
@@ -173,7 +173,7 @@ def prepro_each(args, mode):
 
     assert len(out_file_names) == len(lens)
     sorted_file_names, lens = zip(*sorted(zip(out_file_names, lens), key=lambda each: each[1]))
-    assert lens[-1] == max_num_sents
+    assert lens[-1] == max_sent_size
 
     word2vec_dict = get_word2vec(args, word_counter)
     lower_word2vec_dit = get_word2vec(args, lower_word_counter)
