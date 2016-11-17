@@ -12,7 +12,7 @@ flags.DEFINE_string("root_dir", "/Users/minjoons/data/cnn/questions", "root dir 
 flags.DEFINE_string("run_id", "0", "Run ID [0]")
 flags.DEFINE_string("out_base_dir", "out", "out base dir [out]")
 
-flags.DEFINE_integer("batch_size", 15, "Batch size [15]")
+flags.DEFINE_integer("batch_size", 6, "Batch size [6]")
 flags.DEFINE_float("init_lr", 0.5, "Initial learning rate [0.5]")
 flags.DEFINE_integer("num_epochs", 50, "Total number of epochs for training [50]")
 flags.DEFINE_integer("num_steps", 100000, "Number of steps [100000]")
@@ -89,10 +89,11 @@ flags.DEFINE_bool("len_opt", False, "Length optimization? [False]")
 flags.DEFINE_string("sh_logit_func", "tri_linear", "sh logit func [tri_linear]")
 flags.DEFINE_float("filter_ratio", 1.0, "filter ratio [1.0]")
 flags.DEFINE_bool("bi", False, "bi-directional attention? [False]")
-flags.DEFINE_integer("width", 5, "width around entity [5]")
+flags.DEFINE_integer("width", 9, "width around entity [9]")
 flags.DEFINE_bool("shuffle_ent", True, "shuffle ent? [True]")
 flags.DEFINE_integer("max_num_ents", 600, "max num ents [600]")
 flags.DEFINE_bool("max_answer", False, "max answer instead of sum? [False]")
+flags.DEFINE_bool("load_ema", False, "Load ema vars for regular vars? [False]")
 
 
 def main(_):

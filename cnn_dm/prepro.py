@@ -37,10 +37,10 @@ def get_args():
     parser.add_argument("--glove_corpus", default='6B')
     parser.add_argument("--glove_vec_size", default=100, type=int)
     parser.add_argument("--debug", default=False, type=bool_)
-    parser.add_argument("--num_sents_th", default=80, type=int)
-    parser.add_argument("--sent_size_th", default=50, type=int)
+    parser.add_argument("--num_sents_th", default=200, type=int)
+    parser.add_argument("--sent_size_th", default=20, type=int)
     parser.add_argument("--ques_size_th", default=30, type=int)
-    parser.add_argument("--width", default=5, type=int)
+    parser.add_argument("--width", default=9, type=int)
     # TODO : put more args here
     return parser.parse_args()
 
@@ -58,16 +58,21 @@ def para2sents(para, width):
     :param para:
     :return:
     """
+    """
     sents = nltk.sent_tokenize(para)
     wordss = [sent.split(" ") for sent in sents]
     return wordss
+    """
     words = para.split(" ")
     sents = []
     for i, word in enumerate(words):
         if word.startswith("@"):
             start = max(i - width, 0)
             stop = min(i + width + 1, len(words))
-            sent = words[start:stop]
+            pre = ['-PRE-'] * max(width - i, 0)
+            post = ['-POST-'] * max(width - (len(words) - i - 1), 0)
+            sent = pre + words[start:stop] + post
+            assert len(sent) == 2 * width + 1
             sents.append(sent)
     return sents
 

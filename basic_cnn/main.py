@@ -66,7 +66,7 @@ def _train(config):
     model = models[0]
     trainer = MultiGPUTrainer(config, models)
     evaluator = MultiGPUCNNAccuracyEvaluator(config, models, tensor_dict=model.tensor_dict if config.vis else None)
-    graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
+    graph_handler = GraphHandler(config, model)  # controls all tensors and variables in the graph, including loading /saving
 
     # Variables
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
@@ -129,7 +129,7 @@ def _test(config):
     pprint(config.__flags, indent=2)
     models = get_multi_gpu_models(config)
     evaluator = MultiGPUCNNAccuracyEvaluator(config, models, tensor_dict=models[0].tensor_dict if config.vis else None)
-    graph_handler = GraphHandler(config)  # controls all tensors and variables in the graph, including loading /saving
+    graph_handler = GraphHandler(config, models[0])  # controls all tensors and variables in the graph, including loading /saving
 
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     graph_handler.initialize(sess)

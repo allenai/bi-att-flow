@@ -190,7 +190,9 @@ class CNNAccuracyEvaluator(AccuracyEvaluator):
         xi = data['x'][0]  # [N, M, JX] words
         dist = defaultdict(int)
         for ypij, xij in zip(ypi, xi):
-            for ypijk, xijk in zip(ypij, xij):
+            for k, (ypijk, xijk) in enumerate(zip(ypij, xij)):
+                if k != self.config.width:
+                    continue
                 if xijk.startswith("@"):
                     ypijk = float(ypijk)
                     if self.config.max_answer:

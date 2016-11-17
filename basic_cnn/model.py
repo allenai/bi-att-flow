@@ -73,7 +73,7 @@ def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None
 
 
 class Model(object):
-    def __init__(self, config, scope):
+    def __init__(self, config, scope, rep=True):
         self.scope = scope
         self.config = config
         self.global_step = tf.get_variable('global_step', shape=[], dtype='int32',
@@ -107,6 +107,8 @@ class Model(object):
 
         self._build_forward()
         self._build_loss()
+        if rep:
+            self._build_var_ema()
         if config.mode == 'train':
             self._build_ema()
 
@@ -250,6 +252,13 @@ class Model(object):
         with tf.control_dependencies([ema_op]):
             self.loss = tf.identity(self.loss)
 
+    def _build_var_ema(self):
+        self.var_ema = tf.train.ExponentialMovingAverage(self.config.decay)
+        ema = self.var_ema
+        ema_op = ema.apply(tf.trainable_variables())
+        with tf.control_dependencies([ema_op]):
+            self.loss = tf.identity(self.loss)
+
     def get_loss(self):
         return self.loss
 
@@ -284,6 +293,7 @@ class Model(object):
                 new_JQ = max(len(ques) for ques in batch.data['q'])
             JQ = min(JQ, new_JQ)
         # print(JX)
+        assert JX == self.config.width * 2 + 1
 
         x = np.zeros([N, M, JX], dtype='int32')
         cx = np.zeros([N, M, JX, W], dtype='int32')
@@ -335,6 +345,9 @@ class Model(object):
                     if j == config.max_num_sents:
                         break
                     for k, xijk in enumerate(xij):
+                        # This effectively only considers mid word in each sentence
+                        if k != config.width:
+                            continue
                         if k == JX:
                             break
                         if xijk == yi:
@@ -396,7 +409,7 @@ def get_multi_gpu_models(config):
     models = []
     for gpu_idx in range(config.num_gpus):
         with tf.name_scope("model_{}".format(gpu_idx)) as scope, tf.device("/gpu:{}".format(gpu_idx)):
-            model = Model(config, scope)
+            model = Model(config, scope, rep=gpu_idx == 0)
             tf.get_variable_scope().reuse_variables()
             models.append(model)
     return models
