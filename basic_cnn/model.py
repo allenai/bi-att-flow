@@ -345,9 +345,6 @@ class Model(object):
                     if j == config.max_num_sents:
                         break
                     for k, xijk in enumerate(xij):
-                        # This effectively only considers mid word in each sentence
-                        if k != config.width:
-                            continue
                         if k == JX:
                             break
                         if xijk == yi:
