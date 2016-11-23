@@ -11,7 +11,7 @@ flags.DEFINE_string("data_dir", "data/squad", "Data dir [data/squad]")
 flags.DEFINE_string("run_id", "0", "Run ID [0]")
 flags.DEFINE_string("out_base_dir", "out", "out base dir [out]")
 
-flags.DEFINE_integer("batch_size", 60, "Batch size [60]")
+flags.DEFINE_integer("batch_size", 30, "Batch size [30]")
 flags.DEFINE_float("init_lr", 0.5, "Initial learning rate [0.5]")
 flags.DEFINE_integer("num_epochs", 50, "Total number of epochs for training [50]")
 flags.DEFINE_integer("num_steps", 30000, "Number of steps [20000]")
