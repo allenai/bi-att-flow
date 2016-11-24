@@ -6,7 +6,7 @@ import os
 from basic.read_data import DataSet
 from my.nltk_utils import span_f1
 from my.tensorflow import padded_reshape
-from my.utils import argmax
+from my.utils import argmax, get_phrase
 
 
 class Evaluation(object):
@@ -279,8 +279,15 @@ class F1Evaluator(LabeledEvaluator):
                 return [""]
             return xi[span[0][0]][span[0][1]:span[1][1]]
 
-        id2answer_dict = {id_: " ".join(_get(xi, span))
-                          for id_, xi, span in zip(data_set.data['ids'], data_set.data['x'], spans)}
+        def _get2(context, xi, span):
+            if len(xi) <= span[0][0]:
+                return [""]
+            if len(xi[span[0][0]]) <= span[1][1]:
+                return [""]
+            return get_phrase(context, xi, span)
+
+        id2answer_dict = {id_: _get2(context, xi, span)
+                          for id_, xi, span, context in zip(data_set.data['ids'], data_set.data['x'], spans, data_set.data['p'])}
         id2score_dict = {id_: score for id_, score in zip(data_set.data['ids'], scores)}
         id2answer_dict['scores'] = id2score_dict
         correct = [self.__class__.compare2(yi, span) for yi, span in zip(y, spans)]
@@ -370,8 +377,15 @@ class ForwardEvaluator(Evaluator):
                 return [""]
             return xi[span[0][0]][span[0][1]:span[1][1]]
 
-        id2answer_dict = {id_: " ".join(_get(xi, span))
-                          for id_, xi, span in zip(data_set.data['ids'], data_set.data['x'], spans)}
+        def _get2(context, xi, span):
+            if len(xi) <= span[0][0]:
+                return [""]
+            if len(xi[span[0][0]]) <= span[1][1]:
+                return [""]
+            return get_phrase(context, xi, span)
+
+        id2answer_dict = {id_: _get2(context, xi, span)
+                          for id_, xi, span, context in zip(data_set.data['ids'], data_set.data['x'], spans, data_set.data['p'])}
         id2score_dict = {id_: score for id_, score in zip(data_set.data['ids'], scores)}
         id2answer_dict['scores'] = id2score_dict
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))

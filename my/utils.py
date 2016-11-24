@@ -92,6 +92,7 @@ def _find(token_spans, target_span):
             idxs.append(i)
     return idxs[0], idxs[-1] + 1
 
+
 def get_2d_spans(text, tokenss):
     spanss = []
     cur_idx = 0
@@ -121,6 +122,38 @@ def get_word_span(context, wordss, start, stop):
     return idxs[0], (idxs[-1][0], idxs[-1][1] + 1)
 
 
+def get_phrase(context, wordss, span):
+    """
+    Obtain phrase as substring of context given start and stop indices in word level
+    :param context:
+    :param wordss:
+    :param start: [sent_idx, word_idx]
+    :param stop: [sent_idx, word_idx]
+    :return:
+    """
+    start, stop = span
+    flat_start = get_flat_idx(wordss, start)
+    flat_stop = get_flat_idx(wordss, stop)
+    words = sum(wordss, [])
+    char_idx = 0
+    char_start, char_stop = None, None
+    for word_idx, word in enumerate(words):
+        char_idx = context.find(word, char_idx)
+        assert char_idx >= 0
+        if word_idx == flat_start:
+            char_start = char_idx
+        char_idx += len(word)
+        if word_idx == flat_stop - 1:
+            char_stop = char_idx
+    assert char_start is not None
+    assert char_stop is not None
+    return context[char_start:char_stop]
+
+
+def get_flat_idx(wordss, idx):
+    return sum(len(words) for words in wordss[:idx[0]]) + idx[1]
+
+
 def get_word_idx(context, wordss, idx):
     spanss = get_2d_spans(context, wordss)
     return spanss[idx[0]][idx[1]][0]
@@ -130,7 +163,9 @@ def process_tokens(temp_tokens):
     tokens = []
     for token in temp_tokens:
         flag = False
-        # l = ("-", "\u2212", "\u2014", "\u2013", "/", "~", '"', "'", "\u201C", "\u2019", "\u201D", "\u2018", "\u00B0")
-        l = ("-", "\u2212", "\u2014", "\u2013")
+        l = ("-", "\u2212", "\u2014", "\u2013", "/", "~", '"', "'", "\u201C", "\u2019", "\u201D", "\u2018", "\u00B0")
+        # \u2013 is en-dash. Used for number to nubmer
+        # l = ("-", "\u2212", "\u2014", "\u2013")
+        # l = ("\u2013",)
         tokens.extend(re.split("([{}])".format("".join(l)), token))
     return tokens
