@@ -281,9 +281,9 @@ class F1Evaluator(LabeledEvaluator):
 
         def _get2(context, xi, span):
             if len(xi) <= span[0][0]:
-                return [""]
+                return ""
             if len(xi[span[0][0]]) <= span[1][1]:
-                return [""]
+                return ""
             return get_phrase(context, xi, span)
 
         id2answer_dict = {id_: _get2(context, xi, span)
@@ -379,9 +379,9 @@ class ForwardEvaluator(Evaluator):
 
         def _get2(context, xi, span):
             if len(xi) <= span[0][0]:
-                return [""]
+                return ""
             if len(xi[span[0][0]]) <= span[1][1]:
-                return [""]
+                return ""
             return get_phrase(context, xi, span)
 
         id2answer_dict = {id_: _get2(context, xi, span)
