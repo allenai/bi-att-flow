@@ -81,7 +81,7 @@ def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None
 
 
 class Model(object):
-    def __init__(self, config, scope):
+    def __init__(self, config, scope, rep=True):
         self.scope = scope
         self.config = config
         self.global_step = tf.get_variable('global_step', shape=[], dtype='int32',
@@ -115,6 +115,9 @@ class Model(object):
 
         self._build_forward()
         self._build_loss()
+        self.var_ema = None
+        if rep:
+            self._build_var_ema()
         if config.mode == 'train':
             self._build_ema()
 
@@ -325,15 +328,24 @@ class Model(object):
         tf.add_to_collection('ema/scalar', self.loss)
 
     def _build_ema(self):
-        ema = tf.train.ExponentialMovingAverage(self.config.decay)
-        ema_op = ema.apply(tf.get_collection("ema/scalar", scope=self.scope) + tf.get_collection("ema/histogram", scope=self.scope))
+        self.ema = tf.train.ExponentialMovingAverage(self.config.decay)
+        ema = self.ema
+        tensors = tf.get_collection("ema/scalar", scope=self.scope) + tf.get_collection("ema/vector", scope=self.scope)
+        ema_op = ema.apply(tensors)
         for var in tf.get_collection("ema/scalar", scope=self.scope):
             ema_var = ema.average(var)
             tf.scalar_summary(ema_var.op.name, ema_var)
-        for var in tf.get_collection("ema/histogram", scope=self.scope):
+        for var in tf.get_collection("ema/vector", scope=self.scope):
             ema_var = ema.average(var)
             tf.histogram_summary(ema_var.op.name, ema_var)
 
+        with tf.control_dependencies([ema_op]):
+            self.loss = tf.identity(self.loss)
+
+    def _build_var_ema(self):
+        self.var_ema = tf.train.ExponentialMovingAverage(self.config.decay)
+        ema = self.var_ema
+        ema_op = ema.apply(tf.trainable_variables())
         with tf.control_dependencies([ema_op]):
             self.loss = tf.identity(self.loss)
 
@@ -485,9 +497,10 @@ class Model(object):
 
 def get_multi_gpu_models(config):
     models = []
+    var_scope = tf.get_variable_scope()
     for gpu_idx in range(config.num_gpus):
         with tf.name_scope("model_{}".format(gpu_idx)) as scope, tf.device("/{}:{}".format(config.device_type, gpu_idx)):
-            model = Model(config, scope)
+            model = Model(config, scope, rep=gpu_idx == 0)
             tf.get_variable_scope().reuse_variables()
             models.append(model)
     return models

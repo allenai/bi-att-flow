@@ -17,8 +17,8 @@ debug=False
 python3 -m squad.prepro --mode single --single_path $source_path --debug $debug --target_dir $split_dir --glove_dir .
 python3 -m squad.prepro --mode single --single_path $source_path --debug $debug --target_dir $merge_dir --glove_dir . --merge True
 
-python3 -m basic.cli --data_dir $split_dir --nodump_eval --answer_path $out_path --load_path $load_path --shared_path $shared_path --draft $debug --eval_num_batches 0 --mode forward --batch_size 1 --len_opt --cluster --cpu_opt &
-python3 -m basic.cli --data_dir $split_dir --nodump_eval --answer_path $out_path2 --load_path $load_path2 --shared_path $shared_path2 --draft $debug --eval_num_batches 0 --mode forward --batch_size 1 --len_opt --cluster --cpu_opt &
+python3 -m basic.cli --data_dir $split_dir --nodump_eval --answer_path $out_path --load_path $load_path --shared_path $shared_path --draft $debug --eval_num_batches 0 --mode forward --batch_size 1 --len_opt --cluster --cpu_opt --load_ema &
+python3 -m basic.cli --data_dir $split_dir --nodump_eval --answer_path $out_path2 --load_path $load_path2 --shared_path $shared_path2 --draft $debug --eval_num_batches 0 --mode forward --batch_size 1 --len_opt --cluster --cpu_opt --load_ema &
 args="$out_path $out_path2"
 
 for num in {0..7}
@@ -27,7 +27,7 @@ do
     shared_path="$root_dir/7$num/shared.json"
     out_path="$inter_dir/7$num.json"
     args="$args $out_path"
-    python3 -m basic.cli --data_dir $merge_dir --nodump_eval --answer_path $out_path --load_path $load_path --shared_path $shared_path --draft $debug --eval_num_batches 0 --mode forward --batch_size 1 --len_opt --cluster --cpu_opt &
+    python3 -m basic.cli --data_dir $merge_dir --nodump_eval --answer_path $out_path --load_path $load_path --shared_path $shared_path --draft $debug --eval_num_batches 0 --mode forward --batch_size 1 --len_opt --cluster --cpu_opt --load_ema &
 
 done
 wait
