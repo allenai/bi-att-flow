@@ -16,7 +16,7 @@ fi
 python3 -m squad.prepro --mode single --single_path $source_path -pm $parg --target_dir $inter_dir --glove_dir .
 
 eargs=""
-for num in 30 31 32; do
+for num in 31 33 34 35 36 37 40 41 43 44 45 46; do
     load_path="$root_dir/$num/save"
     shared_path="$root_dir/$num/shared.json"
     eval_path="$inter_dir/eval-$num.json"
