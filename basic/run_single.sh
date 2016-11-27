@@ -9,11 +9,11 @@ marg=""
 if [ "$3" = "debug" ]
 then
     parg="-d"
-    marg="--draft"
+    marg="--debug"
 fi
 
 # Preprocess data
-python3 -m squad.prepro --mode single --single_path $source_path -pm $parg --target_dir $inter_dir --glove_dir .
+python3 -m squad.prepro --mode single --single_path $source_path $parg --target_dir $inter_dir --glove_dir .
 
 num=37
 load_path="$root_dir/$num/save"

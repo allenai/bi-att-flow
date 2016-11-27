@@ -32,10 +32,9 @@ def get_args():
     parser.add_argument("--mode", default="full", type=str)
     parser.add_argument("--single_path", default="", type=str)
     parser.add_argument("--tokenizer", default="PTB", type=str)
-    parser.add_argument('-p', "--process_tokens", action='store_true')
     parser.add_argument("--url", default="vision-server2.corp.ai2", type=str)
     parser.add_argument("--port", default=8000, type=int)
-    parser.add_argument('-m', "--merge", action='store_true')
+    parser.add_argument("--split", action='store_true')
     # TODO : put more args here
     return parser.parse_args()
 
@@ -119,7 +118,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     else:
         raise Exception()
 
-    if args.merge:
+    if not args.split:
         sent_tokenize = lambda para: [para]
 
     source_path = in_path or os.path.join(args.source_dir, "{}-v1.1.json".format(data_type))
@@ -145,8 +144,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
             context = context.replace("''", '" ')
             context = context.replace("``", '" ')
             xi = list(map(word_tokenize, sent_tokenize(context)))
-            if args.process_tokens:
-                xi = [process_tokens(tokens) for tokens in xi]
+            xi = [process_tokens(tokens) for tokens in xi]  # process tokens
             # given xi, add chars
             cxi = [[list(xijk) for xijk in xij] for xij in xi]
             xp.append(xi)

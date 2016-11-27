@@ -1,4 +1,4 @@
-""" Official evaluation script for v1.1 of the SQuAD dataset. """
+""" Official evaluation script for v1.1 of the SQuAD dataset. [Changed name for external importing]"""
 from __future__ import print_function
 from collections import Counter
 import string

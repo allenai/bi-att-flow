@@ -9,11 +9,11 @@ marg=""
 if [ "$3" = "debug" ]
 then
     parg="-d"
-    marg="--draft"
+    marg="--debug"
 fi
 
 # Preprocess data
-python3 -m squad.prepro --mode single --single_path $source_path -pm $parg --target_dir $inter_dir --glove_dir .
+python3 -m squad.prepro --mode single --single_path $source_path $parg --target_dir $inter_dir --glove_dir .
 
 eargs=""
 for num in 31 33 34 35 36 37 40 41 43 44 45 46; do
