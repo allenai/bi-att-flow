@@ -1,6 +1,6 @@
 import sys
 import json
-from collections import Counter
+from collections import Counter, defaultdict
 import re
 
 def key_func(pair):
@@ -9,7 +9,14 @@ def key_func(pair):
 
 def get_func(vals, probs):
     counter = Counter(vals)
-    return max(zip(vals, probs), key=lambda pair: pair[1] + 0.5 * counter[pair[0]] / len(counter) - 999 * (len(pair[0]) == 0) )[0]
+    # return max(zip(vals, probs), key=lambda pair: pair[1])[0]
+    # return max(zip(vals, probs), key=lambda pair: pair[1] * counter[pair[0]] / len(counter) - 999 * (len(pair[0]) == 0) )[0]
+    # return max(zip(vals, probs), key=lambda pair: pair[1] + 0.7 * counter[pair[0]] / len(counter) - 999 * (len(pair[0]) == 0) )[0]
+    d = defaultdict(float)
+    for val, prob in zip(vals, probs):
+        d[val] += prob
+    d[''] = 0
+    return max(d.items(), key=lambda pair: pair[1])[0]
 
 third_path = sys.argv[1]
 other_paths = sys.argv[2:]

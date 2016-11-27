@@ -8,7 +8,8 @@ from collections import Counter
 
 from tqdm import tqdm
 
-from my.utils import get_word_span, process_tokens, get_word_idx
+from my.utils import process_tokens, get_word_idx
+from squad.utils import get_word_span, get_word_idx, process_tokens
 
 
 def bool_(arg):

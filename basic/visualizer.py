@@ -10,7 +10,8 @@ from tqdm import tqdm
 
 from jinja2 import Environment, FileSystemLoader
 
-from basic.evaluator import get_span_score_pairs, get_best_span
+from basic.evaluator import get_span_score_pairs
+from squad.utils import get_best_span, get_span_score_pairs
 
 
 def bool_(string):

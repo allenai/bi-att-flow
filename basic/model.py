@@ -343,7 +343,7 @@ class Model(object):
             self.loss = tf.identity(self.loss)
 
     def _build_var_ema(self):
-        self.var_ema = tf.train.ExponentialMovingAverage(self.config.decay)
+        self.var_ema = tf.train.ExponentialMovingAverage(self.config.var_decay)
         ema = self.var_ema
         ema_op = ema.apply(tf.trainable_variables())
         with tf.control_dependencies([ema_op]):

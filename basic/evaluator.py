@@ -1,12 +1,11 @@
-import itertools
 import numpy as np
 import tensorflow as tf
-import os
 
 from basic.read_data import DataSet
 from my.nltk_utils import span_f1
 from my.tensorflow import padded_reshape
-from my.utils import argmax, get_phrase
+from my.utils import argmax
+from squad.utils import get_phrase, get_best_span
 
 
 class Evaluation(object):
@@ -421,32 +420,3 @@ class ForwardEvaluator(Evaluator):
         return max_f1
 
 
-def get_best_span(ypi, yp2i):
-    max_val = 0
-    best_word_span = (0, 1)
-    best_sent_idx = 0
-    for f, (ypif, yp2if) in enumerate(zip(ypi, yp2i)):
-        argmax_j1 = 0
-        for j in range(len(ypif)):
-            val1 = ypif[argmax_j1]
-            if val1 < ypif[j]:
-                val1 = ypif[j]
-                argmax_j1 = j
-
-            val2 = yp2if[j]
-            if val1 * val2 > max_val:
-                best_word_span = (argmax_j1, j)
-                best_sent_idx = f
-                max_val = val1 * val2
-    return ((best_sent_idx, best_word_span[0]), (best_sent_idx, best_word_span[1] + 1)), float(max_val)
-
-
-def get_span_score_pairs(ypi, yp2i):
-    span_score_pairs = []
-    for f, (ypif, yp2if) in enumerate(zip(ypi, yp2i)):
-        for j in range(len(ypif)):
-            for k in range(j, len(yp2if)):
-                span = ((f, j), (f, k+1))
-                score = ypif[j] * yp2if[k]
-                span_score_pairs.append((span, score))
-    return span_score_pairs

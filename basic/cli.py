@@ -26,6 +26,7 @@ flags.DEFINE_integer("log_period", 100, "Log period [100]")
 flags.DEFINE_integer("eval_period", 1000, "Eval period [1000]")
 flags.DEFINE_integer("save_period", 1000, "Save Period [1000]")
 flags.DEFINE_float("decay", 0.9, "Exponential moving average decay [0.9]")
+flags.DEFINE_float("var_decay", 0.999, "var decay [0.999]")
 
 flags.DEFINE_boolean("draft", False, "Draft for quick testing? [False]")
 
