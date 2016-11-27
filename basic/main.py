@@ -192,7 +192,7 @@ def _forward(config):
         graph_handler.dump_answer(e, path=config.answer_path)
     if config.dump_eval:
         print("dumping eval ...")
-        graph_handler.dump_eval(e)
+        graph_handler.dump_eval(e, path=config.eval_path)
 
 
 def set_dirs(config):

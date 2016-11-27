@@ -8,16 +8,7 @@ from collections import Counter
 
 from tqdm import tqdm
 
-from my.utils import process_tokens, get_word_idx
 from squad.utils import get_word_span, get_word_idx, process_tokens
-
-
-def bool_(arg):
-    if arg == 'True':
-        return True
-    elif arg == 'False':
-        return False
-    raise Exception(arg)
 
 
 def main():
@@ -31,9 +22,9 @@ def get_args():
     source_dir = os.path.join(home, "data", "squad")
     target_dir = "data/squad"
     glove_dir = os.path.join(home, "data", "glove")
-    parser.add_argument("--source_dir", default=source_dir)
-    parser.add_argument("--target_dir", default=target_dir)
-    parser.add_argument("--debug", default=False, type=bool_)
+    parser.add_argument('-s', "--source_dir", default=source_dir)
+    parser.add_argument('-t', "--target_dir", default=target_dir)
+    parser.add_argument('-d', "--debug", action='store_true')
     parser.add_argument("--train_ratio", default=0.9, type=int)
     parser.add_argument("--glove_corpus", default="6B")
     parser.add_argument("--glove_dir", default=glove_dir)
@@ -41,10 +32,10 @@ def get_args():
     parser.add_argument("--mode", default="full", type=str)
     parser.add_argument("--single_path", default="", type=str)
     parser.add_argument("--tokenizer", default="PTB", type=str)
-    parser.add_argument("--process_tokens", default=False, type=bool_)
+    parser.add_argument('-p', "--process_tokens", action='store_true')
     parser.add_argument("--url", default="vision-server2.corp.ai2", type=str)
     parser.add_argument("--port", default=8000, type=int)
-    parser.add_argument("--merge", default=False, type=bool_)
+    parser.add_argument('-m', "--merge", action='store_true')
     # TODO : put more args here
     return parser.parse_args()
 

@@ -6,7 +6,6 @@ import tensorflow as tf
 from tensorflow.python.ops.rnn_cell import BasicLSTMCell, GRUCell
 
 from basic.read_data import DataSet
-from basic.superhighway import SHCell
 from my.tensorflow import exp_mask, get_initializer, VERY_SMALL_NUMBER
 from my.tensorflow.nn import linear, double_linear_logits, linear_logits, softsel, dropout, get_logits, softmax, \
     highway_network, multi_conv1d

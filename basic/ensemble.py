@@ -34,7 +34,10 @@ def ensemble(args):
         shared = json.load(fh)
 
     out = {}
-    for idx, (id_, rx) in tqdm(enumerate(zip(data['ids'], data['*x'])), total=len(data['ids'])):
+    for idx, (id_, rx) in tqdm(enumerate(zip(data['ids'], data['*x'])), total=len(e['yp'])):
+        if idx >= len(e['yp']):
+            # for debugging purpose
+            break
         context = shared['p'][rx[0]][rx[1]]
         wordss = shared['x'][rx[0]][rx[1]]
         yp_list = [e['yp'][idx] for e in e_list]
