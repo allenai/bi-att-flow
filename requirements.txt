@@ -1,4 +1,4 @@
-tensorflow
+tensorflow>=0.11
 nltk
 tqdm
 jinja2
