@@ -50,30 +50,64 @@ python -m basic.cli --mode train --noload --len_opt --cluster
 You can still omit them, but training will be much slower.
 
 
-## 3. Testing
-To Test, run:
+## 3. Test
+To test, run:
 ```
-python -m basic.cli --mode test
+python -m basic.cli
 ```
 
 Similarly to training, you can give the optimization flags to speed up test (5 minutes on dev data):
 ```
-python -m basic.cli --mode test --len_opt --cluster
+python -m basic.cli --len_opt --cluster
 ```
 
 This command loads the most recently saved model during training and begins testing on the test data.
 After the process ends, it prints F1 and EM scores, and also outputs a json file (`$PWD/out/basic/00/answer/test-####.json`,
 where `####` is the step # that the model was saved).
 Note that the printed scores are not official (our scoring scheme is a bit harsher).
-To obtain the official number, use the official evaluator and the output json file:
+To obtain the official number, use the official evaluator (copied in `squad` folder) and the output json file:
 
 ```
 python squad/evaluate-v1.1.py $HOME/data/squad/dev-v1.1.json out/basic/00/answer/test-####.json
 ```
 
+### 3.1 Loading from pre-trained weights
+Instead of training the model yourself, you can choose to use pre-trained weights that were used for [SQuAD Leaderboard][squad] submission.
+Refer to [this worksheet][worksheet] in CodaLab to reproduce the results.
+If you are unfamiliar with CodaLab, follow these simple steps (given that you met all prereqs above):
+
+1. Download `save.zip` from the [worksheet][worksheet] and unzip it in the current directory.
+2. Copy `glove.6B.100d.txt` from your glove data folder (`$HOME/data/glove/`) to the current directory.
+3. To reproduce single model:
+```
+basic/run_single.sh $HOME/data/squad/dev-v1.1.json single.json
+```
+This writes the answers to `single.json` in the current directory. You can then use the official evaluator to obtain EM and F1 scores.
+4. Similarly, to reproduce ensemble method:
+```
+basic/run_ensemble.sh $HOME/data/squad/dev-v1.1.json ensemble.json
+```
+
+
+
 
 ## Results
-See [SQuAD Leaderboard][squad]
+
+###Dev Data
+
+|          | EM (%) | F1 (%) |
+| -------- |:------:|:------:|
+| single   | 67.7   | 77.3   |
+| ensemble | 72.6   | 80.7   |
+
+###Test Data
+
+|          | EM (%) | F1 (%) |
+| -------- |:------:|:------:|
+| single   | 68.0   | 77.3   |
+| ensemble | 73.3   | 81.1   |
+
+Also see [SQuAD Leaderboard][squad].
 
 
 <!--
