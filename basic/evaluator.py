@@ -1,12 +1,11 @@
-import itertools
 import numpy as np
 import tensorflow as tf
-import os
 
 from basic.read_data import DataSet
 from my.nltk_utils import span_f1
 from my.tensorflow import padded_reshape
 from my.utils import argmax
+from squad.utils import get_phrase, get_best_span
 
 
 class Evaluation(object):
@@ -279,8 +278,15 @@ class F1Evaluator(LabeledEvaluator):
                 return [""]
             return xi[span[0][0]][span[0][1]:span[1][1]]
 
-        id2answer_dict = {id_: " ".join(_get(xi, span))
-                          for id_, xi, span in zip(data_set.data['ids'], data_set.data['x'], spans)}
+        def _get2(context, xi, span):
+            if len(xi) <= span[0][0]:
+                return ""
+            if len(xi[span[0][0]]) <= span[1][1]:
+                return ""
+            return get_phrase(context, xi, span)
+
+        id2answer_dict = {id_: _get2(context, xi, span)
+                          for id_, xi, span, context in zip(data_set.data['ids'], data_set.data['x'], spans, data_set.data['p'])}
         id2score_dict = {id_: score for id_, score in zip(data_set.data['ids'], scores)}
         id2answer_dict['scores'] = id2score_dict
         correct = [self.__class__.compare2(yi, span) for yi, span in zip(y, spans)]
@@ -370,8 +376,15 @@ class ForwardEvaluator(Evaluator):
                 return [""]
             return xi[span[0][0]][span[0][1]:span[1][1]]
 
-        id2answer_dict = {id_: " ".join(_get(xi, span))
-                          for id_, xi, span in zip(data_set.data['ids'], data_set.data['x'], spans)}
+        def _get2(context, xi, span):
+            if len(xi) <= span[0][0]:
+                return ""
+            if len(xi[span[0][0]]) <= span[1][1]:
+                return ""
+            return get_phrase(context, xi, span)
+
+        id2answer_dict = {id_: _get2(context, xi, span)
+                          for id_, xi, span, context in zip(data_set.data['ids'], data_set.data['x'], spans, data_set.data['p'])}
         id2score_dict = {id_: score for id_, score in zip(data_set.data['ids'], scores)}
         id2answer_dict['scores'] = id2score_dict
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
@@ -407,32 +420,3 @@ class ForwardEvaluator(Evaluator):
         return max_f1
 
 
-def get_best_span(ypi, yp2i):
-    max_val = 0
-    best_word_span = (0, 1)
-    best_sent_idx = 0
-    for f, (ypif, yp2if) in enumerate(zip(ypi, yp2i)):
-        argmax_j1 = 0
-        for j in range(len(ypif)):
-            val1 = ypif[argmax_j1]
-            if val1 < ypif[j]:
-                val1 = ypif[j]
-                argmax_j1 = j
-
-            val2 = yp2if[j]
-            if val1 * val2 > max_val:
-                best_word_span = (argmax_j1, j)
-                best_sent_idx = f
-                max_val = val1 * val2
-    return ((best_sent_idx, best_word_span[0]), (best_sent_idx, best_word_span[1] + 1)), float(max_val)
-
-
-def get_span_score_pairs(ypi, yp2i):
-    span_score_pairs = []
-    for f, (ypif, yp2if) in enumerate(zip(ypi, yp2i)):
-        for j in range(len(ypif)):
-            for k in range(j, len(yp2if)):
-                span = ((f, j), (f, k+1))
-                score = ypif[j] * yp2if[k]
-                span_score_pairs.append((span, score))
-    return span_score_pairs

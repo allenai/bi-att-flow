@@ -1,10 +1,7 @@
-from collections import deque
 import json
+from collections import deque
 
-import nltk
-import re
 import numpy as np
-
 from tqdm import tqdm
 
 
@@ -59,78 +56,3 @@ def argmax(x):
     return np.unravel_index(x.argmax(), x.shape)
 
 
-def get_spans(text, tokens):
-    """
-
-    :param text:
-    :param tokens:
-    :return: the start indices of tokens in text
-    """
-    spans = []
-    cur_idx = 0
-    for token in tokens:
-        if text.find(token, cur_idx) < 0:
-            print(tokens)
-            print("{} {} {}".format(token, cur_idx, text))
-            raise Exception()
-        cur_idx = text.find(token, cur_idx)
-        spans.append((cur_idx, cur_idx+len(token)))
-        cur_idx += len(token)
-    return spans
-
-
-def _find(token_spans, target_span):
-    """
-
-    :param token_spans: [ (0, 5), (6, 7), (9, 14), ... ]
-    :param target_span: [ (5, 13) ]
-    :return: (1, 3)
-    """
-    idxs = []
-    for i, span in enumerate(token_spans):
-        if not (target_span[1] <= span[0] or target_span[0] >= span[1]):
-            idxs.append(i)
-    return idxs[0], idxs[-1] + 1
-
-def get_2d_spans(text, tokenss):
-    spanss = []
-    cur_idx = 0
-    for tokens in tokenss:
-        spans = []
-        for token in tokens:
-            if text.find(token, cur_idx) < 0:
-                print(tokens)
-                print("{} {} {}".format(token, cur_idx, text))
-                raise Exception()
-            cur_idx = text.find(token, cur_idx)
-            spans.append((cur_idx, cur_idx + len(token)))
-            cur_idx += len(token)
-        spanss.append(spans)
-    return spanss
-
-
-def get_word_span(context, wordss, start, stop):
-    spanss = get_2d_spans(context, wordss)
-    idxs = []
-    for sent_idx, spans in enumerate(spanss):
-        for word_idx, span in enumerate(spans):
-            if not (stop <= span[0] or start >= span[1]):
-                idxs.append((sent_idx, word_idx))
-
-    assert len(idxs) > 0, "{} {} {} {}".format(context, spanss, start, stop)
-    return idxs[0], (idxs[-1][0], idxs[-1][1] + 1)
-
-
-def get_word_idx(context, wordss, idx):
-    spanss = get_2d_spans(context, wordss)
-    return spanss[idx[0]][idx[1]][0]
-
-
-def process_tokens(temp_tokens):
-    tokens = []
-    for token in temp_tokens:
-        flag = False
-        # l = ("-", "\u2212", "\u2014", "\u2013", "/", "~", '"', "'", "\u201C", "\u2019", "\u201D", "\u2018", "\u00B0")
-        l = ("-", "\u2212", "\u2014", "\u2013")
-        tokens.extend(re.split("([{}])".format("".join(l)), token))
-    return tokens

@@ -11,8 +11,7 @@ wget https://rajpurkar.github.io/SQuAD-explorer/dataset/dev-v1.1.json -O $SQUAD_
 
 
 # Download CNN and DailyMail
-# wget https://s3-us-west-2.amazonaws.com/minjoon/data/cnn/cnn.tgz -O $DATA_DIR/cnn.tgz
-# wget https://s3-us-west-2.amazonaws.com/minjoon/data/dailymail/dailymail.tgz -O $DATA_DIR/dailymail.tgz
+# Download at: http://cs.nyu.edu/~kcho/DMQA/
 
 
 # Download GloVe

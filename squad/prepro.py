@@ -8,15 +8,7 @@ from collections import Counter
 
 from tqdm import tqdm
 
-from my.utils import get_word_span, process_tokens, get_word_idx
-
-
-def bool_(arg):
-    if arg == 'True':
-        return True
-    elif arg == 'False':
-        return False
-    raise Exception(arg)
+from squad.utils import get_word_span, get_word_idx, process_tokens
 
 
 def main():
@@ -30,9 +22,9 @@ def get_args():
     source_dir = os.path.join(home, "data", "squad")
     target_dir = "data/squad"
     glove_dir = os.path.join(home, "data", "glove")
-    parser.add_argument("--source_dir", default=source_dir)
-    parser.add_argument("--target_dir", default=target_dir)
-    parser.add_argument("--debug", default=False, type=bool_)
+    parser.add_argument('-s', "--source_dir", default=source_dir)
+    parser.add_argument('-t', "--target_dir", default=target_dir)
+    parser.add_argument('-d', "--debug", action='store_true')
     parser.add_argument("--train_ratio", default=0.9, type=int)
     parser.add_argument("--glove_corpus", default="6B")
     parser.add_argument("--glove_dir", default=glove_dir)
@@ -40,10 +32,9 @@ def get_args():
     parser.add_argument("--mode", default="full", type=str)
     parser.add_argument("--single_path", default="", type=str)
     parser.add_argument("--tokenizer", default="PTB", type=str)
-    parser.add_argument("--process_tokens", default=False, type=bool_)
     parser.add_argument("--url", default="vision-server2.corp.ai2", type=str)
     parser.add_argument("--port", default=8000, type=int)
-    parser.add_argument("--merge", default=False, type=bool_)
+    parser.add_argument("--split", action='store_true')
     # TODO : put more args here
     return parser.parse_args()
 
@@ -127,7 +118,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     else:
         raise Exception()
 
-    if args.merge:
+    if not args.split:
         sent_tokenize = lambda para: [para]
 
     source_path = in_path or os.path.join(args.source_dir, "{}-v1.1.json".format(data_type))
@@ -137,25 +128,28 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     cy = []
     x, cx = [], []
     answerss = []
+    p = []
     word_counter, char_counter, lower_word_counter = Counter(), Counter(), Counter()
     start_ai = int(round(len(source_data['data']) * start_ratio))
     stop_ai = int(round(len(source_data['data']) * stop_ratio))
     for ai, article in enumerate(tqdm(source_data['data'][start_ai:stop_ai])):
         xp, cxp = [], []
+        pp = []
         x.append(xp)
         cx.append(cxp)
+        p.append(pp)
         for pi, para in enumerate(article['paragraphs']):
             # wordss
             context = para['context']
             context = context.replace("''", '" ')
             context = context.replace("``", '" ')
             xi = list(map(word_tokenize, sent_tokenize(context)))
-            if args.process_tokens:
-                xi = [process_tokens(tokens) for tokens in xi]
+            xi = [process_tokens(tokens) for tokens in xi]  # process tokens
             # given xi, add chars
             cxi = [[list(xijk) for xijk in xij] for xij in xi]
             xp.append(xi)
             cxp.append(cxi)
+            pp.append(context)
 
             for xij in xi:
                 for xijk in xij:
@@ -222,9 +216,10 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     word2vec_dict = get_word2vec(args, word_counter)
     lower_word2vec_dict = get_word2vec(args, lower_word_counter)
 
+    # add context here
     data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, 'cy': cy,
-            'idxs': idxs, 'ids': ids, 'answerss': answerss}
-    shared = {'x': x, 'cx': cx,
+            'idxs': idxs, 'ids': ids, 'answerss': answerss, '*p': rx}
+    shared = {'x': x, 'cx': cx, 'p': p,
               'word_counter': word_counter, 'char_counter': char_counter, 'lower_word_counter': lower_word_counter,
               'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dict}
 
