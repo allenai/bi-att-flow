@@ -9,7 +9,7 @@ from collections import Counter
 from tqdm import tqdm
 
 from my.utils import get_word_span, process_tokens, get_word_idx
-
+from IPython import embed
 
 def bool_(arg):
     if arg == 'True':
@@ -66,8 +66,8 @@ def prepro(args):
         os.makedirs(args.target_dir)
 
     if args.mode == 'full':
-        prepro_each(args, 'train', out_name='train')
-        prepro_each(args, 'dev', out_name='dev')
+        #prepro_each(args, 'train', out_name='train')
+        #prepro_each(args, 'dev', out_name='dev')
         prepro_each(args, 'dev', out_name='test')
     elif args.mode == 'all':
         create_all(args)
@@ -84,9 +84,9 @@ def prepro(args):
 
 
 def save(args, data, shared, data_type):
-    data_path = os.path.join(args.target_dir, "data_{}.json".format(data_type))
+    #data_path = os.path.join(args.target_dir, "data_{}.json".format(data_type))
     shared_path = os.path.join(args.target_dir, "shared_{}.json".format(data_type))
-    json.dump(data, open(data_path, 'w'))
+    #json.dump(data, open(data_path, 'w'))
     json.dump(shared, open(shared_path, 'w'))
 
 
@@ -134,6 +134,9 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     source_data = json.load(open(source_path, 'r'))
 
     q, cq, y, rx, rcx, ids, idxs = [], [], [], [], [], [], []
+    contextss = []
+    context_questions = []
+    titles = []
     cy = []
     x, cx = [], []
     answerss = []
@@ -141,21 +144,26 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     start_ai = int(round(len(source_data['data']) * start_ratio))
     stop_ai = int(round(len(source_data['data']) * stop_ratio))
     for ai, article in enumerate(tqdm(source_data['data'][start_ai:stop_ai])):
-        xp, cxp = [], []
+        xp, cxp, contexts, c_questions = [], [], [], []
         x.append(xp)
         cx.append(cxp)
+        contextss.append(contexts)
+        context_questions.append(c_questions)
+        title = "[" + str(ai).zfill(2) + "] " + article['title'].replace('_', ' ')
+        titles.append(title)
         for pi, para in enumerate(article['paragraphs']):
             # wordss
             context = para['context']
             context = context.replace("''", '" ')
-            context = context.replace("``", '" ')
+            context = context.replace("``", '" ') #Sentences of priginal Paragraph
+            contexts.append(context)
             xi = list(map(word_tokenize, sent_tokenize(context)))
             if args.process_tokens:
                 xi = [process_tokens(tokens) for tokens in xi]
             # given xi, add chars
             cxi = [[list(xijk) for xijk in xij] for xij in xi]
-            xp.append(xi)
-            cxp.append(cxi)
+            xp.append(xi) # A list of (A list of words)
+            cxp.append(cxi) # A list of (A list of (A list of chars))
 
             for xij in xi:
                 for xijk in xij:
@@ -169,11 +177,14 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
             assert len(x[ai]) - 1 == pi
             for qa in para['qas']:
                 # get words
-                qi = word_tokenize(qa['question'])
+                c_questions.append(qa['question'])
+                break
+                qi = word_tokenize(qa['question']) # qa['question'] : original question
                 cqi = [list(qij) for qij in qi]
                 yi = []
                 cyi = []
                 answers = []
+                
                 for answer in qa['answers']:
                     answer_text = answer['text']
                     answers.append(answer_text)
@@ -218,16 +229,16 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
 
             if args.debug:
                 break
-
     word2vec_dict = get_word2vec(args, word_counter)
     lower_word2vec_dict = get_word2vec(args, lower_word_counter)
 
     data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, 'cy': cy,
             'idxs': idxs, 'ids': ids, 'answerss': answerss}
     shared = {'x': x, 'cx': cx,
+              'contextss' : contextss, 'context_questions' : context_questions,
+              'titles' : titles,
               'word_counter': word_counter, 'char_counter': char_counter, 'lower_word_counter': lower_word_counter,
               'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dict}
-
     print("saving ...")
     save(args, data, shared, out_name)
 
