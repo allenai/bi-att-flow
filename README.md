@@ -79,17 +79,17 @@ If you are unfamiliar with CodaLab, follow these simple steps (given that you me
 1. Download `save.zip` from the [worksheet][worksheet] and unzip it in the current directory.
 2. Copy `glove.6B.100d.txt` from your glove data folder (`$HOME/data/glove/`) to the current directory.
 3. To reproduce single model:
-```
-basic/run_single.sh $HOME/data/squad/dev-v1.1.json single.json
-```
-This writes the answers to `single.json` in the current directory. You can then use the official evaluator to obtain EM and F1 scores.
+  
+  ```
+  basic/run_single.sh $HOME/data/squad/dev-v1.1.json single.json
+  ```
+  
+  This writes the answers to `single.json` in the current directory. You can then use the official evaluator to obtain EM and F1 scores.
 4. Similarly, to reproduce ensemble method:
-```
-basic/run_ensemble.sh $HOME/data/squad/dev-v1.1.json ensemble.json
-```
-
-
-
+  
+  ```
+  basic/run_ensemble.sh $HOME/data/squad/dev-v1.1.json ensemble.json 
+  ```
 
 ## Results
 
@@ -135,12 +135,11 @@ python -m basic.cli --mode train --noload --num_gpus 3 --batch_size 20
 
 Similarly, you can speed up your testing by:
 ```
-python -m basic.cli --mode test --num_gpus 3 --batch_size 20 
+python -m basic.cli --num_gpus 3 --batch_size 20 
 ```
  
 
 [multi-gpu]: https://www.tensorflow.org/versions/r0.11/tutorials/deep_cnn/index.html#training-a-model-using-multiple-gpu-cards
-[save]: #
 [squad]: http://stanford-qa.com
 [paper]: https://arxiv.org/abs/1611.01603
 [worksheet]: https://worksheets.codalab.org/worksheets/0x37a9b8c44f6845c28866267ef941c89d/
