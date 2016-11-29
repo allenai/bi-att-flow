@@ -2,6 +2,7 @@
  
 - This the original implementation of [Bi-directional Attention Flow for Machine Comprehension][paper] (Seo et al., 2016).
 - The CodaLab worksheet for the [SQuAD Leaderboard][squad] submission is available [here][worksheet].
+- Please contact [Minjoon Seo][minjoon] ([@seominjoon][minjoon-github]) for questions and suggestions.
 
 ## 0. Requirements
 #### General
@@ -107,7 +108,8 @@ If you are unfamiliar with CodaLab, follow these simple steps (given that you me
 | single   | 68.0   | 77.3   |
 | ensemble | 73.3   | 81.1   |
 
-Also see [SQuAD Leaderboard][squad].
+Refer to [our paper][paper] for more details.
+See [SQuAD Leaderboard][squad] to compare with other models.
 
 
 <!--
@@ -143,3 +145,5 @@ python -m basic.cli --num_gpus 3 --batch_size 20
 [squad]: http://stanford-qa.com
 [paper]: https://arxiv.org/abs/1611.01603
 [worksheet]: https://worksheets.codalab.org/worksheets/0x37a9b8c44f6845c28866267ef941c89d/
+[minjoon]: https://seominjoon.github.io
+[minjoon-github]: https://github.com/seominjoon
