@@ -5,7 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
-    <title>BiAtt-flow demo</title>
+    <title>BiDAF Demo</title>
 
     <!-- Bootstrap -->
     <link href="../static/styles/bootstrap/css/bootstrap.min.css" rel="stylesheet">
@@ -24,31 +24,10 @@
 	<div class="container" role="main">
 		<div> <!--<div class="jumbotron">-->
 			<h1 class="display-3"> Bi-directional Attention Flow Demo</h1>
-			<p>BiAtt-Flow can answer to your question!</p>
-			<p><strong>Direction</strong> : Select a paragraph and write a question to see how BiAtt-Flow answers to your question.</p>
-			<p><strong>Note : </strong>The answer is always a part of paragraph - remember it when you ask for a question!</p>
+			<h3>for <a href="https://stanford-qa.com" target="_blank">Stanford Question Answering Dataset (SQuAD)</a></h3>
+			<p>BiDAF can answer your question!</p>
+			<p><strong>Direction</strong> : Select a paragraph and write your own question. The answer is always a subphrase of the paragraph - remember it when you ask a question!</p>
 		</div>
-		<!--
-		<h3> Some Given Paragraphs </h3>
-		<p id = "button-field">
-		    <button type="button" class="btn btn-sm btn-default" id="0">Para0</button>
-		    <button type="button" class="btn btn-sm btn-primary" id="1">Para1</button>
-		    <button type="button" class="btn btn-sm btn-default" id="2">Para2</button>
-		    <button type="button" class="btn btn-sm btn-primary" id="3">Para3</button>
-		    <button type="button" class="btn btn-sm btn-default" id="4">Para4</button>
-		    <button type="button" class="btn btn-sm btn-primary" id="5">Para5</button>
- 		    <button type="button" class="btn btn-sm btn-default" id="6">Para6</button>
-		    <button type="button" class="btn btn-sm btn-primary" id="7">Para7</button>
-		    <button type="button" class="btn btn-sm btn-default" id="8">Para8</button>
-		    <button type="button" class="btn btn-sm btn-primary" id="9">Para9</button>
-		    <button type="button" class="btn btn-sm btn-default" id="10">Para10</button>
-		    <button type="button" class="btn btn-sm btn-primary" id="11">Para11</button>
-		    <button type="button" class="btn btn-sm btn-default" id="12">Para12</button>
-		    <button type="button" class="btn btn-sm btn-primary" id="13">Para13</button>
-		    <button type="button" class="btn btn-sm btn-default" id="14">Para14</button>
-		    <button type="button" class="btn btn-sm btn-primary" id="15">Para15</button>
-		</p>
-		-->
 		<hr />
 		<h4><span class="label label-default">Select Paragraph</span></h4>
 		<select id="selectArticle"></select>
@@ -64,7 +43,8 @@
 		</div>
 		<hr />
 		<div>
-			<p>Reference : Minjoon Seo, Aniruddha Kembhavi, Ali Farhadi, Hannaneh Hajishirzi. "Bidirestional Attention Flow for Machine Comprehension" [<a href="https://arxiv.org/abs/1611.01603" target="_blank">link</a>]</p>
+			<p>Reference : <a href="https://seominjoon.github.io" target="_blank">Minjoon Seo</a>, <a href="http://allenai.org/team/anik/papers.html" target="_blank">Aniruddha Kembhavi</a>, <a href="https://homes.cs.washington.edu/~ali/index.html" target="_blank">Ali Farhadi</a>, <a href="https://ssli.ee.washington.edu/~hannaneh/index.html" target="_blank">Hannaneh Hajishirzi</a>. "Bidirectional Attention Flow for Machine Comprehension" [<a href="https://arxiv.org/abs/1611.01603" target="_blank">link</a>]</p>
+			<p>Created by : Sewon Min</p>
 			<p>SQuAD leaderboard [<a href="https://rajpurkar.github.io/SQuAD-explorer" target="_blank">link</a>]</p>
 
 		</div>

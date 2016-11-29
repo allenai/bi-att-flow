@@ -164,8 +164,10 @@
 
 	function _loadParagraph(){
 		clearField();
-		document.getElementById("paragraph").value = contextss[paragraph_id][0];
-		document.getElementById("question").value = context_questions[paragraph_id][0];
+		p_id = 0;
+		if (paragraph_id==0) p_id=1;
+		document.getElementById("paragraph").value = contextss[paragraph_id][p_id];
+		document.getElementById("question").value = context_questions[paragraph_id][p_id];
 	}
 
 	function handleParagraph(data){

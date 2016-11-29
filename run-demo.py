@@ -37,7 +37,8 @@ def select():
 def submit():
     paragraph_id = request.args.get('paragraph_id', type=int)
     question = request.args.get('question')
-    rxi = [paragraph_id, 0]
+    if paragraph_id == 0: rxi = [paragraph_id, 1]
+    else: rxi = [paragraph_id, 0]
     answer = getAnswer(rxi, question)
     return jsonify(result=answer)
 
