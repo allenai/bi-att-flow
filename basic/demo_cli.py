@@ -27,7 +27,7 @@ flags.DEFINE_string("out_base_dir", "out", "out base dir [out]")
 flags.DEFINE_integer("batch_size", 1, "Batch size [60]")
 flags.DEFINE_float("init_lr", 0.5, "Initial learning rate [0.5]")
 flags.DEFINE_integer("num_epochs", 50, "Total number of epochs for training [50]")
-flags.DEFINE_integer("num_steps", 20000, "Number of steps [20000]")
+flags.DEFINE_integer("num_steps", 18000, "Number of steps [20000]")
 flags.DEFINE_integer("eval_num_batches", 0, "eval num batches [100]")
 flags.DEFINE_integer("load_step", 0, "load step [0]")
 flags.DEFINE_integer("early_stop", 4, "early stop [4]")
@@ -39,6 +39,8 @@ flags.DEFINE_integer("log_period", 100, "Log period [100]")
 flags.DEFINE_integer("eval_period", 1000, "Eval period [1000]")
 flags.DEFINE_integer("save_period", 1000, "Save Period [1000]")
 flags.DEFINE_float("decay", 0.9, "Exponential moving average decay [0.9]")
+flags.DEFINE_float("var_decay", 0.999, "Exponential moving average decay [0.9]")
+flags.DEFINE_boolean("load_ema", True, "Load ema")
 
 flags.DEFINE_boolean("draft", False, "Draft for quick testing? [False]")
 
@@ -77,7 +79,7 @@ flags.DEFINE_bool("use_char_emb", True, "use char emb? [True]")
 
 flags.DEFINE_string("forward_name", "single", "Forward name [single]")
 flags.DEFINE_string("answer_path", "", "Answer path []")
-flags.DEFINE_string("load_path", "out/basic/00/save/basic-20000", "Load path []")
+flags.DEFINE_string("load_path", "out/basic/00/save/basic-18000", "Load path []")
 flags.DEFINE_string("shared_path", "", "Shared path []")
 flags.DEFINE_string("device", "/cpu:0", "default device [/cpu:0]")
 flags.DEFINE_integer("num_gpus", 1, "num of gpus [1]")
@@ -98,8 +100,8 @@ flags.DEFINE_string("logit_func", "tri_linear", "logit func [tri_linear]")
 flags.DEFINE_bool("sh", False, "use superhighway [False]")
 flags.DEFINE_string("answer_func", "linear", "answer logit func [linear]")
 flags.DEFINE_bool("cluster", False, "Cluster data for faster training [False]")
-flags.DEFINE_bool("len_opt", False, "Length optimization? [False]")
-flags.DEFINE_bool("cpu_opt", False, "CPU optimization? GPU computation can be slower [False]")
+flags.DEFINE_bool("len_opt", True, "Length optimization? [False]")
+flags.DEFINE_bool("cpu_opt", True, "CPU optimization? GPU computation can be slower [False]")
 flags.DEFINE_string("sh_logit_func", "tri_linear", "sh logit func [tri_linear]")
 flags.DEFINE_bool("q2c_att", True, "question-to-context attention? [True]")
 flags.DEFINE_bool("c2q_att", True, "context-to-question attention? [True]")
@@ -128,10 +130,10 @@ class Demo(object):
 
         set_dirs(config)
         models = get_multi_gpu_models(config)
-        self.evaluator = MultiGPUF1Evaluator(config, models, tensor_dict=models[0].tensor_dict if config.vis else None)
+        self.evaluator = ForwardEvaluator(config, models[0], tensor_dict=models[0].tensor_dict if config.vis else None)
 
         self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
-        self.graph_handler = GraphHandler(config)
+        self.graph_handler = GraphHandler(config, models[0])
         self.graph_handler.initialize(self.sess)
         self.config = config
 
@@ -159,11 +161,11 @@ class Demo(object):
 
         e = None
         print ("start")
-        for multi_batch in tqdm(test_data.get_multi_batches(config.batch_size, config.num_gpus, num_steps=1, cluster=config.cluster), total=1):
+        for multi_batch in test_data.get_batches(config.batch_size, num_batches=1, cluster=config.cluster):
             ei = self.evaluator.get_evaluation(self.sess, multi_batch)
             e = ei if e is None else e + ei
         print ("end")
-        return e.id2answer_dict[0]
+        return (e.id2answer_dict[0])
 
 if __name__ == "__main__":
     tf.app.run()

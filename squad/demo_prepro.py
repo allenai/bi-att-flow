@@ -8,14 +8,14 @@ from collections import Counter
 
 from tqdm import tqdm
 
-from my.utils import get_word_span, process_tokens, get_word_idx
+from squad.utils import get_word_span, process_tokens, get_word_idx
 
 def prepro(rxi, question):
     data_type = 'demo'
     out_name='demo'
 
     import nltk
-    sent_tokenize = nltk.sent_tokenize
+    sent_tokenize = lambda para: [para] #  nltk.sent_tokenize
     def word_tokenize(tokens):
         return [token.replace("''", '"').replace("``", '"') for token in nltk.word_tokenize(tokens)]
 
@@ -40,7 +40,7 @@ def prepro(rxi, question):
     idxs.append(len(idxs))
     answerss.append(answers)
 
-    data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, 'cy': cy,
+    data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, 'cy': cy, '*p': rx,
             'idxs': idxs, 'ids': ids, 'answerss': answerss}
     return data 
 

@@ -58,8 +58,8 @@ def prepro(args):
         os.makedirs(args.target_dir)
 
     if args.mode == 'full':
-        prepro_each(args, 'train', out_name='train')
-        prepro_each(args, 'dev', out_name='dev')
+        #prepro_each(args, 'train', out_name='train')
+        #prepro_each(args, 'dev', out_name='dev')
         prepro_each(args, 'dev', out_name='test')
     elif args.mode == 'all':
         create_all(args)
@@ -170,6 +170,9 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
             rxi = [ai, pi]
             assert len(x) - 1 == ai
             assert len(x[ai]) - 1 == pi
+            if ai==0: c_questions.append(para['qas'][3]['question'])
+            else: c_questions.append(para['qas'][0]['question'])
+            """
             for qa in para['qas']:
                 # get words
                 c_questions.append(qa['question'])
@@ -221,7 +224,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
                 ids.append(qa['id'])
                 idxs.append(len(idxs))
                 answerss.append(answers)
-
+            """
             if args.debug:
                 break
     word2vec_dict = get_word2vec(args, word_counter)
