@@ -85,12 +85,13 @@ If you are unfamiliar with CodaLab, follow these simple steps (given that you me
   basic/run_single.sh $HOME/data/squad/dev-v1.1.json single.json
   ```
   
-  This writes the answers to `single.json` in the current directory. You can then use the official evaluator to obtain EM and F1 scores.
+  This writes the answers to `single.json` in the current directory. You can then use the official evaluator to obtain EM and F1 scores. If you want to run on GPU (~5 mins), change the value of batch_size flag in the shell file to a higher number (60 for 12GB GPU RAM). 
 4. Similarly, to reproduce ensemble method:
   
   ```
   basic/run_ensemble.sh $HOME/data/squad/dev-v1.1.json ensemble.json 
   ```
+  If you want to run on GPU, you should run the script sequentially by removing '&' in the forloop, or you will need to specify different GPUs for each run of the for loop.
 
 ## Results
 
