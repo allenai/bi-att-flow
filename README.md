@@ -13,6 +13,7 @@
 - nltk (NLP tools, verified on 3.2.1)
 - tqdm (progress bar, verified on 4.7.4)
 - jinja2 (for visaulization; if you only train and test, not needed)
+- flask
 
 ## 1. Pre-processing
 First, prepare data. Donwload SQuAD data and GloVe and nltk corpus
@@ -91,6 +92,14 @@ If you are unfamiliar with CodaLab, follow these simple steps (given that you me
   basic/run_ensemble.sh $HOME/data/squad/dev-v1.1.json ensemble.json 
   ```
 
+## 4. Run demo
+For demo, run:
+```
+python run-demo.py
+```
+Then you can see demo webpage on localhost:1995
+
+
 ## Results
 
 ###Dev Data
@@ -143,3 +152,4 @@ python -m basic.cli --num_gpus 3 --batch_size 20
 [squad]: http://stanford-qa.com
 [paper]: https://arxiv.org/abs/1611.01603
 [worksheet]: https://worksheets.codalab.org/worksheets/0x37a9b8c44f6845c28866267ef941c89d/
+[demo]: https://allenai.github.io/bi-att-flow/demo
