@@ -1,4 +1,0 @@
-# missing line for oauth_token_secret
-app_key=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-app_secret=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-oauth_token=cccccccccccccccccccccccccccccccccccccccccccccccc
