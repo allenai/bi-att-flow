@@ -6,7 +6,7 @@
 
 ## 0. Requirements
 #### General
-- Python (developed on 3.5.2)
+- Python (developed on 3.5.2. Issues have been reported with Python 2!)
 - unzip
 
 #### Python Packages
