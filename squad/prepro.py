@@ -164,6 +164,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
             for qa in para['qas']:
                 # get words
                 qi = word_tokenize(qa['question'])
+                qi = process_tokens(qi)
                 cqi = [list(qij) for qij in qi]
                 yi = []
                 cyi = []
