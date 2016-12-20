@@ -9,6 +9,7 @@ from collections import Counter
 from tqdm import tqdm
 
 from squad.utils import get_word_span, get_word_idx, process_tokens
+from IPython import embed
 
 
 def main():
@@ -57,8 +58,8 @@ def prepro(args):
         os.makedirs(args.target_dir)
 
     if args.mode == 'full':
-        prepro_each(args, 'train', out_name='train')
-        prepro_each(args, 'dev', out_name='dev')
+        #prepro_each(args, 'train', out_name='train')
+        #prepro_each(args, 'dev', out_name='dev')
         prepro_each(args, 'dev', out_name='test')
     elif args.mode == 'all':
         create_all(args)
@@ -125,6 +126,9 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     source_data = json.load(open(source_path, 'r'))
 
     q, cq, y, rx, rcx, ids, idxs = [], [], [], [], [], [], []
+    contextss = []
+    context_questions = []
+    titles = []
     cy = []
     x, cx = [], []
     answerss = []
@@ -133,16 +137,21 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     start_ai = int(round(len(source_data['data']) * start_ratio))
     stop_ai = int(round(len(source_data['data']) * stop_ratio))
     for ai, article in enumerate(tqdm(source_data['data'][start_ai:stop_ai])):
-        xp, cxp = [], []
         pp = []
+        p.append(pp)
+        xp, cxp, contexts, c_questions = [], [], [], []
         x.append(xp)
         cx.append(cxp)
-        p.append(pp)
+        contextss.append(contexts)
+        context_questions.append(c_questions)
+        title = "[" + str(ai).zfill(2) + "] " + article['title'].replace('_', ' ')
+        titles.append(title)
         for pi, para in enumerate(article['paragraphs']):
             # wordss
             context = para['context']
             context = context.replace("''", '" ')
-            context = context.replace("``", '" ')
+            context = context.replace("``", '" ') #Sentences of priginal Paragraph
+            contexts.append(context)
             xi = list(map(word_tokenize, sent_tokenize(context)))
             xi = [process_tokens(tokens) for tokens in xi]  # process tokens
             # given xi, add chars
@@ -161,13 +170,19 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
             rxi = [ai, pi]
             assert len(x) - 1 == ai
             assert len(x[ai]) - 1 == pi
+            if ai==0: c_questions.append(para['qas'][3]['question'])
+            else: c_questions.append(para['qas'][0]['question'])
+            """
             for qa in para['qas']:
                 # get words
-                qi = word_tokenize(qa['question'])
+                c_questions.append(qa['question'])
+                break
+                qi = word_tokenize(qa['question']) # qa['question'] : original question
                 cqi = [list(qij) for qij in qi]
                 yi = []
                 cyi = []
                 answers = []
+                
                 for answer in qa['answers']:
                     answer_text = answer['text']
                     answers.append(answer_text)
@@ -209,20 +224,20 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
                 ids.append(qa['id'])
                 idxs.append(len(idxs))
                 answerss.append(answers)
-
+            """
             if args.debug:
                 break
-
     word2vec_dict = get_word2vec(args, word_counter)
     lower_word2vec_dict = get_word2vec(args, lower_word_counter)
 
     # add context here
     data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, 'cy': cy,
-            'idxs': idxs, 'ids': ids, 'answerss': answerss, '*p': rx}
-    shared = {'x': x, 'cx': cx, 'p': p,
+            'idxs': idxs, 'ids': ids, 'answerss': answerss, '*p' : rx}
+    shared = {'x': x, 'cx': cx, 'p' : p,
+              'contextss' : contextss, 'context_questions' : context_questions,
+              'titles' : titles,
               'word_counter': word_counter, 'char_counter': char_counter, 'lower_word_counter': lower_word_counter,
               'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dict}
-
     print("saving ...")
     save(args, data, shared, out_name)
 
