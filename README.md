@@ -1,11 +1,12 @@
 # Bi-directional Attention Flow for Machine Comprehension
-
-Follow three simple steps.
-For more advanced usages, see below.
+ 
+- This the original implementation of [Bi-directional Attention Flow for Machine Comprehension][paper] (Seo et al., 2016).
+- The CodaLab worksheet for the [SQuAD Leaderboard][squad] submission is available [here][worksheet].
+- Please contact [Minjoon Seo][minjoon] ([@seominjoon][minjoon-github]) for questions and suggestions.
 
 ## 0. Requirements
 #### General
-- Python (developed on 3.5.2)
+- Python (developed on 3.5.2. Issues have been reported with Python 2!)
 - unzip
 
 #### Python Packages
@@ -31,34 +32,85 @@ The model was trained with NVidia Titan X (Pascal Architecture, 2016).
 The model requires at least 12GB of GPU RAM.
 If your GPU RAM is smaller than 12GB, you can either decrease batch size (performance might degrade),
 or you can use multi GPU (see below).
-The training converges at 10~15k steps, and it took ~1.5s per step (i.e. ~6 hours).
+The training converges at ~18k steps, and it took ~4s per step (i.e. ~20 hours).
 
+Before training, it is recommended to first try the following code to verify everything is okay and memory is sufficient:
+```
+python -m basic.cli --mode train --noload --debug
+```
 
-To train:
+Then to fully train, run:
 ```
 python -m basic.cli --mode train --noload
 ```
 
-## 3. Testing
-To Test (~30 mins):
+You can speed up the training process with optimization flags:
 ```
-python -m basic.cli --mode test --batch_size 8 --eval_num_batches 0
+python -m basic.cli --mode train --noload --len_opt --cluster
+```
+You can still omit them, but training will be much slower.
+
+
+## 3. Test
+To test, run:
+```
+python -m basic.cli
+```
+
+Similarly to training, you can give the optimization flags to speed up test (5 minutes on dev data):
+```
+python -m basic.cli --len_opt --cluster
 ```
 
 This command loads the most recently saved model during training and begins testing on the test data.
-Note that batch size is reduced to 8, because testing requires more memory per example.
 After the process ends, it prints F1 and EM scores, and also outputs a json file (`$PWD/out/basic/00/answer/test-####.json`,
 where `####` is the step # that the model was saved).
 Note that the printed scores are not official (our scoring scheme is a bit harsher).
-To obtain the official number, use the official evaluator and the output json file:
+To obtain the official number, use the official evaluator (copied in `squad` folder) and the output json file:
 
 ```
 python squad/evaluate-v1.1.py $HOME/data/squad/dev-v1.1.json out/basic/00/answer/test-####.json
 ```
 
+### 3.1 Loading from pre-trained weights
+Instead of training the model yourself, you can choose to use pre-trained weights that were used for [SQuAD Leaderboard][squad] submission.
+Refer to [this worksheet][worksheet] in CodaLab to reproduce the results.
+If you are unfamiliar with CodaLab, follow these simple steps (given that you met all prereqs above):
+
+1. Download `save.zip` from the [worksheet][worksheet] and unzip it in the current directory.
+2. Copy `glove.6B.100d.txt` from your glove data folder (`$HOME/data/glove/`) to the current directory.
+3. To reproduce single model:
+  
+  ```
+  basic/run_single.sh $HOME/data/squad/dev-v1.1.json single.json
+  ```
+  
+  This writes the answers to `single.json` in the current directory. You can then use the official evaluator to obtain EM and F1 scores. If you want to run on GPU (~5 mins), change the value of batch_size flag in the shell file to a higher number (60 for 12GB GPU RAM). 
+4. Similarly, to reproduce ensemble method:
+  
+  ```
+  basic/run_ensemble.sh $HOME/data/squad/dev-v1.1.json ensemble.json 
+  ```
+  If you want to run on GPU, you should run the script sequentially by removing '&' in the forloop, or you will need to specify different GPUs for each run of the for loop.
 
 ## Results
-See [SQuAD Leaderboard][squad]
+
+###Dev Data
+
+|          | EM (%) | F1 (%) |
+| -------- |:------:|:------:|
+| single   | 67.7   | 77.3   |
+| ensemble | 72.6   | 80.7   |
+
+###Test Data
+
+|          | EM (%) | F1 (%) |
+| -------- |:------:|:------:|
+| single   | 68.0   | 77.3   |
+| ensemble | 73.3   | 81.1   |
+
+Refer to [our paper][paper] for more details.
+See [SQuAD Leaderboard][squad] to compare with other models.
 
 
 <!--
@@ -84,12 +136,15 @@ This can be easily done by running:
 python -m basic.cli --mode train --noload --num_gpus 3 --batch_size 20
 ```
 
-Similarly, you can speed up your testing by (if your GPU's RAM is 4GB, then batch size should be 2 or 3):
+Similarly, you can speed up your testing by:
 ```
-python -m basic.cli --mode test --batch_size 2 --num_gpus 3
+python -m basic.cli --num_gpus 3 --batch_size 20 
 ```
  
 
 [multi-gpu]: https://www.tensorflow.org/versions/r0.11/tutorials/deep_cnn/index.html#training-a-model-using-multiple-gpu-cards
-[save]: #
 [squad]: http://stanford-qa.com
+[paper]: https://arxiv.org/abs/1611.01603
+[worksheet]: https://worksheets.codalab.org/worksheets/0x37a9b8c44f6845c28866267ef941c89d/
+[minjoon]: https://seominjoon.github.io
+[minjoon-github]: https://github.com/seominjoon
