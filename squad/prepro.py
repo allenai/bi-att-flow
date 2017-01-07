@@ -125,6 +125,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     source_data = json.load(open(source_path, 'r'))
 
     q, cq, y, rx, rcx, ids, idxs = [], [], [], [], [], [], []
+    na = []
     cy = []
     x, cx = [], []
     answerss = []
@@ -194,6 +195,12 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
 
                     yi.append([yi0, yi1])
                     cyi.append([cyi0, cyi1])
+                if len(qa['answers']) == 0:
+                    yi.append([(0, 0), (0, 1)])
+                    cyi.append([0, 1])
+                    na.append(True)
+                else:
+                    na.append(False)
 
                 for qij in qi:
                     word_counter[qij] += 1
@@ -219,7 +226,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
 
     # add context here
     data = {'q': q, 'cq': cq, 'y': y, '*x': rx, '*cx': rcx, 'cy': cy,
-            'idxs': idxs, 'ids': ids, 'answerss': answerss, '*p': rx}
+            'idxs': idxs, 'ids': ids, 'answerss': answerss, '*p': rx, 'na': na}
     shared = {'x': x, 'cx': cx, 'p': p,
               'word_counter': word_counter, 'char_counter': char_counter, 'lower_word_counter': lower_word_counter,
               'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dict}

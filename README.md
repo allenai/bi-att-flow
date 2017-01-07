@@ -113,19 +113,6 @@ Refer to [our paper][paper] for more details.
 See [SQuAD Leaderboard][squad] to compare with other models.
 
 
-<!--
-## Using Pre-trained Model
-
-If you would like to use pre-trained model, it's very easy! 
-You can download the model weights [here][save] (make sure that its commit id matches the source code's).
-Extract them and put them in `$PWD/out/basic/00/save` directory, with names unchanged.
-Then do the testing again, but you need to specify the step # that you are loading from:
-```
-python -m basic.cli --mode test --batch_size 8 --eval_num_batches 0 --load_step ####
-```
--->
-
-
 ## Multi-GPU Training & Testing
 Our model supports multi-GPU training.
 We follow the parallelization paradigm described in [TensorFlow Tutorial][multi-gpu].
@@ -140,6 +127,19 @@ Similarly, you can speed up your testing by:
 ```
 python -m basic.cli --num_gpus 3 --batch_size 20 
 ```
+
+
+## Converting Levy Dataset to SQuAD
+In order to train / test BiDAF on Levy Dataset, 
+the dataset should be transformed into SQuAD format (i.e. `.json`).
+Then you can follow the same procedure as described above.
+There are two important scripts for this.
+
+First, `levy/levy2squad.py` transforms `.tsv` file into `.json`:
+```
+
+```
+
  
 
 [multi-gpu]: https://www.tensorflow.org/versions/r0.11/tutorials/deep_cnn/index.html#training-a-model-using-multiple-gpu-cards

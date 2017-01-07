@@ -43,6 +43,7 @@ class Model(object):
         self.y2 = tf.placeholder('bool', [N, None, None], name='y2')
         self.is_train = tf.placeholder('bool', [], name='is_train')
         self.new_emb_mat = tf.placeholder('float', [None, config.word_emb_size], name='new_emb_mat')
+        self.na = tf.placeholder('bool', [], name='na')
 
         # Define misc
         self.tensor_dict = {}
@@ -178,20 +179,33 @@ class Model(object):
                                  mask=self.x_mask,
                                  is_train=self.is_train, func=config.answer_func, scope='logits2')
 
-            flat_logits = tf.reshape(logits, [-1, M * JX])
-            flat_yp = tf.nn.softmax(flat_logits)  # [-1, M*JX]
+            na_bias = tf.get_variable("na_bias", shape=[1], dtype='float')
+            na_bias_tiled = tf.tile(tf.reshape(na_bias, [1, 1]), [N, 1])  #  [N, 1]
+            flat_logits = tf.reshape(logits, [-1, M * JX])  # [N, M*JX]
+            concat_flat_logits = tf.concat(1, [na_bias_tiled, flat_logits])
+            concat_flat_yp = tf.nn.softmax(concat_flat_logits)  # [-1, M*JX+1]
+            na_prob = tf.squeeze(tf.slice(concat_flat_yp, [0, 0], [-1, 1]), [1])  # [N]
+            flat_yp = tf.slice(concat_flat_yp, [0, 1], [-1, -1])
             yp = tf.reshape(flat_yp, [-1, M, JX])
+
             flat_logits2 = tf.reshape(logits2, [-1, M * JX])
-            flat_yp2 = tf.nn.softmax(flat_logits2)
+            concat_flat_logits2 = tf.concat(1, [na_bias_tiled. flat_logits2])
+            concat_flat_yp2 = tf.nn.softmax(concat_flat_logits2)
+            na_prob2 = tf.squeeze(tf.slice(concat_flat_yp2, [0, 0], [-1, 1]), [1])  # [N]
+            flat_yp2 = tf.slice(concat_flat_yp2, [0, 1], [-1, -1])
             yp2 = tf.reshape(flat_yp2, [-1, M, JX])
 
             self.tensor_dict['g1'] = g1
             self.tensor_dict['g2'] = g2
+            self.tensor_dict['na'] = na_prob
+            self.tensor_dict['na2'] = na_prob2
 
             self.logits = flat_logits
             self.logits2 = flat_logits2
-            self.yp = yp
-            self.yp2 = yp2
+            self.concat_logits = concat_flat_logits
+            self.concat_logits2 = concat_flat_logits2
+            self.yp = yp  # start prob dist
+            self.yp2 = yp2  # end prob dist
 
     def _build_loss(self):
         config = self.config
@@ -199,12 +213,14 @@ class Model(object):
         M = tf.shape(self.x)[1]
         JQ = tf.shape(self.q)[1]
         loss_mask = tf.reduce_max(tf.cast(self.q_mask, 'float'), 1)
+        concat_y = tf.concat(1, [self.na, tf.reshape(self.y, [-1, M * JX])])
         losses = tf.nn.softmax_cross_entropy_with_logits(
-            self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float'))
+            self.concat_logits, tf.cast(concat_y, 'float'))
         ce_loss = tf.reduce_mean(loss_mask * losses)
         tf.add_to_collection('losses', ce_loss)
+        concat_y2 = tf.concat(1, [self.na, tf.reshape(self.y2, [-1, M * JX])])
         ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-            self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
+            self.concat_logits2, tf.cast(concat_y2, 'float')))
         tf.add_to_collection("losses", ce_loss2)
 
         self.loss = tf.add_n(tf.get_collection('losses', scope=self.scope), name='loss')
@@ -299,6 +315,7 @@ class Model(object):
             y2 = np.zeros([N, M, JX], dtype='bool')
             feed_dict[self.y] = y
             feed_dict[self.y2] = y2
+            feed_dict[self.na] = batch.data['na']
 
             for i, (xi, cxi, yi) in enumerate(zip(X, CX, batch.data['y'])):
                 start_idx, stop_idx = random.choice(yi)
