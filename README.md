@@ -6,8 +6,8 @@
 
 ## 0. Requirements
 #### General
-- Python (developed on 3.5.2. Issues have been reported with Python 2!)
-- unzip
+- Python (verified on 3.5.2. Issues have been reported with Python 2!)
+- unzip, wget (for running `download.sh` only)
 
 #### Python Packages
 - tensorflow (deep learning library, verified on r0.11)
