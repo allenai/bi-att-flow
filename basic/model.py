@@ -43,7 +43,7 @@ class Model(object):
         self.y2 = tf.placeholder('bool', [N, None, None], name='y2')
         self.is_train = tf.placeholder('bool', [], name='is_train')
         self.new_emb_mat = tf.placeholder('float', [None, config.word_emb_size], name='new_emb_mat')
-        self.na = tf.placeholder('bool', [], name='na')
+        self.na = tf.placeholder('bool', [N], name='na')
 
         # Define misc
         self.tensor_dict = {}
@@ -189,7 +189,7 @@ class Model(object):
             yp = tf.reshape(flat_yp, [-1, M, JX])
 
             flat_logits2 = tf.reshape(logits2, [-1, M * JX])
-            concat_flat_logits2 = tf.concat(1, [na_bias_tiled. flat_logits2])
+            concat_flat_logits2 = tf.concat(1, [na_bias_tiled, flat_logits2])
             concat_flat_yp2 = tf.nn.softmax(concat_flat_logits2)
             na_prob2 = tf.squeeze(tf.slice(concat_flat_yp2, [0, 0], [-1, 1]), [1])  # [N]
             flat_yp2 = tf.slice(concat_flat_yp2, [0, 1], [-1, -1])
@@ -197,8 +197,6 @@ class Model(object):
 
             self.tensor_dict['g1'] = g1
             self.tensor_dict['g2'] = g2
-            self.tensor_dict['na'] = na_prob
-            self.tensor_dict['na2'] = na_prob2
 
             self.logits = flat_logits
             self.logits2 = flat_logits2
@@ -206,6 +204,7 @@ class Model(object):
             self.concat_logits2 = concat_flat_logits2
             self.yp = yp  # start prob dist
             self.yp2 = yp2  # end prob dist
+            self.na_prob = na_prob * na_prob2
 
     def _build_loss(self):
         config = self.config
@@ -213,12 +212,13 @@ class Model(object):
         M = tf.shape(self.x)[1]
         JQ = tf.shape(self.q)[1]
         loss_mask = tf.reduce_max(tf.cast(self.q_mask, 'float'), 1)
-        concat_y = tf.concat(1, [self.na, tf.reshape(self.y, [-1, M * JX])])
+        na = tf.reshape(self.na, [-1, 1])
+        concat_y = tf.concat(1, [na, tf.reshape(self.y, [-1, M * JX])])
         losses = tf.nn.softmax_cross_entropy_with_logits(
             self.concat_logits, tf.cast(concat_y, 'float'))
         ce_loss = tf.reduce_mean(loss_mask * losses)
         tf.add_to_collection('losses', ce_loss)
-        concat_y2 = tf.concat(1, [self.na, tf.reshape(self.y2, [-1, M * JX])])
+        concat_y2 = tf.concat(1, [na, tf.reshape(self.y2, [-1, M * JX])])
         ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
             self.concat_logits2, tf.cast(concat_y2, 'float')))
         tf.add_to_collection("losses", ce_loss2)

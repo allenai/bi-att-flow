@@ -226,7 +226,9 @@ class F1Evaluation(AccuracyEvaluation):
         new_loss = (self.loss * self.num_examples + other.loss * other.num_examples) / len(new_correct)
         new_id2answer_dict = dict(list(self.id2answer_dict.items()) + list(other.id2answer_dict.items()))
         new_id2score_dict = dict(list(self.id2answer_dict['scores'].items()) + list(other.id2answer_dict['scores'].items()))
+        new_id2na_dict = dict(list(self.id2answer_dict['na'].items()) + list(other.id2answer_dict['na'].items()))
         new_id2answer_dict['scores'] = new_id2score_dict
+        new_id2answer_dict['na'] = new_id2na_dict
         return F1Evaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_y, new_correct, new_loss, new_f1s, new_id2answer_dict)
 
     def __repr__(self):
@@ -238,12 +240,13 @@ class F1Evaluator(LabeledEvaluator):
         super(F1Evaluator, self).__init__(config, model, tensor_dict=tensor_dict)
         self.yp2 = model.yp2
         self.loss = model.loss
+        self.na = model.na_prob
 
     def get_evaluation(self, sess, batch):
         idxs, data_set = self._split_batch(batch)
         assert isinstance(data_set, DataSet)
         feed_dict = self._get_feed_dict(batch)
-        global_step, yp, yp2, loss, vals = sess.run([self.global_step, self.yp, self.yp2, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
+        global_step, yp, yp2, loss, vals, na = sess.run([self.global_step, self.yp, self.yp2, self.loss, list(self.tensor_dict.values()), self.na], feed_dict=feed_dict)
         y = data_set.data['y']
         if self.config.squash:
             new_y = []
@@ -288,7 +291,9 @@ class F1Evaluator(LabeledEvaluator):
         id2answer_dict = {id_: _get2(context, xi, span)
                           for id_, xi, span, context in zip(data_set.data['ids'], data_set.data['x'], spans, data_set.data['p'])}
         id2score_dict = {id_: score for id_, score in zip(data_set.data['ids'], scores)}
+        id2na_dict = {id_: float(each) for id_, each in zip(data_set.data['ids'], na)}
         id2answer_dict['scores'] = id2score_dict
+        id2answer_dict['na'] = id2na_dict
         correct = [self.__class__.compare2(yi, span) for yi, span in zip(y, spans)]
         f1s = [self.__class__.span_f1(yi, span) for yi, span in zip(y, spans)]
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
@@ -359,12 +364,13 @@ class ForwardEvaluator(Evaluator):
         super(ForwardEvaluator, self).__init__(config, model, tensor_dict=tensor_dict)
         self.yp2 = model.yp2
         self.loss = model.loss
+        self.na = model.na_prob
 
     def get_evaluation(self, sess, batch):
         idxs, data_set = batch
         assert isinstance(data_set, DataSet)
         feed_dict = self.model.get_feed_dict(data_set, False)
-        global_step, yp, yp2, loss, vals = sess.run([self.global_step, self.yp, self.yp2, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
+        global_step, yp, yp2, loss, vals, na = sess.run([self.global_step, self.yp, self.yp2, self.loss, list(self.tensor_dict.values()), self.na], feed_dict=feed_dict)
 
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
         spans, scores = zip(*[get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)])
@@ -387,6 +393,8 @@ class ForwardEvaluator(Evaluator):
                           for id_, xi, span, context in zip(data_set.data['ids'], data_set.data['x'], spans, data_set.data['p'])}
         id2score_dict = {id_: score for id_, score in zip(data_set.data['ids'], scores)}
         id2answer_dict['scores'] = id2score_dict
+        id2na_dict = {id_: float(each) for id_, each in zip(data_set.data['ids'], na)}
+        id2answer_dict['na'] = id2na_dict
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
         e = ForwardEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), float(loss), id2answer_dict, tensor_dict=tensor_dict)
         return e
