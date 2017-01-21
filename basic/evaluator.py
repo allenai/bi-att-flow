@@ -5,7 +5,7 @@ from basic.read_data import DataSet
 from my.nltk_utils import span_f1
 from my.tensorflow import padded_reshape
 from my.utils import argmax
-from squad.utils import get_phrase, get_best_span
+from squad.utils import get_phrase, get_best_span, get_best_span_wy
 
 
 class Evaluation(object):
@@ -237,13 +237,14 @@ class F1Evaluator(LabeledEvaluator):
     def __init__(self, config, model, tensor_dict=None):
         super(F1Evaluator, self).__init__(config, model, tensor_dict=tensor_dict)
         self.yp2 = model.yp2
+        self.wy = model.wy
         self.loss = model.loss
 
     def get_evaluation(self, sess, batch):
         idxs, data_set = self._split_batch(batch)
         assert isinstance(data_set, DataSet)
         feed_dict = self._get_feed_dict(batch)
-        global_step, yp, yp2, loss, vals = sess.run([self.global_step, self.yp, self.yp2, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
+        global_step, yp, yp2, wyp, loss, vals = sess.run([self.global_step, self.yp, self.yp2, self.wy, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
         y = data_set.data['y']
         if self.config.squash:
             new_y = []
@@ -268,8 +269,11 @@ class F1Evaluator(LabeledEvaluator):
                 new_y.append(new_yi)
             y = new_y
 
-        yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
-        spans, scores = zip(*[get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)])
+        yp, yp2, wyp = yp[:data_set.num_examples], yp2[:data_set.num_examples], wyp[:data_set.num_examples]
+        if self.config.wy:
+            spans, scores = zip(*[get_best_span_wy(wypi) for wypi in wyp])
+        else:
+            spans, scores = zip(*[get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)])
 
         def _get(xi, span):
             if len(xi) <= span[0][0]:
@@ -339,6 +343,7 @@ class MultiGPUF1Evaluator(F1Evaluator):
             N, M, JX = config.batch_size, config.max_num_sents, config.max_sent_size
             self.yp = tf.concat(0, [padded_reshape(model.yp, [N, M, JX]) for model in models])
             self.yp2 = tf.concat(0, [padded_reshape(model.yp2, [N, M, JX]) for model in models])
+            self.wy = tf.concat(0, [padded_reshape(model.wy, [N, M, JX]) for model in models])
             self.loss = tf.add_n([model.loss for model in models])/len(models)
 
     def _split_batch(self, batches):

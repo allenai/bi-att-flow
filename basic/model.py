@@ -41,6 +41,7 @@ class Model(object):
         self.q_mask = tf.placeholder('bool', [N, None], name='q_mask')
         self.y = tf.placeholder('bool', [N, None, None], name='y')
         self.y2 = tf.placeholder('bool', [N, None, None], name='y2')
+        self.wy = tf.placeholder('bool', [N, None, None], name='wy')
         self.is_train = tf.placeholder('bool', [], name='is_train')
         self.new_emb_mat = tf.placeholder('float', [None, config.word_emb_size], name='new_emb_mat')
 
@@ -184,6 +185,7 @@ class Model(object):
             flat_logits2 = tf.reshape(logits2, [-1, M * JX])
             flat_yp2 = tf.nn.softmax(flat_logits2)
             yp2 = tf.reshape(flat_yp2, [-1, M, JX])
+            wyp = tf.nn.sigmoid(logits2)
 
             self.tensor_dict['g1'] = g1
             self.tensor_dict['g2'] = g2
@@ -192,20 +194,34 @@ class Model(object):
             self.logits2 = flat_logits2
             self.yp = yp
             self.yp2 = yp2
+            self.wyp = wyp
 
     def _build_loss(self):
         config = self.config
         JX = tf.shape(self.x)[2]
         M = tf.shape(self.x)[1]
         JQ = tf.shape(self.q)[1]
+
         loss_mask = tf.reduce_max(tf.cast(self.q_mask, 'float'), 1)
-        losses = tf.nn.softmax_cross_entropy_with_logits(
-            self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float'))
-        ce_loss = tf.reduce_mean(loss_mask * losses)
-        tf.add_to_collection('losses', ce_loss)
-        ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-            self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
-        tf.add_to_collection("losses", ce_loss2)
+        if config.wy:
+            losses = tf.nn.sigmoid_cross_entropy_with_logits(
+                tf.reshape(self.logits2, [-1, M, JX]), tf.cast(self.wy, 'float'))  # [N, M, JX]
+            num_pos = tf.reduce_sum(tf.cast(self.wy, 'float'))
+            num_neg = tf.reduce_sum(tf.cast(self.x_mask, 'float')) - num_pos
+            damp_ratio = num_pos / num_neg
+            dampened_losses = losses * ((tf.cast(self.x_mask, 'float') - tf.cast(self.wy, 'float')) * damp_ratio + tf.cast(self.wy, 'float'))
+            new_losses = tf.reduce_sum(dampened_losses, [1, 2]) / num_pos
+            ce_loss = tf.reduce_mean(loss_mask * new_losses)
+            tf.add_to_collection('losses', ce_loss)
+
+        else:
+            losses = tf.nn.softmax_cross_entropy_with_logits(
+                self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float'))
+            ce_loss = tf.reduce_mean(loss_mask * losses)
+            tf.add_to_collection('losses', ce_loss)
+            ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
+                self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
+            tf.add_to_collection("losses", ce_loss2)
 
         self.loss = tf.add_n(tf.get_collection('losses', scope=self.scope), name='loss')
         tf.scalar_summary(self.loss.op.name, self.loss)
@@ -297,8 +313,10 @@ class Model(object):
         if supervised:
             y = np.zeros([N, M, JX], dtype='bool')
             y2 = np.zeros([N, M, JX], dtype='bool')
+            wy = np.zeros([N, M, JX], dtype='bool')
             feed_dict[self.y] = y
             feed_dict[self.y2] = y2
+            feed_dict[self.wy] = wy
 
             for i, (xi, cxi, yi) in enumerate(zip(X, CX, batch.data['y'])):
                 start_idx, stop_idx = random.choice(yi)
@@ -315,6 +333,11 @@ class Model(object):
                     j2, k2 = 0, k2 + offset
                 y[i, j, k] = True
                 y2[i, j2, k2-1] = True
+                if j == j2:
+                    wy[i, j, k:k2] = True
+                else:
+                    wy[i, j, k:len(batch['x'][i][j])] = True
+                    wy[i, j2, :k2] = True
 
         def _get_word(word):
             d = batch.shared['word2idx']

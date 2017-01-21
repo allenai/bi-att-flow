@@ -29,6 +29,7 @@ flags.DEFINE_bool("single", False, "supervise only the answer sentence? [False]"
 flags.DEFINE_boolean("debug", False, "Debugging mode? [False]")
 flags.DEFINE_bool('load_ema', True, "load exponential average of variables when testing?  [True]")
 flags.DEFINE_bool("eval", True, "eval? [True]")
+flags.DEFINE_bool("wy", False, "Use wy for loss / eval? [False]")
 
 # Training / test parameters
 flags.DEFINE_integer("batch_size", 60, "Batch size [60]")
