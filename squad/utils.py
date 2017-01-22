@@ -1,4 +1,5 @@
 import re
+import numpy as np
 
 
 def get_2d_spans(text, tokenss):
@@ -105,6 +106,7 @@ def get_best_span_wy(wypi, th=0.5):
     chunk_start = None
     score = 0
     l = 0
+    th = min(th, np.max(wypi))
     for f, wypif in enumerate(wypi):
         for j, wypifj in enumerate(wypif):
             if wypifj >= th:

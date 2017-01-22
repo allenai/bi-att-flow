@@ -30,6 +30,7 @@ flags.DEFINE_boolean("debug", False, "Debugging mode? [False]")
 flags.DEFINE_bool('load_ema', True, "load exponential average of variables when testing?  [True]")
 flags.DEFINE_bool("eval", True, "eval? [True]")
 flags.DEFINE_bool("wy", False, "Use wy for loss / eval? [False]")
+flags.DEFINE_bool("na", False, "Enable no answer strategy and learn bias? [False]")
 
 # Training / test parameters
 flags.DEFINE_integer("batch_size", 60, "Batch size [60]")

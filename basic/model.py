@@ -44,6 +44,7 @@ class Model(object):
         self.wy = tf.placeholder('bool', [N, None, None], name='wy')
         self.is_train = tf.placeholder('bool', [], name='is_train')
         self.new_emb_mat = tf.placeholder('float', [None, config.word_emb_size], name='new_emb_mat')
+        self.na = tf.placeholder('bool', [N], name='na')
 
         # Define misc
         self.tensor_dict = {}
@@ -52,6 +53,7 @@ class Model(object):
         self.logits = None
         self.yp = None
         self.var_list = None
+        self.na_prob = None
 
         # Loss outputs
         self.loss = None
@@ -181,9 +183,27 @@ class Model(object):
 
             flat_logits = tf.reshape(logits, [-1, M * JX])
             flat_yp = tf.nn.softmax(flat_logits)  # [-1, M*JX]
-            yp = tf.reshape(flat_yp, [-1, M, JX])
             flat_logits2 = tf.reshape(logits2, [-1, M * JX])
             flat_yp2 = tf.nn.softmax(flat_logits2)
+
+            if config.na:
+                na_bias = tf.get_variable("na_bias", shape=[], dtype='float')
+                na_bias_tiled = tf.tile(tf.reshape(na_bias, [1, 1]), [N, 1])  # [N, 1]
+                concat_flat_logits = tf.concat(1, [na_bias_tiled, flat_logits])
+                concat_flat_yp = tf.nn.softmax(concat_flat_logits)
+                na_prob = tf.squeeze(tf.slice(concat_flat_yp, [0, 0], [-1, 1]), [1])
+                flat_yp = tf.slice(concat_flat_yp, [0, 1], [-1, -1])
+
+                concat_flat_logits2 = tf.concat(1, [na_bias_tiled, flat_logits2])
+                concat_flat_yp2 = tf.nn.softmax(concat_flat_logits2)
+                na_prob2 = tf.squeeze(tf.slice(concat_flat_yp2, [0, 0], [-1, 1]), [1])  # [N]
+                flat_yp2 = tf.slice(concat_flat_yp2, [0, 1], [-1, -1])
+
+                self.concat_logits = concat_flat_logits
+                self.concat_logits2 = concat_flat_logits2
+                self.na_prob = na_prob * na_prob2
+
+            yp = tf.reshape(flat_yp, [-1, M, JX])
             yp2 = tf.reshape(flat_yp2, [-1, M, JX])
             wyp = tf.nn.sigmoid(logits2)
 
@@ -210,17 +230,25 @@ class Model(object):
             num_neg = tf.reduce_sum(tf.cast(self.x_mask, 'float')) - num_pos
             damp_ratio = num_pos / num_neg
             dampened_losses = losses * ((tf.cast(self.x_mask, 'float') - tf.cast(self.wy, 'float')) * damp_ratio + tf.cast(self.wy, 'float'))
-            new_losses = tf.reduce_sum(dampened_losses, [1, 2]) / num_pos
+            new_losses = tf.reduce_sum(dampened_losses, [1, 2])
             ce_loss = tf.reduce_mean(loss_mask * new_losses)
             tf.add_to_collection('losses', ce_loss)
 
         else:
-            losses = tf.nn.softmax_cross_entropy_with_logits(
-                self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float'))
+            if config.na:
+                na = tf.reshape(self.na, [-1, 1])
+                concat_y = tf.concat(1, [na, tf.reshape(self.y, [-1, M * JX])])
+                losses = tf.nn.softmax_cross_entropy_with_logits(self.concat_logits, tf.cast(concat_y, 'float'))
+                concat_y2 = tf.concat(1, [na, tf.reshape(self.y2, [-1, M * JX])])
+                losses2 = tf.nn.softmax_cross_entropy_with_logits(self.concat_logits2, tf.cast(concat_y2, 'float'))
+            else:
+                losses = tf.nn.softmax_cross_entropy_with_logits(
+                    self.logits, tf.cast(tf.reshape(self.y, [-1, M * JX]), 'float'))
+                losses2 = tf.nn.softmax_cross_entropy_with_logits(
+                    self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float'))
             ce_loss = tf.reduce_mean(loss_mask * losses)
+            ce_loss2 = tf.reduce_mean(loss_mask * losses2)
             tf.add_to_collection('losses', ce_loss)
-            ce_loss2 = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-                self.logits2, tf.cast(tf.reshape(self.y2, [-1, M * JX]), 'float')))
             tf.add_to_collection("losses", ce_loss2)
 
         self.loss = tf.add_n(tf.get_collection('losses', scope=self.scope), name='loss')
@@ -314,11 +342,16 @@ class Model(object):
             y = np.zeros([N, M, JX], dtype='bool')
             y2 = np.zeros([N, M, JX], dtype='bool')
             wy = np.zeros([N, M, JX], dtype='bool')
+            na = np.zeros([N], dtype='bool')
             feed_dict[self.y] = y
             feed_dict[self.y2] = y2
             feed_dict[self.wy] = wy
+            feed_dict[self.na] = na
 
-            for i, (xi, cxi, yi) in enumerate(zip(X, CX, batch.data['y'])):
+            for i, (xi, cxi, yi, nai) in enumerate(zip(X, CX, batch.data['y'], batch.data['na'])):
+                if nai:
+                    na[i] = nai
+                    continue
                 start_idx, stop_idx = random.choice(yi)
                 j, k = start_idx
                 j2, k2 = stop_idx
