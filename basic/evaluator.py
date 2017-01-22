@@ -240,7 +240,7 @@ class F1Evaluator(LabeledEvaluator):
     def __init__(self, config, model, tensor_dict=None):
         super(F1Evaluator, self).__init__(config, model, tensor_dict=tensor_dict)
         self.yp2 = model.yp2
-        self.wy = model.wy
+        self.wyp = model.wyp
         self.loss = model.loss
         if config.na:
             self.na = model.na_prob
@@ -250,9 +250,9 @@ class F1Evaluator(LabeledEvaluator):
         assert isinstance(data_set, DataSet)
         feed_dict = self._get_feed_dict(batch)
         if self.config.na:
-            global_step, yp, yp2, wyp, loss, na, vals = sess.run([self.global_step, self.yp, self.yp2, self.wy, self.loss, self.na, list(self.tensor_dict.values())], feed_dict=feed_dict)
+            global_step, yp, yp2, wyp, loss, na, vals = sess.run([self.global_step, self.yp, self.yp2, self.wyp, self.loss, self.na, list(self.tensor_dict.values())], feed_dict=feed_dict)
         else:
-            global_step, yp, yp2, wyp, loss, vals = sess.run([self.global_step, self.yp, self.yp2, self.wy, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
+            global_step, yp, yp2, wyp, loss, vals = sess.run([self.global_step, self.yp, self.yp2, self.wyp, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
         y = data_set.data['y']
         if self.config.squash:
             new_y = []
@@ -279,7 +279,7 @@ class F1Evaluator(LabeledEvaluator):
 
         yp, yp2, wyp = yp[:data_set.num_examples], yp2[:data_set.num_examples], wyp[:data_set.num_examples]
         if self.config.wy:
-            spans, scores = zip(*[get_best_span_wy(wypi) for wypi in wyp])
+            spans, scores = zip(*[get_best_span_wy(wypi, self.config.th) for wypi in wyp])
         else:
             spans, scores = zip(*[get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)])
 

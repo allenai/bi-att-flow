@@ -31,6 +31,7 @@ flags.DEFINE_bool('load_ema', True, "load exponential average of variables when 
 flags.DEFINE_bool("eval", True, "eval? [True]")
 flags.DEFINE_bool("wy", False, "Use wy for loss / eval? [False]")
 flags.DEFINE_bool("na", False, "Enable no answer strategy and learn bias? [False]")
+flags.DEFINE_float("th", 0.5, "Threshold [0.5]")
 
 # Training / test parameters
 flags.DEFINE_integer("batch_size", 60, "Batch size [60]")

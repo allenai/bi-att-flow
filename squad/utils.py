@@ -100,7 +100,7 @@ def get_best_span(ypi, yp2i):
     return ((best_sent_idx, best_word_span[0]), (best_sent_idx, best_word_span[1] + 1)), float(max_val)
 
 
-def get_best_span_wy(wypi, th=0.5):
+def get_best_span_wy(wypi, th):
     chunk_spans = []
     scores = []
     chunk_start = None

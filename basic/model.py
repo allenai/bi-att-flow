@@ -224,14 +224,14 @@ class Model(object):
 
         loss_mask = tf.reduce_max(tf.cast(self.q_mask, 'float'), 1)
         if config.wy:
-            losses = tf.nn.sigmoid_cross_entropy_with_logits(
-                tf.reshape(self.logits2, [-1, M, JX]), tf.cast(self.wy, 'float'))  # [N, M, JX]
-            num_pos = tf.reduce_sum(tf.cast(self.wy, 'float'))
-            num_neg = tf.reduce_sum(tf.cast(self.x_mask, 'float')) - num_pos
-            damp_ratio = num_pos / num_neg
-            dampened_losses = losses * ((tf.cast(self.x_mask, 'float') - tf.cast(self.wy, 'float')) * damp_ratio + tf.cast(self.wy, 'float'))
-            new_losses = tf.reduce_sum(dampened_losses, [1, 2])
-            ce_loss = tf.reduce_mean(loss_mask * new_losses)
+            if config.na:
+                na = tf.reshape(self.na, [-1, 1])
+                concat_y = tf.concat(1, [na, tf.reshape(self.wy, [-1, M * JX])])
+                losses = tf.nn.softmax_cross_entropy_with_logits(self.concat_logits, tf.cast(concat_y, 'float'))
+            else:
+                losses = tf.nn.softmax_cross_entropy_with_logits(
+                    self.logits2, tf.cast(tf.reshape(self.wy, [-1, M * JX]), 'float'))
+            ce_loss = tf.reduce_mean(loss_mask * losses)
             tf.add_to_collection('losses', ce_loss)
 
         else:
@@ -369,7 +369,7 @@ class Model(object):
                 if j == j2:
                     wy[i, j, k:k2] = True
                 else:
-                    wy[i, j, k:len(batch['x'][i][j])] = True
+                    wy[i, j, k:len(batch.data['x'][i][j])] = True
                     wy[i, j2, :k2] = True
 
         def _get_word(word):
