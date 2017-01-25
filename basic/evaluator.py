@@ -230,7 +230,11 @@ class F1Evaluation(AccuracyEvaluation):
         if 'na' in self.id2answer_dict:
             new_id2na_dict = dict(list(self.id2answer_dict['na'].items()) + list(other.id2answer_dict['na'].items()))
             new_id2answer_dict['na'] = new_id2na_dict
-        return F1Evaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_y, new_correct, new_loss, new_f1s, new_id2answer_dict)
+        e = F1Evaluation(self.data_type, self.global_step, new_idxs, new_yp, new_yp2, new_y, new_correct, new_loss, new_f1s, new_id2answer_dict)
+        if 'wyp' in self.dict:
+            new_wyp = self.dict['wyp'] + other.dict['wyp']
+            e.dict['wyp'] = new_wyp
+        return e
 
     def __repr__(self):
         return "{} step {}: accuracy={:.4f}, f1={:.4f}, loss={:.4f}".format(self.data_type, self.global_step, self.acc, self.f1, self.loss)
@@ -309,6 +313,8 @@ class F1Evaluator(LabeledEvaluator):
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
         e = F1Evaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), y,
                          correct, float(loss), f1s, id2answer_dict, tensor_dict=tensor_dict)
+        if self.config.wy:
+            e.dict['wyp'] = wyp.tolist()
         return e
 
     def _split_batch(self, batch):
@@ -413,6 +419,7 @@ class ForwardEvaluator(Evaluator):
             id2answer_dict['na'] = id2na_dict
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
         e = ForwardEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), float(loss), id2answer_dict, tensor_dict=tensor_dict)
+        # TODO : wy support
         return e
 
     @staticmethod

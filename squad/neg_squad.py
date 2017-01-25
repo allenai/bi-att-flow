@@ -40,7 +40,7 @@ def neg_squad(args):
             samples = random.sample(cands, args.aug_ratio)
             for sample in samples:
                 for qi, ques in enumerate(article['paragraphs'][sample]['qas']):
-                    new_ques = {'question': ques['question'], 'answers': [], 'answer_start': 0}
+                    new_ques = {'question': ques['question'], 'answers': [], 'answer_start': 0, 'id': "neg_" + ques['id']}
                     squad['data'][ai]['paragraphs'][pi]['qas'].append(new_ques)
 
     with open(args.target_path, 'w') as fp:

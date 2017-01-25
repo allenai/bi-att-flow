@@ -36,6 +36,7 @@ def get_args():
     parser.add_argument("--url", default="vision-server2.corp.ai2", type=str)
     parser.add_argument("--port", default=8000, type=int)
     parser.add_argument("--split", action='store_true')
+    parser.add_argument("--suffix", default="")
     # TODO : put more args here
     return parser.parse_args()
 
@@ -46,7 +47,7 @@ def create_all(args):
         return
     train_path = os.path.join(args.source_dir, args.train_name)
     train_data = json.load(open(train_path, 'r'))
-    dev_path = os.path.join(args.source_dir, "dev-v1.1.json")
+    dev_path = os.path.join(args.source_dir, args.dev_name)
     dev_data = json.load(open(dev_path, 'r'))
     train_data['data'].extend(dev_data['data'])
     print("dumping all data ...")
@@ -122,7 +123,7 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     if not args.split:
         sent_tokenize = lambda para: [para]
 
-    source_path = in_path or os.path.join(args.source_dir, "{}-v1.1.json".format(data_type))
+    source_path = in_path or os.path.join(args.source_dir, "{}-{}v1.1.json".format(data_type, args.suffix))
     source_data = json.load(open(source_path, 'r'))
 
     q, cq, y, rx, rcx, ids, idxs = [], [], [], [], [], [], []
