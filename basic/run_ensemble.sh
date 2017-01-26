@@ -19,7 +19,7 @@ eargs=""
 for num in 31 33 34 35 36 37 40 41 43 44 45 46; do
     load_path="$root_dir/$num/save"
     shared_path="$root_dir/$num/shared.json"
-    eval_path="$inter_dir/eval-$num.json"
+    eval_path="$inter_dir/eval-$num.pklz"
     eargs="$eargs $eval_path"
     python3 -m basic.cli --data_dir $inter_dir --eval_path $eval_path --nodump_answer --load_path $load_path --shared_path $shared_path $marg --eval_num_batches 0 --mode forward --batch_size 1 --len_opt --cluster --cpu_opt --load_ema &
 done

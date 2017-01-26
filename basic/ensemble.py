@@ -7,7 +7,7 @@ from collections import defaultdict
 from operator import mul
 
 from tqdm import tqdm
-from squad.utils import get_phrase, get_best_span
+from squad.utils import get_phrase, get_best_span, get_span_score_pairs
 
 
 def get_args():
@@ -42,7 +42,7 @@ def ensemble(args):
         wordss = shared['x'][rx[0]][rx[1]]
         yp_list = [e['yp'][idx] for e in e_list]
         yp2_list = [e['yp2'][idx] for e in e_list]
-        answer = ensemble3(context, wordss, yp_list, yp2_list)
+        answer = ensemble4(context, wordss, yp_list, yp2_list)
         out[id_] = answer
 
     with open(args.out, 'w') as fh:
@@ -84,6 +84,16 @@ def ensemble3(context, wordss, y1_list, y2_list):
         phrase = get_phrase(context, wordss, span)
         d[phrase] += score
     return max(d.items(), key=lambda pair: pair[1])[0]
+
+
+def ensemble4(context, wordss, y1_list, y2_list):
+    d = defaultdict(lambda: 1.0)
+    for y1, y2 in zip(y1_list, y2_list):
+        for span, score in get_span_score_pairs(y1, y2):
+            d[span] *= score
+    span = max(d.items(), key=lambda pair: pair[1])[0]
+    phrase = get_phrase(context, wordss, span)
+    return phrase
 
 
 def combine_y_list(y_list, op='*'):
