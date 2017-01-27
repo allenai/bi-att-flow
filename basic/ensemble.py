@@ -87,10 +87,10 @@ def ensemble3(context, wordss, y1_list, y2_list):
 
 
 def ensemble4(context, wordss, y1_list, y2_list):
-    d = defaultdict(lambda: 1.0)
+    d = defaultdict(lambda: 0.0)
     for y1, y2 in zip(y1_list, y2_list):
         for span, score in get_span_score_pairs(y1, y2):
-            d[span] *= score
+            d[span] += score
     span = max(d.items(), key=lambda pair: pair[1])[0]
     phrase = get_phrase(context, wordss, span)
     return phrase
