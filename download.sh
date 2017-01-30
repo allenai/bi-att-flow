@@ -24,3 +24,8 @@ unzip $GLOVE_DIR/glove.6B.zip -d $GLOVE_DIR
 # Download NLTK (for tokenizer)
 # Make sure that nltk is installed!
 python3 -m nltk.downloader -d $HOME/nltk_data punkt
+
+
+# Download TQA data
+wget https://s3.amazonaws.com/ai2-vision-textbook-dataset/dataset_releases/tqa_dataset_beta7_5.json
+wget https://s3.amazonaws.com/ai2-vision-textbook-dataset/dataset_releases/data_release_beta6.tgz

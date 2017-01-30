@@ -211,7 +211,7 @@ def prepro_each(args, lesson_ids, out_name="default", in_path=None):
                 # print("Skipping question '{}' because no processed text ...".format(qid))
                 skip_count += 1
                 continue
-            if len(question['answerChoices']) == 0:
+            if 'answerChoices' not in question or len(question['answerChoices']) == 0:
                 # print("Skipping question '{}' because no answer choices ...".format(qid))
                 skip_count += 1
                 continue
