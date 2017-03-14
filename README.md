@@ -28,6 +28,7 @@ python -m squad.prepro
 ```
 
 ## 2. Training
+The model has 2,571,787 parameters.
 The model was trained with NVidia Titan X (Pascal Architecture, 2016).
 The model requires at least 12GB of GPU RAM.
 If your GPU RAM is smaller than 12GB, you can either decrease batch size (performance might degrade),
