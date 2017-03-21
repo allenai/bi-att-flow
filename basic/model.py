@@ -283,7 +283,6 @@ class Model(object):
         q = np.zeros([N, JQ], dtype='int32')
         cq = np.zeros([N, JQ, W], dtype='int32')
         q_mask = np.zeros([N, JQ], dtype='bool')
-        print("x_mask {} q_mask {}".format(x_mask.shape, q_mask.shape))
 
         feed_dict[self.x] = x
         feed_dict[self.x_mask] = x_mask
