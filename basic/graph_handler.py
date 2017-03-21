@@ -20,12 +20,12 @@ class GraphHandler(object):
         self.save_path = os.path.join(config.save_dir, config.model_name)
 
     def initialize(self, sess):
-        sess.run(tf.initialize_all_variables())
+        sess.run(tf.global_variables_initializer())
         if self.config.load:
             self._load(sess)
 
         if self.config.mode == 'train':
-            self.writer = tf.train.SummaryWriter(self.config.log_dir, graph=tf.get_default_graph())
+            self.writer = tf.summary.FileWriter(self.config.log_dir, graph=tf.get_default_graph())
 
     def save(self, sess, global_step=None):
         saver = tf.train.Saver(max_to_keep=self.config.max_to_keep)

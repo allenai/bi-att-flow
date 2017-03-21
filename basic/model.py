@@ -63,8 +63,8 @@ class Model(object):
         if config.mode == 'train':
             self._build_ema()
 
-        self.summary = tf.merge_all_summaries()
-        self.summary = tf.merge_summary(tf.get_collection("summaries", scope=self.scope))
+        self.summary = tf.summary.merge_all()
+        self.summary = tf.summary.merge(tf.get_collection("summaries", scope=self.scope))
 
     def _build_forward(self):
         config = self.config
@@ -208,7 +208,9 @@ class Model(object):
         tf.add_to_collection("losses", ce_loss2)
 
         self.loss = tf.add_n(tf.get_collection('losses', scope=self.scope), name='loss')
-        tf.scalar_summary(self.loss.op.name, self.loss)
+        #tf.scalar_summary(self.loss.op.name, self.loss)
+        tf.summary.scalar(self.loss.op.name, self.loss)
+        
         tf.add_to_collection('ema/scalar', self.loss)
 
     def _build_ema(self):
@@ -218,7 +220,8 @@ class Model(object):
         ema_op = ema.apply(tensors)
         for var in tf.get_collection("ema/scalar", scope=self.scope):
             ema_var = ema.average(var)
-            tf.scalar_summary(ema_var.op.name, ema_var)
+            #tf.scalar_summary(ema_var.op.name, ema_var)
+            tf.summary.scalar(ema_var.op.name, ema_var)
         for var in tf.get_collection("ema/vector", scope=self.scope):
             ema_var = ema.average(var)
             tf.histogram_summary(ema_var.op.name, ema_var)
@@ -280,6 +283,7 @@ class Model(object):
         q = np.zeros([N, JQ], dtype='int32')
         cq = np.zeros([N, JQ, W], dtype='int32')
         q_mask = np.zeros([N, JQ], dtype='bool')
+        print("x_mask {} q_mask {}".format(x_mask.shape, q_mask.shape))
 
         feed_dict[self.x] = x
         feed_dict[self.x_mask] = x_mask
