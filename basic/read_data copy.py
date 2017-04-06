@@ -179,7 +179,6 @@ def read_data(config, data_type, ref, data_filter=None):
 
     shared_path = config.shared_path or os.path.join(config.out_dir, "shared.json")
     if not ref:
-        print("are you getting here at all")
         word2vec_dict = shared['lower_word2vec'] if config.lower_word else shared['word2vec']
         word_counter = shared['lower_word_counter'] if config.lower_word else shared['word_counter']
         char_counter = shared['char_counter']

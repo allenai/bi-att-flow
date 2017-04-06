@@ -60,9 +60,9 @@ flags.DEFINE_bool("cpu_opt", False, "CPU optimization? GPU computation can be sl
 
 # Logging and saving options
 flags.DEFINE_boolean("progress", True, "Show progress? [True]")
-flags.DEFINE_integer("log_period", 100, "Log period [100]")
-flags.DEFINE_integer("eval_period", 1000, "Eval period [1000]")
-flags.DEFINE_integer("save_period", 1000, "Save Period [1000]")
+flags.DEFINE_integer("log_period", 1, "Log period [100]")
+flags.DEFINE_integer("eval_period", 10, "Eval period [1000]")
+flags.DEFINE_integer("save_period", 1, "Save Period [1000]")
 flags.DEFINE_integer("max_to_keep", 20, "Max recent saves to keep [20]")
 flags.DEFINE_bool("dump_eval", True, "dump eval? [True]")
 flags.DEFINE_bool("dump_answer", True, "dump answer? [True]")

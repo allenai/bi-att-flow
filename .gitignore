@@ -63,3 +63,6 @@ target/
 .ipynb_checkpoints
 
 #other files
+out/
+inter_single/
+save/

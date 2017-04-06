@@ -34,6 +34,7 @@ class GraphHandler(object):
     def _load(self, sess):
         config = self.config
         vars_ = {var.name.split(":")[0]: var for var in tf.all_variables()}
+
         if config.load_ema:
             ema = self.model.var_ema
             for var in tf.trainable_variables():

@@ -63,8 +63,10 @@ def _config_debug(config):
 
 def _train(config):
     data_filter = get_squad_data_filter(config)
-    train_data = read_data(config, 'train', config.load, data_filter=data_filter)
-    dev_data = read_data(config, 'dev', True, data_filter=data_filter)
+    #train_data = read_data(config, 'train', config.load, data_filter=data_filter)
+    dev_data = read_data(config, 'dev_short', config.load, data_filter=data_filter)
+    train_data = read_data(config, 'dev_short', True, data_filter=data_filter)
+    print("dev_data.num_examples {} train_data.num_examples {}".format(dev_data.num_examples, train_data.num_examples))
     update_config(config, [train_data, dev_data])
 
     _config_debug(config)
@@ -94,20 +96,28 @@ def _train(config):
     global_step = 0
     for batches in tqdm(train_data.get_multi_batches(config.batch_size, config.num_gpus,
                                                      num_steps=num_steps, shuffle=True, cluster=config.cluster), total=num_steps):
+
+        # for v in tf.trainable_variables():
+        #     if v.name == 'main/p0/bi_attention/u_logits/first/Matrix:0':
+        #         print(v[0])
+        #         print(sess.run(v).shape)
         global_step = sess.run(model.global_step) + 1  # +1 because all calculations are done after step
         get_summary = global_step % config.log_period == 0
         loss, summary, train_op = trainer.step(sess, batches, get_summary=get_summary)
+
         if get_summary:
             graph_handler.add_summary(summary, global_step)
 
         # occasional saving
         if global_step % config.save_period == 0:
+            print("Let's save the model")
             graph_handler.save(sess, global_step=global_step)
 
         if not config.eval:
             continue
         # Occasional evaluation
         if global_step % config.eval_period == 0:
+            print("Let's evaluate the model")
             num_steps = math.ceil(dev_data.num_examples / (config.batch_size * config.num_gpus))
             if 0 < config.val_num_batches < num_steps:
                 num_steps = config.val_num_batches

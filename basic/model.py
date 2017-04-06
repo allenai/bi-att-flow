@@ -50,6 +50,9 @@ class Model(object):
         # Forward outputs / loss inputs
         self.logits = None
         self.yp = None
+        self.u_logits = None
+        self.u_a = None
+        self.h_a = None
         self.var_list = None
 
         # Loss outputs
@@ -77,6 +80,7 @@ class Model(object):
         M = tf.shape(self.x)[1]
         dc, dw, dco = config.char_emb_size, config.word_emb_size, config.char_out_size
 
+        # Create word and char embeddings
         with tf.variable_scope("emb"):
             if config.use_char_emb:
                 with tf.variable_scope("emb_var"), tf.device("/cpu:0"):
@@ -137,6 +141,7 @@ class Model(object):
         x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
+        # 3. Phrase Embedding Layer
         with tf.variable_scope("prepro"):
             (fw_u, bw_u), ((_, fw_u_f), (_, bw_u_f)) = bidirectional_dynamic_rnn(d_cell, d_cell, qq, q_len, dtype='float', scope='u1')  # [N, J, d], [N, d]
             u = tf.concat(2, [fw_u, bw_u])
@@ -150,7 +155,11 @@ class Model(object):
             self.tensor_dict['u'] = u
             self.tensor_dict['h'] = h
 
+        # 4. Attention Flow Layer
         with tf.variable_scope("main"):
+            # Dynamic attention by Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua
+            # Bengio. Neural machine translation by jointly learning to align
+            # and translate. ICLR, 2015.
             if config.dynamic_att:
                 p0 = h
                 u = tf.reshape(tf.tile(tf.expand_dims(u, 1), [1, M, 1, 1]), [N * M, JQ, 2 * d])
@@ -158,7 +167,8 @@ class Model(object):
                 first_cell = AttentionCell(cell, u, mask=q_mask, mapper='sim',
                                            input_keep_prob=self.config.input_keep_prob, is_train=self.is_train)
             else:
-                p0 = attention_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0", tensor_dict=self.tensor_dict)
+                # This is the proposed attention mechanism invented by the authors
+                p0, self.u_logits, self.u_a, self.h_a = attention_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0", tensor_dict=self.tensor_dict)
                 first_cell = d_cell
 
             (fw_g0, bw_g0), _ = bidirectional_dynamic_rnn(first_cell, first_cell, p0, x_len, dtype='float', scope='g0')  # [N, M, JX, 2d]
@@ -245,6 +255,15 @@ class Model(object):
     def get_var_list(self):
         return self.var_list
 
+    """
+    This method prepares the data to be fed into the NN
+    Arguments:
+        batch: <DataSet>
+        is_train: <boolean>
+        supervised: <boolean>
+    Returns:
+        feed_dict: <dict>
+    """
     def get_feed_dict(self, batch, is_train, supervised=True):
         assert isinstance(batch, DataSet)
         config = self.config
@@ -381,6 +400,7 @@ class Model(object):
 
 
 def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
+
     with tf.variable_scope(scope or "bi_attention"):
         JX = tf.shape(h)[2]
         M = tf.shape(h)[1]
@@ -393,9 +413,10 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
             h_mask_aug = tf.tile(tf.expand_dims(h_mask, 3), [1, 1, 1, JQ])
             u_mask_aug = tf.tile(tf.expand_dims(tf.expand_dims(u_mask, 1), 1), [1, M, JX, 1])
             hu_mask = h_mask_aug & u_mask_aug
-
+        # S?
         u_logits = get_logits([h_aug, u_aug], None, True, wd=config.wd, mask=hu_mask,
                               is_train=is_train, func=config.logit_func, scope='u_logits')  # [N, M, JX, JQ]
+
         u_a = softsel(u_aug, u_logits)  # [N, M, JX, d]
         h_a = softsel(h, tf.reduce_max(u_logits, 3))  # [N, M, d]
         h_a = tf.tile(tf.expand_dims(h_a, 2), [1, 1, JX, 1])
@@ -409,7 +430,7 @@ def bi_attention(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, t
             for var in variables:
                 tensor_dict[var.name] = var
 
-        return u_a, h_a
+        return u_a, h_a, u_logits
 
 
 def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None, tensor_dict=None):
@@ -418,11 +439,11 @@ def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None
         M = tf.shape(h)[1]
         JQ = tf.shape(u)[1]
         if config.q2c_att or config.c2q_att:
-            u_a, h_a = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
+            u_a, h_a, u_logits = bi_attention(config, is_train, h, u, h_mask=h_mask, u_mask=u_mask, tensor_dict=tensor_dict)
         if not config.c2q_att:
             u_a = tf.tile(tf.expand_dims(tf.expand_dims(tf.reduce_mean(u, 1), 1), 1), [1, M, JX, 1])
         if config.q2c_att:
             p0 = tf.concat(3, [h, u_a, h * u_a, h * h_a])
         else:
             p0 = tf.concat(3, [h, u_a, h * u_a])
-        return p0
+        return p0, u_logits, u_a, h_a

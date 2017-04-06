@@ -114,8 +114,7 @@ class Evaluator(object):
         return e
 
     def get_evaluation_from_batches(self, sess, batches):
-        e = sum(self.get_evaluation(sess, batch) for batch in batches)
-        return e
+        return sum(self.get_evaluation(sess, batch) for batch in batches)
 
 
 class LabeledEvaluator(Evaluator):
@@ -362,12 +361,22 @@ class ForwardEvaluator(Evaluator):
 
     def get_evaluation(self, sess, batch):
         idxs, data_set = batch
+        # print(data_set.num_examples, data_set.data)
         assert isinstance(data_set, DataSet)
         feed_dict = self.model.get_feed_dict(data_set, False)
         global_step, yp, yp2, loss, vals = sess.run([self.global_step, self.yp, self.yp2, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
-
         yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
-        spans, scores = zip(*[get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)])
+        top_n = 10
+        top_10_y = zip(
+            np.argsort(yp[0][0])[::-1][0:top_n],
+            np.argsort(yp2[0][0])[::-1][0:top_n]
+        )
+
+        scores = np.sort(yp[0][0])[::-1][0:top_n] * np.sort(yp2[0][0])[::-1][0:top_n]
+        spans = [((0, yp), (0, yp2 + 1)) for yp, yp2 in top_10_y]
+
+        # spans, scores = zip(*[get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)])
+        # print(spans,scores)
 
         def _get(xi, span):
             if len(xi) <= span[0][0]:
@@ -386,6 +395,35 @@ class ForwardEvaluator(Evaluator):
         id2answer_dict = {id_: _get2(context, xi, span)
                           for id_, xi, span, context in zip(data_set.data['ids'], data_set.data['x'], spans, data_set.data['p'])}
         id2score_dict = {id_: score for id_, score in zip(data_set.data['ids'], scores)}
+        id2answer_dict['scores'] = id2score_dict
+        tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
+
+        x = data_set.data['x'][0][0]
+        p = data_set.data['p'][0][0]
+        # print(p)
+        evaluations, scores_v = [], []
+
+        for idx, span in enumerate(spans):
+            start, end = span
+            start = start[1]
+            end = end[1]
+            # print(scores[idx])
+            scores_v.append(scores[idx])
+            if start < end:
+                e = ForwardEvaluation(
+                    data_set.data_type,
+                    int(global_step),
+                    idxs,
+                    yp.tolist(),
+                    yp2.tolist(),
+                    float(loss),
+                    #id2answer_dict,
+                    " ".join(x[start:end]),
+                    tensor_dict=tensor_dict
+                )
+                evaluations.append(e)
+        return evaluations, scores_v
+
         id2answer_dict['scores'] = id2score_dict
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
         e = ForwardEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), float(loss), id2answer_dict, tensor_dict=tensor_dict)
