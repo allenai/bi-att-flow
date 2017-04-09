@@ -1,5 +1,6 @@
 (function() {
 
+	var PNUM = 49
         var paragraph_id = 0;
 	var titles;
 	var contextss;
@@ -8,12 +9,6 @@
 	window.onload = function(){
 		displayQuestion();
 		load();
-		//loadButtons();
-		/*
-		for(var i=0; i<16; i++){
-			document.getElementById(parseInt(i)).onclick = loadParagraph;
-		}
-		*/
 	}
 
 	function clearField(){
@@ -27,7 +22,7 @@
 	}
 	function loadDropdown(){
 		var dropdown = document.getElementById("selectArticle");
-		for(var i=0; i<48; i++){
+		for(var i=0; i<PNUM; i++){
 			var opt = document.createElement("option");
 			opt.value = parseInt(i);
 			opt.innerHTML = titles[i];
@@ -116,6 +111,7 @@
 		span.classList.add("label-primary");
 		span.innerHTML="Answer";
 		var input = document.createElement("textarea");
+		input.style = "resize:none";
 		input.readOnly = true;
 		input.classList.add("form-control");
 		input.innerHTML = answer;
@@ -130,7 +126,7 @@
      function loadAnswer(){
 		document.getElementById("loading").style.display = "block";
 		var data = {
-			paragraph_id: paragraph_id, //$("#paragraph").val(),
+			paragraph: $("#paragraph").val(),
 			question: $("#question").val()
 		};
 		sendAjax("/submit", data, handleAnswer);
@@ -164,10 +160,9 @@
 
 	function _loadParagraph(){
 		clearField();
-		p_id = 0;
 		if (paragraph_id==0) p_id=1;
-		document.getElementById("paragraph").value = contextss[paragraph_id][p_id];
-		document.getElementById("question").value = context_questions[paragraph_id][p_id];
+		document.getElementById("paragraph").value = contextss[paragraph_id];
+		document.getElementById("question").value = context_questions[paragraph_id];
 	}
 
 	function handleParagraph(data){

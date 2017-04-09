@@ -9,7 +9,7 @@ import numpy as np
 
 from my.tensorflow import grouper
 from my.utils import index
-
+from IPython import embed
 
 class Data(object):
     def get_size(self):
@@ -319,7 +319,7 @@ def update_config(config, data_sets):
     config.char_vocab_size = len(data_sets[0].shared['char2idx'])
     config.word_emb_size = len(next(iter(data_sets[0].shared['word2vec'].values())))
     config.word_vocab_size = len(data_sets[0].shared['word2idx'])
-
+    print (config.word_vocab_size)
     if config.single:
         config.max_num_sents = 1
     if config.squash:

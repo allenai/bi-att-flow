@@ -5,9 +5,13 @@ import json
 
 app = Flask(__name__)
 shared = json.load(open("data/squad/shared_test.json", "r"))
-contextss = shared["contextss"]
-titles = shared["titles"]
-context_questions = shared["context_questions"]
+contextss = [""]
+context_questions = [""]
+for i in range(len(shared['contextss'])):
+    j = 1 if i==0 else 0
+    contextss.append(shared["contextss"][i][j])
+    context_questions.append(shared['context_questions'][i][j])
+titles = ["Write own paragraph"]+shared["titles"]
 
 demo = Demo()
 
@@ -17,9 +21,13 @@ def getTitle(ai):
 def getPara(rxi):
     return contextss[rxi[0]][rxi[1]]
 
-def getAnswer(rxi, question):
-    q_prepro = prepro(rxi, question)
-    return demo.run(q_prepro)
+def getAnswer(paragraph, question):
+    pq_prepro = prepro(paragraph, question)
+    if len(pq_prepro['x'])>1000:
+        return "[Error] Sorry, the number of words in paragraph cannot be more than 1000." 
+    if len(pq_prepro['q'])>100:
+        return "[Error] Sorry, the number of words in question cannot be more than 100."
+    return demo.run(pq_prepro)
 
 @app.route('/')
 def main():
@@ -35,11 +43,9 @@ def select():
 
 @app.route('/submit', methods=['GET', 'POST'])
 def submit():
-    paragraph_id = request.args.get('paragraph_id', type=int)
+    paragraph = request.args.get('paragraph')
     question = request.args.get('question')
-    if paragraph_id == 0: rxi = [paragraph_id, 1]
-    else: rxi = [paragraph_id, 0]
-    answer = getAnswer(rxi, question)
+    answer = getAnswer(paragraph, question)
     return jsonify(result=answer)
 
 if __name__ == "__main__":

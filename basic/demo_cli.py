@@ -8,7 +8,7 @@ from pprint import pprint
 import tensorflow as tf
 from tqdm import tqdm
 import numpy as np
-
+from IPython import embed
 from basic.evaluator import F1Evaluator, Evaluator, ForwardEvaluator, MultiGPUF1Evaluator
 from basic.graph_handler import GraphHandler
 from basic.model import Model, get_multi_gpu_models
@@ -59,11 +59,11 @@ flags.DEFINE_bool("single", False, "supervise only the answer sentence? [False]"
 
 flags.DEFINE_integer("word_count_th", 30, "word count th [100]")
 flags.DEFINE_integer("char_count_th", 150, "char count th [500]")
-flags.DEFINE_integer("sent_size_th", 180, "sent size th [64]")
-flags.DEFINE_integer("num_sents_th", 24, "num sents th [8]")
-flags.DEFINE_integer("ques_size_th", 90, "ques size th [32]")
+flags.DEFINE_integer("sent_size_th", 1000, "sent size th [64]")
+flags.DEFINE_integer("num_sents_th", 1000, "num sents th [8]")
+flags.DEFINE_integer("ques_size_th", 100, "ques size th [32]")
 flags.DEFINE_integer("word_size_th", 48, "word size th [16]")
-flags.DEFINE_integer("para_size_th", 512, "para size th [256]")
+flags.DEFINE_integer("para_size_th", 1000, "para size th [256]")
 
 flags.DEFINE_bool("swap_memory", True, "swap memory? [True]")
 flags.DEFINE_string("data_filter", "max", "max | valid | semi [max]")
@@ -158,13 +158,10 @@ class Demo(object):
         self.data_ready(data=data)
         test_data = self.test_data
         config = self.config
-
         e = None
-        print ("start")
         for multi_batch in test_data.get_batches(config.batch_size, num_batches=1, cluster=config.cluster):
             ei = self.evaluator.get_evaluation(self.sess, multi_batch)
             e = ei if e is None else e + ei
-        print ("end")
         return (e.id2answer_dict[0])
 
 if __name__ == "__main__":
