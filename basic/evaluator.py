@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-
+from IPython import embed
 from basic.read_data import DataSet
 from my.nltk_utils import span_f1
 from my.tensorflow import padded_reshape
@@ -382,7 +382,6 @@ class ForwardEvaluator(Evaluator):
             if len(xi[span[0][0]]) <= span[1][1]:
                 return ""
             return get_phrase(context, xi, span)
-
         id2answer_dict = {id_: _get2(context, xi, span)
                           for id_, xi, span, context in zip(data_set.data['ids'], data_set.data['x'], spans, data_set.data['p'])}
         id2score_dict = {id_: score for id_, score in zip(data_set.data['ids'], scores)}

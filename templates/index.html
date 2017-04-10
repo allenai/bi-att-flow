@@ -23,10 +23,9 @@
 	
 	<div class="container" role="main">
 		<div> <!--<div class="jumbotron">-->
-			<h1 class="display-3"> Bi-directional Attention Flow Demo</h1>
-			<h3>for <a href="https://stanford-qa.com" target="_blank">Stanford Question Answering Dataset (SQuAD)</a></h3>
-			<p>BiDAF can answer your question!</p>
-			<p><strong>Direction</strong> : Select a paragraph and write your own question. The answer is always a subphrase of the paragraph - remember it when you ask a question!</p>
+			<h1 class="display-3" style="margin-top:20px; margin-bottom:0px;"> Bi-directional Attention Flow Demo</h1>
+			<h3 style="margin-top:5px; margin-bottom:20px;">for <a href="https://stanford-qa.com" target="_blank">Stanford Question Answering Dataset (SQuAD)</a></h3>
+			<p style="font-size:16px;"><strong>Direction</strong> : Select a paragraph and write your own question. The answer is always a subphrase of the paragraph - remember it when you ask a question!</p>
 		</div>
 		<hr />
 		<h4><span class="label label-default">Select Paragraph</span></h4>
@@ -35,7 +34,7 @@
 		<div class="row">
 			<div class="col-md-6">
 				<h4><span class="label label-primary">Paragraph</span></h4>
-				<textarea readonly class="form-control" id="paragraph" rows="10">
+				<textarea style="resize:none" class="form-control" id="paragraph" rows="10">
 				</textarea>
 			</div>
 			<div class="col-md-6" id="qa">
@@ -44,8 +43,7 @@
 		<hr />
 		<div>
 			<p>Reference : <a href="https://seominjoon.github.io" target="_blank">Minjoon Seo</a>, <a href="http://allenai.org/team/anik/papers.html" target="_blank">Aniruddha Kembhavi</a>, <a href="https://homes.cs.washington.edu/~ali/index.html" target="_blank">Ali Farhadi</a>, <a href="https://ssli.ee.washington.edu/~hannaneh/index.html" target="_blank">Hannaneh Hajishirzi</a>. "Bidirectional Attention Flow for Machine Comprehension" [<a href="https://arxiv.org/abs/1611.01603" target="_blank">link</a>]</p>
-			<p>Created by : Sewon Min</p>
-			<p>SQuAD leaderboard [<a href="https://rajpurkar.github.io/SQuAD-explorer" target="_blank">link</a>]</p>
+			<p>Demo by : Sewon Min</p>
 
 		</div>
 	</div>
@@ -60,6 +58,17 @@
 	<script src="../static/jquery-3.1.0.min.js"></script>
 	<script src="../static/jszip.min.js"></script>
 	<script src="../static/index.js"></script>
+
+	<script>
+  		(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+ 	 		(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+ 		 	m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+ 		 })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  		ga('create', 'UA-88163986-1', 'auto');
+  		ga('send', 'pageview');
+
+	</script>
   </body>
 </html>
 
