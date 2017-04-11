@@ -11,7 +11,10 @@ from basic.model import get_multi_gpu_models
 from basic.main import set_dirs
 from basic.read_data import read_data, update_config, DataSet
 from squad.prepro import prepro_single_question_with_context
+from squad.eda_improvements import load_glove_emb
 import pandas as pd
+from scipy import spatial
+import sys, traceback
 
 flags = tf.app.flags
 
@@ -25,10 +28,10 @@ flags.DEFINE_string("forward_name", "single", "Forward name [single]")
 flags.DEFINE_string("answer_path", "", "Answer path []")
 flags.DEFINE_string("eval_path", "data/squad", "Eval path []")
 # flags.DEFINE_string("load_path", "", "Load path []")
-flags.DEFINE_string("load_path", "/Applications/MAMP/htdocs/bi-att-flow/save/37/save", "Load path []")
+flags.DEFINE_string("load_path", "/Applications/MAMP/htdocs/bi-att-flow/save/40/save", "Load path []")
 #flags.DEFINE_string("load_path", "out/basic/00/save/basic-20000", "Load path []")
 # "$root_dir/$num/shared.json"
-flags.DEFINE_string("shared_path", "/Applications/MAMP/htdocs/bi-att-flow/save/37/shared.json", "Shared path []")
+flags.DEFINE_string("shared_path", "/Applications/MAMP/htdocs/bi-att-flow/save/40/shared.json", "Shared path []")
 flags.DEFINE_integer("eval_num_batches", 0, "eval num batches [100]")
 
 # Device placement
@@ -225,6 +228,30 @@ class Inference(object):
         # read this file during startup.
         projector.visualize_embeddings(summary_writer, config)
         pass
+
+    def makeRawS(self, context_words, question_words, raw_S):
+        word2vec = load_glove_emb()
+
+        for row_index in range(len(context_words)):
+
+            word_c = context_words[row_index].lower()
+
+            for colum_index in range(len(question_words)):
+
+                word_q = question_words[colum_index].lower()
+                try:
+                    similarity = 1 - spatial.distance.cosine(word2vec[word_c], word2vec[word_q])
+                except KeyError:
+                    print(traceback.print_exc(file=sys.stdout))
+                    continue
+
+                raw_S[row_index, colum_index] = similarity
+
+        # for row_index in range(raw_S.shape[0]):
+        #     raw_S[row_index] = self.sess.run(tf.nn.softmax(raw_S[row_index]))
+
+        return raw_S
+
     def getS(self, context, question):
         # context = 'Super Bowl 50 was an American football game to determine the champion of the National Football League (NFL) for the 2015 season. The American Football Conference (AFC) champion Denver Broncos defeated the National Football Conference (NFC) champion Carolina Panthers 24–10 to earn their third Super Bowl title. The game was played on February 7, 2016, at Levi\'s Stadium in the San Francisco Bay Area at Santa Clara, California. As this was the 50th Super Bowl, the league emphasized the "golden anniversary" with various gold-themed initiatives, as well as temporarily suspending the tradition of naming each Super Bowl game with Roman numerals (under which the game would have been known as "Super Bowl L"), so that the logo could prominently feature the Arabic numerals 50.'
         # question = 'Where did Super Bowl 50 take place?'
@@ -264,6 +291,7 @@ class Inference(object):
         # u_a = u_a[0][0]
         S = S[0][0]
         # h_a = h_a[0][0]
+        raw_S = self.makeRawS(context_words, question_words, np.zeros(shape=S.shape))
         #print("context_words {} \n question_words {} \n u_a.shape {} \n u_a {}".format(context_words, question_words, u_a.shape, u_a))
         # print("context_words {} \n question_words {} \n h_a.shape {} \n h_a {}".format(context_words, question_words, h_a.shape, h_a))
         print("context_words {} \n question_words {} \n S.shape {} \n S {}".format(context_words, question_words, S.shape, S))
@@ -342,6 +370,14 @@ class Inference(object):
         with open('df.html', 'w') as f:
             f.write(df_html)
         print(df)
+
+        df = pd.DataFrame(data=raw_S, columns=question_words)
+        df['context'] = pd.Series(context_words, index=df.index)
+
+        df_html = df.style.applymap(color_negative_red).apply(highlight_max, axis=1).render()
+        with open('df_raw_S.html', 'w') as f:
+            f.write(df_html)
+
         return df
         # print(S[0][0].shape)
         # yp = yp[:data_set.num_examples]
@@ -372,6 +408,8 @@ if __name__ == "__main__":
     # question = 'What is the warmest part of Victoria?'
     #question = 'What is the craziest part of Victoria?'
     # question = 'What is the temperature in the highest parts of the mountain range in winter?'
-    inference.predict(context, question)
+    # inference.predict(context, question)
     df = inference.getS(context, question)
+    #inference.makeRawS(context, question)
+    #inference.makeRawS(['i', 'like', 'cars'], ['cars'], np.zeros(shape=(3, 1)))
     

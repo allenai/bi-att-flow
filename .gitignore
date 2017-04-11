@@ -65,4 +65,6 @@ target/
 #other files
 out/
 inter_single/
+inter_ensemble/
+glove.6B.100d.txt
 save/

@@ -55,7 +55,7 @@ def failed_answers():
 		# break
 	print("total_qas {} failed_qas {}".format(total_qas, failed_qas))
 
-# failed_answers()
+failed_answers()
 
 
 def load_glove_emb():
@@ -70,8 +70,8 @@ def load_glove_emb():
 			word2vec_all[word] = np.array(embedding_vector, dtype=np.float32)
 	return word2vec_all
 
-glove_emb = load_glove_emb()
-word1 = 'car'
-word2 = 'cars'
-similarity = 1 - spatial.distance.cosine(glove_emb[word1], glove_emb[word2])
-print("word1 {} word2 {} similarity {}".format(word1, word2, similarity))
+# glove_emb = load_glove_emb()
+# word1 = 'car'
+# word2 = 'cars'
+# similarity = 1 - spatial.distance.cosine(glove_emb[word1], glove_emb[word2])
+# print("word1 {} word2 {} similarity {}".format(word1, word2, similarity))
