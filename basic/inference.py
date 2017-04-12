@@ -120,7 +120,7 @@ flags.DEFINE_bool("dynamic_att", False, "Dynamic attention [False]")
 
 
 class Inference(object):
-    def __init__(self):
+    def __init__(self, top_n=1):
         self.config = flags.FLAGS
 
         # Set directories for temporary files
@@ -142,7 +142,12 @@ class Inference(object):
 
         # Get the models and the evaluator to get predictions
         self.model = get_multi_gpu_models(self.config)[0]
-        self.evaluator = ForwardEvaluator(self.config, self.model, tensor_dict=models.tensor_dict if self.config.vis else None)
+        self.evaluator = ForwardEvaluator(
+            config=self.config,
+            model=self.model,
+            tensor_dict=models.tensor_dict if self.config.vis else None,
+            top_n=top_n
+        )
 
         # Initialize TF session and graph handler
         self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
@@ -171,8 +176,21 @@ class Inference(object):
             data_type=self.config.dataset,
             shared=self.data.shared
         ))
-
+        prediction = self.evaluator.get_evaluation(self.sess, batch_data)
+        print(prediction.id2answer_dict.keys())
+        print(
+            prediction.id2answer_dict[
+                list(prediction.id2answer_dict.keys())[0]
+            ],
+            prediction.id2answer_dict['scores'][
+                list(prediction.id2answer_dict['scores'].keys())[0]
+            ]
+        )
+        return 1
+        # print r
+        
         predictions, scores = self.evaluator.get_evaluation(self.sess, batch_data)
+        # print(predictions)
         predictions_text, predictions_scores = [], []
         if isinstance(predictions, list):
             for idx, prediction in enumerate(predictions):
@@ -393,7 +411,7 @@ class Inference(object):
 
 if __name__ == "__main__":
     #tf.app.run()
-    inference = Inference()
+    inference = Inference(top_n=10)
     # context = 'The carrot was born in August.'
     # question = 'When was the carrot born?'
     # context = 'Super Bowl 50 was an American football game to determine the champion of the National Football League (NFL) for the 2015 season. The American Football Conference (AFC) champion Denver Broncos defeated the National Football Conference (NFC) champion Carolina Panthers 24–10 to earn their third Super Bowl title. The game was played on February 7, 2016, at Levi\'s Stadium in the San Francisco Bay Area at Santa Clara, California. As this was the 50th Super Bowl, the league emphasized the "golden anniversary" with various gold-themed initiatives, as well as temporarily suspending the tradition of naming each Super Bowl game with Roman numerals (under which the game would have been known as "Super Bowl L"), so that the logo could prominently feature the Arabic numerals 50.'
@@ -408,8 +426,8 @@ if __name__ == "__main__":
     # question = 'What is the warmest part of Victoria?'
     #question = 'What is the craziest part of Victoria?'
     # question = 'What is the temperature in the highest parts of the mountain range in winter?'
-    # inference.predict(context, question)
-    df = inference.getS(context, question)
+    inference.predict(context, question)
+    # df = inference.getS(context, question)
     #inference.makeRawS(context, question)
     #inference.makeRawS(['i', 'like', 'cars'], ['cars'], np.zeros(shape=(3, 1)))
     

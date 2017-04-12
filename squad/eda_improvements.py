@@ -55,7 +55,7 @@ def failed_answers():
 		# break
 	print("total_qas {} failed_qas {}".format(total_qas, failed_qas))
 
-failed_answers()
+# failed_answers()
 
 
 def load_glove_emb():

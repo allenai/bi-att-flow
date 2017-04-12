@@ -1,5 +1,4 @@
 from flask import Flask, render_template, redirect, request, jsonify
-# from squad.demo_prepro import prepro
 from basic.inference import Inference
 import json
 
@@ -8,8 +7,8 @@ app = Flask(__name__)
 #shared = json.load(open("data/squad/shared_demo.json", "r"))
 #shared = json.load(open("data/squad/shared_specifiedby.json", "r"))
 #data = json.load(open("data/squad/data_specifiedby.json", "r"))
-shared = json.load(open("data/squad/shared_test.json", "r"))
-data = json.load(open("data/squad/data_test.json", "r"))
+shared = json.load(open("./../data/squad/shared_test.json", "r"))
+data = json.load(open("./../data/squad/data_test.json", "r"))
 
 context = [[x for x in xy] for xy in shared['p']]
 
