@@ -120,7 +120,7 @@ flags.DEFINE_bool("dynamic_att", False, "Dynamic attention [False]")
 
 
 class Inference(object):
-    def __init__(self, top_n=1):
+    def __init__(self):
         self.config = flags.FLAGS
 
         # Set directories for temporary files
@@ -145,8 +145,7 @@ class Inference(object):
         self.evaluator = ForwardEvaluator(
             config=self.config,
             model=self.model,
-            tensor_dict=models.tensor_dict if self.config.vis else None,
-            top_n=top_n
+            tensor_dict=models.tensor_dict if self.config.vis else None
         )
 
         # Initialize TF session and graph handler
@@ -411,7 +410,7 @@ class Inference(object):
 
 if __name__ == "__main__":
     #tf.app.run()
-    inference = Inference(top_n=10)
+    inference = Inference()
     # context = 'The carrot was born in August.'
     # question = 'When was the carrot born?'
     # context = 'Super Bowl 50 was an American football game to determine the champion of the National Football League (NFL) for the 2015 season. The American Football Conference (AFC) champion Denver Broncos defeated the National Football Conference (NFC) champion Carolina Panthers 24–10 to earn their third Super Bowl title. The game was played on February 7, 2016, at Levi\'s Stadium in the San Francisco Bay Area at Santa Clara, California. As this was the 50th Super Bowl, the league emphasized the "golden anniversary" with various gold-themed initiatives, as well as temporarily suspending the tradition of naming each Super Bowl game with Roman numerals (under which the game would have been known as "Super Bowl L"), so that the logo could prominently feature the Arabic numerals 50.'

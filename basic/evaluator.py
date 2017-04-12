@@ -354,55 +354,19 @@ class MultiGPUF1Evaluator(F1Evaluator):
 
 
 class ForwardEvaluator(Evaluator):
-    def __init__(self, config, model, tensor_dict=None, top_n=1):
+    def __init__(self, config, model, tensor_dict=None):
         super(ForwardEvaluator, self).__init__(config, model, tensor_dict=tensor_dict)
         self.yp2 = model.yp2
         self.loss = model.loss
-        self.top_n = top_n
 
     def get_evaluation(self, sess, batch):
         idxs, data_set = batch
-        # print(data_set.num_examples, data_set.data)
         assert isinstance(data_set, DataSet)
         feed_dict = self.model.get_feed_dict(data_set, False)
-        global_step, yp, yp2, loss, vals = sess.run([self.global_step, self.yp, self.yp2, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
-        yp, yp2 = yp[:data_set.num_examples], yp2[:data_set.num_examples]
-
-        # Experimental to get top_n logits
-        # spans, scores = [], []
-        # for ypi, yp2i in zip(yp, yp2):
-
-        #     ypi_top_n = np.argsort(ypi[0])[::-1][0:self.top_n]
-        #     yp2i_top_n = np.argsort(yp2i[0])[::-1][0:self.top_n]
-        #     scores_top_n = np.sort(ypi[0])[::-1][0:self.top_n] * np.sort(yp2i[0])[::-1][0:self.top_n]
-
-        #     # aux_spans, aux_scores = zip(*[[((0, ypii), (0, yp2iii + 1)), si]
-        #     #                             for ypii, yp2iii, si in zip(ypi_top_n, yp2i_top_n, scores_top_n)])
-
-        #     aux_spans, aux_scores, = [], []
-        #     for i in range(self.top_n):
-        #         aux_spans.append(((0, ypi_top_n[i]), (0, yp2i_top_n[i] + 1)))
-        #         aux_scores.append(scores_top_n[i])
-
-        #     spans.append(aux_spans)
-        #     scores.append(aux_scores)
-        # print(data_set.num_examples)
-        # spans = spans[0]
-        # scores = scores[0]
-
-        # print(spans)
-        # top_10_y = zip(
-        #     np.argsort(yp[0][0])[::-1][0:self.top_n],
-        #     np.argsort(yp2[0][0])[::-1][0:self.top_n]
-        # )
-
-        # scores = np.sort(yp[0][0])[::-1][0:self.top_n] * np.sort(yp2[0][0])[::-1][0:self.top_n]
-        # spans = [((0, yp), (0, yp2 + 1)) for yp, yp2 in top_10_y]
-
-
-        # I'm not sure get_best_span is necessary because in prepro_each => list(map(word_tokenize, sent_tokenize(context)))
-        # Therefore, the context is converted into words.
-        spans, scores = zip(*[get_best_span(ypi, yp2i) for ypi, yp2i in zip(yp, yp2)])
+        if self.config.na:
+            global_step, yp, yp2, loss, na, vals = sess.run([self.global_step, self.yp, self.yp2, self.loss, self.na, list(self.tensor_dict.values())], feed_dict=feed_dict)
+        else:
+            global_step, yp, yp2, loss, vals = sess.run([self.global_step, self.yp, self.yp2, self.loss, list(self.tensor_dict.values())], feed_dict=feed_dict)
 
         def _get(xi, span):
             if len(xi) <= span[0][0]:
@@ -425,36 +389,7 @@ class ForwardEvaluator(Evaluator):
 
         id2answer_dict['scores'] = id2score_dict
         tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
-        # Experimental to get top_n results
-        # x = data_set.data['x'][0][0]
-        # p = data_set.data['p'][0][0]
 
-        # # print(p)
-        # evaluations, scores_v = [], []
-
-        # for idx, span in enumerate(spans):
-        #     start, end = span
-        #     start = start[1]
-        #     end = end[1]
-        #     # print(scores[idx])
-        #     scores_v.append(scores[idx])
-        #     if start < end:
-        #         e = ForwardEvaluation(
-        #             data_set.data_type,
-        #             int(global_step),
-        #             idxs,
-        #             yp.tolist(),
-        #             yp2.tolist(),
-        #             float(loss),
-        #             #id2answer_dict,
-        #             " ".join(x[start:end]),
-        #             tensor_dict=tensor_dict
-        #         )
-        #         evaluations.append(e)
-        # return evaluations, scores_v
-
-        # id2answer_dict['scores'] = id2score_dict
-        # tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
 
         return ForwardEvaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), yp2.tolist(), float(loss), id2answer_dict, tensor_dict=tensor_dict)
 
