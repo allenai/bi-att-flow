@@ -69,8 +69,6 @@ def prepro(args):
         prepro_each(args, 'dev', out_name='dev')
     elif args.mode == 'dev_short':
         prepro_each(args, 'dev_short', 0.0, 0.05, out_name='dev_short')
-    elif args.mode == 'specifiedby':
-        prepro_each(args, 'specifiedby', out_name='specifiedby')
     elif args.mode == 'single':
         assert len(args.single_path) > 0
         prepro_each(args, "NULL", out_name="single", in_path=args.single_path)
@@ -135,33 +133,9 @@ def prepro_single_question_with_context(context, question):
     # context = para['context']
     context = context.replace("''", '" ')
     context = context.replace("``", '" ')
-    # Split paragraphs into sentences and then split into words.
-    # I like carrots. Very much. => ["I", "like", "carrots", ".", "Very", "much", "."]
-    #xi = list(map(word_tokenize, sent_tokenize(context)))
-    #xi = list(map(word_tokenize, context))
     xi = word_tokenize(context)
-    # xi = [process_tokens(tokens) for tokens in xi]  # Remove non-ascii characters. TODO: Encode to utf-8
     # Transform list of words into list of characters
-    #cxi = [[list(xijk) for xijk in xij] for xij in xi]
     cxi = [list(xij) for xij in xi]
-    # Append to buckets
-    # xp.append(xi) # append all the words to xp
-
-    # batch_data = {
-    #     'q': [['Where', 'did', 'Super', 'Bowl', '50', 'take', 'place', '?']],
-    #     'cq': [[['W', 'h', 'e', 'r', 'e'], ['d', 'i', 'd'], ['S', 'u', 'p', 'e', 'r'], ['B', 'o', 'w', 'l'], ['5', '0'], ['t', 'a', 'k', 'e'], ['p', 'l', 'a', 'c', 'e'], ['?']]],
-    #     'y': [[[[0, 0], [0, 0]]]],
-    #     '*x': [[0, 0]],
-    #     '*cx': [[0, 0]],
-    #     'cy': [[[0, 0]]],
-    #     'idxs': [2],
-    #     'ids': ['56be4db0acb8001400a502ee'],
-    #     'answerss': [['Santa Clara, California', "Levi's Stadium", "Levi's Stadium in the San Francisco Bay Area at Santa Clara, California."]],
-    #     '*p': [[0, 0]],
-    #     'x': [[['Super', 'Bowl', '50', 'was', 'an', 'American', 'football', 'game', 'to', 'determine', 'the', 'champion', 'of', 'the', 'National', 'Football', 'League', '(', 'NFL', ')', 'for', 'the', '2015', 'season', '.', 'The', 'American', 'Football', 'Conference', '(', 'AFC', ')', 'champion', 'Denver', 'Broncos', 'defeated', 'the', 'National', 'Football', 'Conference', '(', 'NFC', ')', 'champion', 'Carolina', 'Panthers', '24', '–', '10', 'to', 'earn', 'their', 'third', 'Super', 'Bowl', 'title', '.', 'The', 'game', 'was', 'played', 'on', 'February', '7', ',', '2016', ',', 'at', 'Levi', '', "'", 's', 'Stadium', 'in', 'the', 'San', 'Francisco', 'Bay', 'Area', 'at', 'Santa', 'Clara', ',', 'California', '.', 'As', 'this', 'was', 'the', '50th', 'Super', 'Bowl', ',', 'the', 'league', 'emphasized', 'the', '', '"', '', 'golden', 'anniversary', '', '"', '', 'with', 'various', 'gold', '-', 'themed', 'initiatives', ',', 'as', 'well', 'as', 'temporarily', 'suspending', 'the', 'tradition', 'of', 'naming', 'each', 'Super', 'Bowl', 'game', 'with', 'Roman', 'numerals', '(', 'under', 'which', 'the', 'game', 'would', 'have', 'been', 'known', 'as', '', '"', '', 'Super', 'Bowl', 'L', '', '"', '', ')', ',', 'so', 'that', 'the', 'logo', 'could', 'prominently', 'feature', 'the', 'Arabic', 'numerals', '50', '.']]],
-    #     'cx': [[[['S', 'u', 'p', 'e', 'r'], ['B', 'o', 'w', 'l'], ['5', '0'], ['w', 'a', 's'], ['a', 'n'], ['A', 'm', 'e', 'r', 'i', 'c', 'a', 'n'], ['f', 'o', 'o', 't', 'b', 'a', 'l', 'l'], ['g', 'a', 'm', 'e'], ['t', 'o'], ['d', 'e', 't', 'e', 'r', 'm', 'i', 'n', 'e'], ['t', 'h', 'e'], ['c', 'h', 'a', 'm', 'p', 'i', 'o', 'n'], ['o', 'f'], ['t', 'h', 'e'], ['N', 'a', 't', 'i', 'o', 'n', 'a', 'l'], ['F', 'o', 'o', 't', 'b', 'a', 'l', 'l'], ['L', 'e', 'a', 'g', 'u', 'e'], ['('], ['N', 'F', 'L'], [')'], ['f', 'o', 'r'], ['t', 'h', 'e'], ['2', '0', '1', '5'], ['s', 'e', 'a', 's', 'o', 'n'], ['.'], ['T', 'h', 'e'], ['A', 'm', 'e', 'r', 'i', 'c', 'a', 'n'], ['F', 'o', 'o', 't', 'b', 'a', 'l', 'l'], ['C', 'o', 'n', 'f', 'e', 'r', 'e', 'n', 'c', 'e'], ['('], ['A', 'F', 'C'], [')'], ['c', 'h', 'a', 'm', 'p', 'i', 'o', 'n'], ['D', 'e', 'n', 'v', 'e', 'r'], ['B', 'r', 'o', 'n', 'c', 'o', 's'], ['d', 'e', 'f', 'e', 'a', 't', 'e', 'd'], ['t', 'h', 'e'], ['N', 'a', 't', 'i', 'o', 'n', 'a', 'l'], ['F', 'o', 'o', 't', 'b', 'a', 'l', 'l'], ['C', 'o', 'n', 'f', 'e', 'r', 'e', 'n', 'c', 'e'], ['('], ['N', 'F', 'C'], [')'], ['c', 'h', 'a', 'm', 'p', 'i', 'o', 'n'], ['C', 'a', 'r', 'o', 'l', 'i', 'n', 'a'], ['P', 'a', 'n', 't', 'h', 'e', 'r', 's'], ['2', '4'], ['–'], ['1', '0'], ['t', 'o'], ['e', 'a', 'r', 'n'], ['t', 'h', 'e', 'i', 'r'], ['t', 'h', 'i', 'r', 'd'], ['S', 'u', 'p', 'e', 'r'], ['B', 'o', 'w', 'l'], ['t', 'i', 't', 'l', 'e'], ['.'], ['T', 'h', 'e'], ['g', 'a', 'm', 'e'], ['w', 'a', 's'], ['p', 'l', 'a', 'y', 'e', 'd'], ['o', 'n'], ['F', 'e', 'b', 'r', 'u', 'a', 'r', 'y'], ['7'], [','], ['2', '0', '1', '6'], [','], ['a', 't'], ['L', 'e', 'v', 'i'], [], ["'"], ['s'], ['S', 't', 'a', 'd', 'i', 'u', 'm'], ['i', 'n'], ['t', 'h', 'e'], ['S', 'a', 'n'], ['F', 'r', 'a', 'n', 'c', 'i', 's', 'c', 'o'], ['B', 'a', 'y'], ['A', 'r', 'e', 'a'], ['a', 't'], ['S', 'a', 'n', 't', 'a'], ['C', 'l', 'a', 'r', 'a'], [','], ['C', 'a', 'l', 'i', 'f', 'o', 'r', 'n', 'i', 'a'], ['.'], ['A', 's'], ['t', 'h', 'i', 's'], ['w', 'a', 's'], ['t', 'h', 'e'], ['5', '0', 't', 'h'], ['S', 'u', 'p', 'e', 'r'], ['B', 'o', 'w', 'l'], [','], ['t', 'h', 'e'], ['l', 'e', 'a', 'g', 'u', 'e'], ['e', 'm', 'p', 'h', 'a', 's', 'i', 'z', 'e', 'd'], ['t', 'h', 'e'], [], ['"'], [], ['g', 'o', 'l', 'd', 'e', 'n'], ['a', 'n', 'n', 'i', 'v', 'e', 'r', 's', 'a', 'r', 'y'], [], ['"'], [], ['w', 'i', 't', 'h'], ['v', 'a', 'r', 'i', 'o', 'u', 's'], ['g', 'o', 'l', 'd'], ['-'], ['t', 'h', 'e', 'm', 'e', 'd'], ['i', 'n', 'i', 't', 'i', 'a', 't', 'i', 'v', 'e', 's'], [','], ['a', 's'], ['w', 'e', 'l', 'l'], ['a', 's'], ['t', 'e', 'm', 'p', 'o', 'r', 'a', 'r', 'i', 'l', 'y'], ['s', 'u', 's', 'p', 'e', 'n', 'd', 'i', 'n', 'g'], ['t', 'h', 'e'], ['t', 'r', 'a', 'd', 'i', 't', 'i', 'o', 'n'], ['o', 'f'], ['n', 'a', 'm', 'i', 'n', 'g'], ['e', 'a', 'c', 'h'], ['S', 'u', 'p', 'e', 'r'], ['B', 'o', 'w', 'l'], ['g', 'a', 'm', 'e'], ['w', 'i', 't', 'h'], ['R', 'o', 'm', 'a', 'n'], ['n', 'u', 'm', 'e', 'r', 'a', 'l', 's'], ['('], ['u', 'n', 'd', 'e', 'r'], ['w', 'h', 'i', 'c', 'h'], ['t', 'h', 'e'], ['g', 'a', 'm', 'e'], ['w', 'o', 'u', 'l', 'd'], ['h', 'a', 'v', 'e'], ['b', 'e', 'e', 'n'], ['k', 'n', 'o', 'w', 'n'], ['a', 's'], [], ['"'], [], ['S', 'u', 'p', 'e', 'r'], ['B', 'o', 'w', 'l'], ['L'], [], ['"'], [], [')'], [','], ['s', 'o'], ['t', 'h', 'a', 't'], ['t', 'h', 'e'], ['l', 'o', 'g', 'o'], ['c', 'o', 'u', 'l', 'd'], ['p', 'r', 'o', 'm', 'i', 'n', 'e', 'n', 't', 'l', 'y'], ['f', 'e', 'a', 't', 'u', 'r', 'e'], ['t', 'h', 'e'], ['A', 'r', 'a', 'b', 'i', 'c'], ['n', 'u', 'm', 'e', 'r', 'a', 'l', 's'], ['5', '0'], ['.']]]],
-    #     'p': ['Super Bowl 50 was an American football game to determine the champion of the National Football League (NFL) for the 2015 season. The American Football Conference (AFC) champion Denver Broncos defeated the National Football Conference (NFC) champion Carolina Panthers 24–10 to earn their third Super Bowl title. The game was played on February 7, 2016, at Levi\'s Stadium in the San Francisco Bay Area at Santa Clara, California. As this was the 50th Super Bowl, the league emphasized the "golden anniversary" with various gold-themed initiatives, as well as temporarily suspending the tradition of naming each Super Bowl game with Roman numerals (under which the game would have been known as "Super Bowl L"), so that the logo could prominently feature the Arabic numerals 50.']
-    # }
 
     data = {
         'q': [qi],                 # raw questions

@@ -4,8 +4,11 @@ import json
 
 app = Flask(__name__)
 
-shared = json.load(open("./../data/squad/shared_test.json", "r"))
-data = json.load(open("./../data/squad/data_test.json", "r"))
+#shared = json.load(open("./../data/squad/shared_test.json", "r"))
+#data = json.load(open("./../data/squad/data_test.json", "r"))
+
+shared = json.load(open("./inter_single/shared_dev.json", "r"))
+data = json.load(open("./inter_single/data_dev.json", "r"))
 
 context = [[x for x in xy] for xy in shared['p']]
 

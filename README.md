@@ -141,7 +141,39 @@ Similarly, you can speed up your testing by:
 ```
 python -m basic.cli --num_gpus 3 --batch_size 20 
 ```
- 
+
+## 4. Demo Server
+Run demo server to explore a single trained model. Firstly, we need to preprocess the data.
+```
+python -m squad.prepro --mode dev --single_path /path-to/dev-v1.1.json --target_dir inter_single --glove_dir .
+```
+Then execute the following command to run the server: 
+```
+python -m demo.run --data_dir = "/path-to/inter_single/" --load_path = "/path-to/save/40/save" --shared_path = "/path-to/save/40/shared.json"
+```
+
+## 5. Inference Module
+
+You can use the basic/inference module to predict answers from new text:
+```
+    python -m basic.inference --data_dir = "/path-to/inter_single/" --load_path = "/path-to/save/40/save" --shared_path = "/path-to/save/40/shared.json"
+```
+You can also import it from another module: 
+
+````
+    from basic.inference import Inference
+    inference = Inference()
+    context = 'More than 26,000 square kilometres (10,000 sq mi) of Victorian farmland are sown for grain, mostly in the state west. More than 50% of this area is sown for wheat, 33% is sown for barley and 7% is sown for oats. A further 6,000 square kilometres (2,300 sq mi) is sown for hay. In 2003–04, Victorian farmers produced more than 3 million tonnes of wheat and 2 million tonnes of barley. Victorian farms produce nearly 90% of Australian pears and third of apples. It is also a leader in stone fruit production. The main vegetable crops include asparagus, broccoli, carrots, potatoes and tomatoes. Last year, 121,200 tonnes of pears and 270,000 tonnes of tomatoes were produced.'
+    question = 'What percentage of farmland grows wheat? '
+    inference.predict(context, question)
+````
+This returns a tuple (predicted_anser, confidence). The confidence is the softmaxed logits
+````
+('50%', 0.582761824131012)
+````
+
+You can get rid of the flags by changing them on `inference.py`.
+
 
 [multi-gpu]: https://www.tensorflow.org/versions/r0.11/tutorials/deep_cnn/index.html#training-a-model-using-multiple-gpu-cards
 [squad]: http://stanford-qa.com
