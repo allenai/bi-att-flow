@@ -5,13 +5,11 @@ import os
 # shared: x, cx, (dx), (px), word_counter, char_counter, word2vec
 # no metadata
 from collections import Counter
-import pprint
 
 from tqdm import tqdm
 
 from squad.utils import get_word_span, get_word_idx, process_tokens
 
-pprint = pprint.PrettyPrinter(indent=2).pprint
 
 def main():
     args = get_args()

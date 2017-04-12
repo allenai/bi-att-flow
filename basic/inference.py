@@ -11,27 +11,26 @@ from basic.model import get_multi_gpu_models
 from basic.main import set_dirs
 from basic.read_data import read_data, update_config, DataSet
 from squad.prepro import prepro_single_question_with_context
-from squad.eda_improvements import load_glove_emb
-import pandas as pd
-from scipy import spatial
-import sys, traceback
 
 flags = tf.app.flags
 
 # Names and directories
 flags.DEFINE_string("model_name", "basic", "Model name [basic]")
 flags.DEFINE_string("dataset", "test", "Dataset [test]")
-flags.DEFINE_string("data_dir", "/Applications/MAMP/htdocs/bi-att-flow/data/squad", "Data dir [data/squad]")
+#flags.DEFINE_string("data_dir", "/Applications/MAMP/htdocs/bi-att-flow/data/squad", "Data dir [data/squad]")
+flags.DEFINE_string("data_dir", "", "Data dir [data/squad]")
 flags.DEFINE_string("run_id", "0", "Run ID [0]")
 flags.DEFINE_string("out_base_dir", "out", "out base dir [out]")
 flags.DEFINE_string("forward_name", "single", "Forward name [single]")
 flags.DEFINE_string("answer_path", "", "Answer path []")
 flags.DEFINE_string("eval_path", "data/squad", "Eval path []")
 # flags.DEFINE_string("load_path", "", "Load path []")
-flags.DEFINE_string("load_path", "/Applications/MAMP/htdocs/bi-att-flow/save/40/save", "Load path []")
+# flags.DEFINE_string("load_path", "/Applications/MAMP/htdocs/bi-att-flow/save/40/save", "Load path []")
+flags.DEFINE_string("load_path", "", "Load path []")
 #flags.DEFINE_string("load_path", "out/basic/00/save/basic-20000", "Load path []")
 # "$root_dir/$num/shared.json"
-flags.DEFINE_string("shared_path", "/Applications/MAMP/htdocs/bi-att-flow/save/40/shared.json", "Shared path []")
+#flags.DEFINE_string("shared_path", "/Applications/MAMP/htdocs/bi-att-flow/save/40/shared.json", "Shared path []")
+flags.DEFINE_string("shared_path", "", "Shared path []")
 flags.DEFINE_integer("eval_num_batches", 0, "eval num batches [100]")
 
 # Device placement
@@ -72,11 +71,8 @@ flags.DEFINE_bool("share_lstm_weights", True, "Share pre-processing (phrase-leve
 flags.DEFINE_float("var_decay", 0.999, "Exponential moving average decay for variables [0.999]")
 
 # Optimizations
-#flags.DEFINE_bool("cluster", False, "Cluster data for faster training [False]")
 flags.DEFINE_bool("cluster", True, "Cluster data for faster training [False]")
-#flags.DEFINE_bool("len_opt", False, "Length optimization? [False]")
 flags.DEFINE_bool("len_opt", True, "Length optimization? [False]")
-#flags.DEFINE_bool("cpu_opt", False, "CPU optimization? GPU computation can be slower [False]")
 flags.DEFINE_bool("cpu_opt", True, "CPU optimization? GPU computation can be slower [False]")
 
 # Logging and saving options
@@ -176,257 +172,19 @@ class Inference(object):
             shared=self.data.shared
         ))
         prediction = self.evaluator.get_evaluation(self.sess, batch_data)
-        print(prediction.id2answer_dict.keys())
-        print(
-            prediction.id2answer_dict[
-                list(prediction.id2answer_dict.keys())[0]
-            ],
-            prediction.id2answer_dict['scores'][
-                list(prediction.id2answer_dict['scores'].keys())[0]
-            ]
-        )
-        return 1
-        # print r
-        
-        predictions, scores = self.evaluator.get_evaluation(self.sess, batch_data)
-        # print(predictions)
-        predictions_text, predictions_scores = [], []
-        if isinstance(predictions, list):
-            for idx, prediction in enumerate(predictions):
-                pprint(prediction.id2answer_dict)
-                print(scores[idx])
-                predictions_text.append(prediction.id2answer_dict)
-                predictions_scores.append(scores[idx])
-            return predictions_text, predictions_scores
 
-        else:
-            for key in prediction.id2answer_dict:
-                pprint(prediction.id2answer_dict[key])
-                return prediction.id2answer_dict[key]
+        p = prediction.id2answer_dict[
+            list(prediction.id2answer_dict.keys())[0]
+        ]
+        s = prediction.id2answer_dict['scores'][
+            list(prediction.id2answer_dict['scores'].keys())[0]
+        ]
 
-    def plotEmbedding(self, embedding, index):
-        # import tensorflow as tf
-        from tensorflow.contrib.tensorboard.plugins import projector
-        import os
-        self.sess.close()
-        LOG_DIR = '/Applications/MAMP/htdocs/bi-att-flow/data/embedding_visualisation/'
-        # Create randomly initialized embedding weights which will be trained.
-        # N = 10 # Number of items (vocab size).
-        # D = 200 # Dimensionality of the embedding.
-        #embedding_var = tf.Variable(tf.random_normal([N,D]), name='word_embedding')
-        embedding_var = tf.Variable(embedding, name='word_embedding')
-
-        saver = tf.train.Saver()
-        session = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
-        # session = tf.Session()
-        session.run(tf.global_variables_initializer())
-
-        #self.sess.run(tf.global_variables_initializer())
-        saver.save(session, os.path.join(LOG_DIR, "model.ckpt"), 0)
-        # saver.save(self.sess, os.path.join(LOG_DIR, "model.ckpt"), 0)
-
-        # Format: tensorflow/contrib/tensorboard/plugins/projector/projector_config.proto
-        config = projector.ProjectorConfig()
-
-        # You can add multiple embeddings. Here we add only one.
-        embedding = config.embeddings.add()
-        embedding.tensor_name = embedding_var.name
-
-        # Link this tensor to its metadata file (e.g. labels).
-        embedding.metadata_path = os.path.join(LOG_DIR, 'metadata.tsv')
-        with open(embedding.metadata_path, 'w') as f:
-            #f.write("\t\n".join(index))
-            f.write("\n".join(index))
-
-        # Use the same LOG_DIR where you stored your checkpoint.
-        summary_writer = tf.summary.FileWriter(LOG_DIR)
-
-        # The next line writes a projector_config.pbtxt in the LOG_DIR. TensorBoard will
-        # read this file during startup.
-        projector.visualize_embeddings(summary_writer, config)
-        pass
-
-    def makeRawS(self, context_words, question_words, raw_S):
-        word2vec = load_glove_emb()
-
-        for row_index in range(len(context_words)):
-
-            word_c = context_words[row_index].lower()
-
-            for colum_index in range(len(question_words)):
-
-                word_q = question_words[colum_index].lower()
-                try:
-                    similarity = 1 - spatial.distance.cosine(word2vec[word_c], word2vec[word_q])
-                except KeyError:
-                    print(traceback.print_exc(file=sys.stdout))
-                    continue
-
-                raw_S[row_index, colum_index] = similarity
-
-        # for row_index in range(raw_S.shape[0]):
-        #     raw_S[row_index] = self.sess.run(tf.nn.softmax(raw_S[row_index]))
-
-        return raw_S
-
-    def getS(self, context, question):
-        # context = 'Super Bowl 50 was an American football game to determine the champion of the National Football League (NFL) for the 2015 season. The American Football Conference (AFC) champion Denver Broncos defeated the National Football Conference (NFC) champion Carolina Panthers 24–10 to earn their third Super Bowl title. The game was played on February 7, 2016, at Levi\'s Stadium in the San Francisco Bay Area at Santa Clara, California. As this was the 50th Super Bowl, the league emphasized the "golden anniversary" with various gold-themed initiatives, as well as temporarily suspending the tradition of naming each Super Bowl game with Roman numerals (under which the game would have been known as "Super Bowl L"), so that the logo could prominently feature the Arabic numerals 50.'
-        # question = 'Where did Super Bowl 50 take place?'
-        # context = 'Major events also play a big part in tourism in Victoria, particularly cultural tourism and sports tourism. Most of these events are centred on Melbourne, but others occur in regional cities, such as the V8 Supercars and Australian Motorcycle Grand Prix at Phillip Island, the Grand Annual Steeplechase at Warrnambool and the Australian International Airshow at Geelong and numerous local festivals such as the popular Port Fairy Folk Festival, Queenscliff Music Festival, Bells Beach SurfClassic and the Bright Autumn Festival.'
-        # question = 'What event is held at Bells Beach in Victoria? '
-        # context = 'The Victorian Alps in the northeast are the coldest part of Victoria. The Alps are part of the Great Dividing Range mountain system extending east-west through the centre of Victoria. Average temperatures are less than 9 °C (48 °F) in winter and below 0 °C (32 °F) in the highest parts of the ranges. The state"s lowest minimum temperature of −11.7 °C (10.9 °F) was recorded at Omeo on 13 June 1965, and again at Falls Creek on 3 July 1970. Temperature extremes for the state are listed in the table below:'
-        #question = 'What is the temperature in the highest portion of the mountain range in winter?'
-        # question = 'What is the temperature in the highest parts of the mountain range in winter?'
-        batch_data_prepro = prepro_single_question_with_context(context, question)
-        pprint(batch_data_prepro)
-        # print(batch_data_prepro['x'])
-
-        data_set = DataSet(
-            data=batch_data_prepro,
-            data_type=self.config.dataset,
-            shared=self.data.shared
-        )
-        # self.tensor_dict = {}
-        self.tensor_dict = self.model.tensor_dict if self.config.vis else {}
-
-        feed_dict = self.model.get_feed_dict(data_set, False, supervised=False)
-        # idxs, data_set = batch
-        # print(self.sess.run(self.model.u_a, feed_dict=feed_dict).shape)
-        # print(self.sess.run(self.model.h_a, feed_dict=feed_dict).shape)
-        
-        # global_step, u_a, vals = self.sess.run(
-        global_step, S, vals = self.sess.run(
-        # global_step, h_a, vals = self.sess.run(
-            #[self.model.global_step, self.model.yp, list(self.tensor_dict.values())],
-            [self.model.global_step, self.model.u_logits, list(self.tensor_dict.values())],
-            #[self.model.global_step, self.model.u_a, list(self.tensor_dict.values())],
-            # [self.model.global_step, self.model.h_a, list(self.tensor_dict.values())],
-            feed_dict=feed_dict)
-        #print(global_step, S.shape, vals)
-        context_words = batch_data_prepro['x'][0][0]
-        question_words = batch_data_prepro['q'][0]
-        # u_a = u_a[0][0]
-        S = S[0][0]
-        # h_a = h_a[0][0]
-        raw_S = self.makeRawS(context_words, question_words, np.zeros(shape=S.shape))
-        #print("context_words {} \n question_words {} \n u_a.shape {} \n u_a {}".format(context_words, question_words, u_a.shape, u_a))
-        # print("context_words {} \n question_words {} \n h_a.shape {} \n h_a {}".format(context_words, question_words, h_a.shape, h_a))
-        print("context_words {} \n question_words {} \n S.shape {} \n S {}".format(context_words, question_words, S.shape, S))
-        S_softmax = S
-        for row_index in range(S.shape[0]):
-            S_softmax[row_index] = self.sess.run(tf.nn.softmax(S_softmax[row_index]))
-        #     pass
-        # print(S_softmax)
-        # print(S_softmax[0])
-        # print(self.sess.run(tf.nn.softmax(S_softmax[0])))
-        S = S_softmax
-        # print(self.sess.run(tf.nn.softmax(S[0])).shape)
-        # self.plotEmbedding(u_a, context_words)
-        # self.plotEmbedding(h_a, context_words)
-        # return 1
-
-        # self.plotEmbedding(S, index)
-        #df = pd.DataFrame(data=S, columns=question_words, index=context_words)
-        df = pd.DataFrame(data=S, columns=question_words)
-        df['context'] = pd.Series(context_words, index=df.index)
-        # df = df.append(context_words, ax)
-        #print(df)
-        pd.set_option('display.height', 1200)
-        pd.set_option('display.max_rows', 500)
-        pd.set_option('display.max_columns', 500)
-        pd.set_option('display.width', 1980)
-
-        def color_negative_red(val):
-            """
-            Takes a scalar and returns a string with
-            the css property `'color: red'` for negative
-            strings, black otherwise.
-            """
-            if not isinstance(val, str):
-                color = 'red' if val < 0 else 'black'
-            else:
-                color = 'black'
-            return 'color: %s' % color
-
-        def highlight_max(s):
-            '''
-            highlight the maximum in a Series yellow.
-            '''
-            # Normalize
-            # zi=xi−min(x)/max(x)−min(x)
-            # print(s[0])
-            """if isinstance(s[0], str):
-                return [''] * len(s)
-            s = np.array(s.tolist())
-            s = (s - s.min()) / (s.max() - s.min()) # normalise
-            s = np.log(s + 1) # apply log
-            print(s)
-            return ['background-color: rgba(255,0,255,' + str(i) + ')' if i > 0.5 else '' for i in s]"""
-            # top_10_indices = np.argsort(s)[::-1][0:10].tolist()
-            # print(top_10_indices)
-            # colors = []
-            # for idx, item in enumerate(s):
-            #     if idx in top_10_indices:
-            #         colors.append('background-color: yellow')
-            #     else:
-            #         colors.append('')
-
-            # return colors
-            # print(s[-1])
-            # if isinstance(s[-1], str):
-            #     return [''] * len(s)
-
-            is_max = s == s[0:-1].max()
-            # return ['background-color: yellow' if not isinstance(i, str) and i > 2 else '' for i in s]
-            return ['background-color: yellow' if v else '' for v in is_max]
-
-        #df = df.style.applymap(color_negative_red).apply(highlight_max).render()
-        df_html = df.style.applymap(color_negative_red).apply(highlight_max, axis=1).render()
-        #df = df.style.apply(highlight_max).render()
-        # df['context'] = pd.Series(context_words, index=df.index)
-        with open('df.html', 'w') as f:
-            f.write(df_html)
-        print(df)
-
-        df = pd.DataFrame(data=raw_S, columns=question_words)
-        df['context'] = pd.Series(context_words, index=df.index)
-
-        df_html = df.style.applymap(color_negative_red).apply(highlight_max, axis=1).render()
-        with open('df_raw_S.html', 'w') as f:
-            f.write(df_html)
-
-        return df
-        # print(S[0][0].shape)
-        # yp = yp[:data_set.num_examples]
-        # tensor_dict = dict(zip(self.tensor_dict.keys(), vals))
-        # e = Evaluation(data_set.data_type, int(global_step), idxs, yp.tolist(), tensor_dict=tensor_dict)
-
-        # for v in tf.trainable_variables():
-        #     print(v.name)
-        #     if v.name == 'main/p0/bi_attention/u_logits/first/Matrix:0':
-        #         print(v[0])
-        #         print(self.sess.run(v).shape)
-        pass
+        return p, s
 
 if __name__ == "__main__":
-    #tf.app.run()
+
     inference = Inference()
-    # context = 'The carrot was born in August.'
-    # question = 'When was the carrot born?'
-    # context = 'Super Bowl 50 was an American football game to determine the champion of the National Football League (NFL) for the 2015 season. The American Football Conference (AFC) champion Denver Broncos defeated the National Football Conference (NFC) champion Carolina Panthers 24–10 to earn their third Super Bowl title. The game was played on February 7, 2016, at Levi\'s Stadium in the San Francisco Bay Area at Santa Clara, California. As this was the 50th Super Bowl, the league emphasized the "golden anniversary" with various gold-themed initiatives, as well as temporarily suspending the tradition of naming each Super Bowl game with Roman numerals (under which the game would have been known as "Super Bowl L"), so that the logo could prominently feature the Arabic numerals 50.'
-    # question = 'Where did Super Bowl 50 take place?'
-    # context = 'The Victorian Alps in the northeast are the coldest part of Victoria. The Alps are part of the Great Dividing Range mountain system extending east-west through the centre of Victoria. Average temperatures are less than 9 °C (48 °F) in winter and below 0 °C (32 °F) in the highest parts of the ranges. The state"s lowest minimum temperature of −11.7 °C (10.9 °F) was recorded at Omeo on 13 June 1965, and again at Falls Creek on 3 July 1970. Temperature extremes for the state are listed in the table below:'
-    # question = 'What is the temperature in the highest portion of the mountain range in winter?'
-    # question = 'What is the coldest part of Victoria?    
-    # question = 'What is the chilliest part of Victoria?'
     context = 'More than 26,000 square kilometres (10,000 sq mi) of Victorian farmland are sown for grain, mostly in the state west. More than 50% of this area is sown for wheat, 33% is sown for barley and 7% is sown for oats. A further 6,000 square kilometres (2,300 sq mi) is sown for hay. In 2003–04, Victorian farmers produced more than 3 million tonnes of wheat and 2 million tonnes of barley. Victorian farms produce nearly 90% of Australian pears and third of apples. It is also a leader in stone fruit production. The main vegetable crops include asparagus, broccoli, carrots, potatoes and tomatoes. Last year, 121,200 tonnes of pears and 270,000 tonnes of tomatoes were produced.'
     question = 'What percentage of farmland grows wheat? '
-    #question = 'What is the deepest part of Victoria?'
-    # question = 'What is the warmest part of Victoria?'
-    #question = 'What is the craziest part of Victoria?'
-    # question = 'What is the temperature in the highest parts of the mountain range in winter?'
-    inference.predict(context, question)
-    # df = inference.getS(context, question)
-    #inference.makeRawS(context, question)
-    #inference.makeRawS(['i', 'like', 'cars'], ['cars'], np.zeros(shape=(3, 1)))
-    
+    print(inference.predict(context, question))

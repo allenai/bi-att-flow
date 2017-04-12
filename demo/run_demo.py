@@ -4,9 +4,6 @@ import json
 
 app = Flask(__name__)
 
-#shared = json.load(open("data/squad/shared_demo.json", "r"))
-#shared = json.load(open("data/squad/shared_specifiedby.json", "r"))
-#data = json.load(open("data/squad/data_specifiedby.json", "r"))
 shared = json.load(open("./../data/squad/shared_test.json", "r"))
 data = json.load(open("./../data/squad/data_test.json", "r"))
 
@@ -80,8 +77,6 @@ for article_idx, paragraph_idx in data['*p']:
     question_index += 1
 
 inference = Inference()
-# inference.data_ready()
-
 
 @app.route('/')
 def main():
@@ -96,6 +91,7 @@ def main():
 @app.route('/submit', methods=['POST'])
 def submit():
     answers, scores = inference.predict(request.form['context'], request.form['question'])
+    answers, scores = [answers], [scores]
     return jsonify(
         answers=answers,
         scores=[float(score) for score in scores]
