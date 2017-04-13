@@ -13,7 +13,7 @@
 - tensorflow (deep learning library, verified on r0.11)
 - nltk (NLP tools, verified on 3.2.1)
 - tqdm (progress bar, verified on 4.7.4)
-- jinja2 (for visaulization; if you only train and test, not needed)
+- jinja2 (for visualization; if you only train and test, not needed)
 
 ## 1. Pre-processing
 First, prepare data. Donwload SQuAD data and GloVe and nltk corpus
@@ -145,16 +145,19 @@ python -m basic.cli --num_gpus 3 --batch_size 20
 ## 4. Demo Server
 Run demo server to explore a single trained model. Firstly, we need to preprocess the data.
 ```
-python -m squad.prepro --mode dev --single_path /path-to/dev-v1.1.json --target_dir inter_single --glove_dir .
+python -m squad.prepro --mode dev --single_path /path-to/dev-v1.1.json --target_dir inter_single --glove_dir /path-to/glove/
 ```
+This will create a folder called `inter_single` in the current path. Before executing the next command, make sure your `PYTHONPATH` has the current project folder on it. You can set the path by `export PYTHONPATH='/path-to/bi-att-flow'`.
 Then execute the following command to run the server: 
 ```
-python -m demo.run --data_dir = "/path-to/inter_single/" --load_path = "/path-to/save/40/save" --shared_path = "/path-to/save/40/shared.json"
+python -m demo.run --data_dir=/path-to/inter_single/ --load_path=/path-to/save/37/save --shared_path=/path-to/save/37/shared.json
 ```
 
+Wait for everything to load and then type ` http://0.0.0.0:1995/` in your browser.
+ 
 ## 5. Inference Module
 
-You can use the basic/inference module to predict answers from new text:
+Run the preprocessing step from 4 if you haven't done it yet. After that, you can use the basic/inference module to predict answers from new text:
 ```
     python -m basic.inference --data_dir = "/path-to/inter_single/" --load_path = "/path-to/save/40/save" --shared_path = "/path-to/save/40/shared.json"
 ```
@@ -172,7 +175,7 @@ This returns a tuple (predicted_anser, confidence). The confidence is the softma
 ('50%', 0.582761824131012)
 ````
 
-You can get rid of the flags by changing them on `inference.py`.
+You can get rid of all the flags in 4 and 5 by hardcoding them in `inference.py`.
 
 
 [multi-gpu]: https://www.tensorflow.org/versions/r0.11/tutorials/deep_cnn/index.html#training-a-model-using-multiple-gpu-cards
