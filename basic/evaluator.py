@@ -114,8 +114,7 @@ class Evaluator(object):
         return e
 
     def get_evaluation_from_batches(self, sess, batches):
-        e = sum(self.get_evaluation(sess, batch) for batch in batches)
-        return e
+        return sum(self.get_evaluation(sess, batch) for batch in batches)
 
 
 class LabeledEvaluator(Evaluator):

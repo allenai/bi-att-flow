@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+    <title>BiDAF Demo</title>
+
+<!--     <script
+  src="https://code.jquery.com/jquery-3.2.1.min.js"
+  integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+  crossorigin="anonymous"></script> -->
+
+    <!-- Bootstrap -->
+    <link href="../static/styles/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link href="../static/styles/bootstrap/css/bootstrap-theme.min.css" rel="stylesheet">
+    <link href="" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
+      <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+	
+	<div class="container" role="main">
+		<div> <!--<div class="jumbotron">-->
+			<h1 class="display-3"> Bi-directional Attention Flow Demo</h1>
+			<h3>for <a href="https://stanford-qa.com" target="_blank">Stanford Question Answering Dataset (SQuAD)</a></h3>
+			<p>BiDAF can answer your question!</p>
+			<p><strong>Direction</strong> : Select a paragraph and write your own question. The answer is always a subphrase of the paragraph - remember it when you ask a question!</p>
+		</div>
+		<hr />
+		
+
+		<form action="/submit" method="POST" id="ask_question">
+			<h4><span class="label label-primary">Select Article and Paragraph</span></h4>
+			<select id="selectArticle">
+				{% for article_idx in range(num_pairs) %}
+					<optgroup label="{{titles[article_idx]}}">
+					{% for paragraph_idx in range(context[article_idx]|count) %}
+						<option
+							value="{{ context[article_idx][paragraph_idx][0:50]}}"
+							data-article-idx="{{article_idx}}"
+							data-paragraph-idx="{{paragraph_idx}}">
+							{{ context[article_idx][paragraph_idx][0:50] }}
+						</option>
+					{% endfor %}
+					</optgroup>
+				{% endfor%}
+			</select>
+								
+			<div class="row">
+
+				<div class="col-md-6 form-group">
+					<h4><span class="label label-primary">Context</span></h4>
+					<textarea class="form-control" id="context" rows="10">
+					</textarea>
+				</div>
+
+				<div class="col-md-6 form-group">
+					<input type="text" class="form-control" value="" id="question"></input>
+					<input type="submit" class="btn btn-primary" value="Submit"></input>
+					<a href="#" class="btn btn-default" id="random_context_question">Random Question</a>
+				</div>
+	
+				<div class="col-md-12 form-group">
+					<label>Answer:</label>
+					<input readonly type="text" class="form-control" id="answer"></input>
+					<label>Answer Confidence:</label>
+					<input readonly type="numeric" class="form-control" id="answer_confidence"></input>
+				</div>
+
+<!-- 				<div class="col-md-12">
+					<label>Alternative Answers:</label>
+					<ul id="alternative_answers"></ul>
+				</div> -->
+				
+			</div>
+		</form>
+		<hr />
+		<div>
+			<p>Reference : <a href="https://seominjoon.github.io" target="_blank">Minjoon Seo</a>, <a href="http://allenai.org/team/anik/papers.html" target="_blank">Aniruddha Kembhavi</a>, <a href="https://homes.cs.washington.edu/~ali/index.html" target="_blank">Ali Farhadi</a>, <a href="https://ssli.ee.washington.edu/~hannaneh/index.html" target="_blank">Hannaneh Hajishirzi</a>. "Bidirectional Attention Flow for Machine Comprehension" [<a href="https://arxiv.org/abs/1611.01603" target="_blank">link</a>]</p>
+			<p>Created by : <a href="https://github.com/shmsw25">Sewon Min</a> and <a href="https://github.com/webeng">Joan Figuerola</a></p>
+			<p>SQuAD leaderboard [<a href="https://rajpurkar.github.io/SQuAD-explorer" target="_blank">link</a>]</p>
+
+		</div>
+	</div>
+	<input type="hidden" id="contexts_json" value="{{contexts}}"></input>
+	<input type="hidden" id="context_questions_json" value="{{context_questions}}"></input>
+
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+	<!-- <script src="bootstrap/js/bootstrap.min.js"></script>-->
+	<script src="../static/jquery-3.1.0.min.js"></script>
+	<script src="../static/jszip.min.js"></script>
+	<script src="../static/index.js"></script>
+  </body>
+</html>
+
