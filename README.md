@@ -1,6 +1,6 @@
 # Bi-directional Attention Flow for Machine Comprehension
  
-- This the original implementation of [Bi-directional Attention Flow for Machine Comprehension][paper] (Seo et al., 2016).
+- This the original implementation of [Bi-directional Attention Flow for Machine Comprehension][paper].
 - The CodaLab worksheet for the [SQuAD Leaderboard][squad] submission is available [here][worksheet].
 - Please contact [Minjoon Seo][minjoon] ([@seominjoon][minjoon-github]) for questions and suggestions.
 
@@ -10,7 +10,7 @@
 - unzip, wget (for running `download.sh` only)
 
 #### Python Packages
-- tensorflow (deep learning library, verified on r0.11)
+- tensorflow (deep learning library, only works on r0.11)
 - nltk (NLP tools, verified on 3.2.1)
 - tqdm (progress bar, verified on 4.7.4)
 - jinja2 (for visaulization; if you only train and test, not needed)
@@ -28,7 +28,7 @@ python -m squad.prepro
 ```
 
 ## 2. Training
-The model has 2,571,787 parameters.
+The model has ~2.5M parameters.
 The model was trained with NVidia Titan X (Pascal Architecture, 2016).
 The model requires at least 12GB of GPU RAM.
 If your GPU RAM is smaller than 12GB, you can either decrease batch size (performance might degrade),
@@ -96,14 +96,14 @@ If you are unfamiliar with CodaLab, follow these simple steps (given that you me
 
 ## Results
 
-###Dev Data
+### Dev Data
 
 |          | EM (%) | F1 (%) |
 | -------- |:------:|:------:|
 | single   | 67.7   | 77.3   |
 | ensemble | 72.6   | 80.7   |
 
-###Test Data
+### Test Data
 
 |          | EM (%) | F1 (%) |
 | -------- |:------:|:------:|
@@ -141,6 +141,9 @@ Similarly, you can speed up your testing by:
 ```
 python -m basic.cli --num_gpus 3 --batch_size 20 
 ```
+
+## Demo
+For now, please refer to the `demo` branch of this repository.
  
 
 [multi-gpu]: https://www.tensorflow.org/versions/r0.11/tutorials/deep_cnn/index.html#training-a-model-using-multiple-gpu-cards
