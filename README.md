@@ -2,6 +2,7 @@
  
 - This the original implementation of [Bi-directional Attention Flow for Machine Comprehension][paper].
 - The CodaLab worksheet for the [SQuAD Leaderboard][squad] submission is available [here][worksheet].
+- For TensorFlow v1.1 compatible version, see the [dev][dev] branch.
 - Please contact [Minjoon Seo][minjoon] ([@seominjoon][minjoon-github]) for questions and suggestions.
 
 ## 0. Requirements
@@ -152,3 +153,4 @@ For now, please refer to the `demo` branch of this repository.
 [worksheet]: https://worksheets.codalab.org/worksheets/0x37a9b8c44f6845c28866267ef941c89d/
 [minjoon]: https://seominjoon.github.io
 [minjoon-github]: https://github.com/seominjoon
+[dev]: https://github.com/allenai/bi-att-flow/tree/dev
