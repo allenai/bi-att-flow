@@ -44,7 +44,7 @@ class Model(object):
         self._build_loss()
 
         self.ema_op = self._get_ema_op()
-        self.summary = tf.merge_all_summaries()
+        self.summary = tf.summary.merge_all()
 
     def _build_forward(self):
         config = self.config
@@ -83,8 +83,8 @@ class Model(object):
             # Ax = linear([Ax], d, False, scope='Ax_reshape')
             # Aq = linear([Aq], d, False, scope='Aq_reshape')
 
-        xx = tf.concat(3, [xxc, Ax])  # [N, M, JX, 2d]
-        qq = tf.concat(2, [qqc, Aq])  # [N, JQ, 2d]
+        xx = tf.concat(axis=3, values=[xxc, Ax])  # [N, M, JX, 2d]
+        qq = tf.concat(axis=2, values=[qqc, Aq])  # [N, JQ, 2d]
         D = d + config.word_emb_size
 
         with tf.variable_scope("pos_emb"):
@@ -107,7 +107,7 @@ class Model(object):
             no_op_cell = NoOpCell(D)
             tree_rnn_cell = TreeRNNCell(no_op_cell, d, tf.reduce_max)
             initial_state = tf.reshape(h, [N*M*JX, D])  # [N*M*JX, D]
-            inputs = tf.concat(4, [Atx, tf.cast(self.tx_edge_mask, 'float')])  # [N, M, H, JX, d+JX]
+            inputs = tf.concat(axis=4, values=[Atx, tf.cast(self.tx_edge_mask, 'float')])  # [N, M, H, JX, d+JX]
             inputs = tf.reshape(tf.transpose(inputs, [0, 1, 3, 2, 4]), [N*M*JX, H, d + JX])  # [N*M*JX, H, d+JX]
             length = tf.reshape(tf.reduce_sum(tf.cast(tx_mask, 'int32'), 2), [N*M*JX])
             # length = tf.reshape(tf.reduce_sum(tf.cast(tf.transpose(tx_mask, [0, 1, 3, 2]), 'float'), 3), [-1])
@@ -127,10 +127,10 @@ class Model(object):
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size
         H = config.max_tree_height
         ce_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
-            self.logits, tf.cast(tf.reshape(self.y, [N, M * H * JX]), 'float')))
+            logits=self.logits, labels=tf.cast(tf.reshape(self.y, [N, M * H * JX]), 'float')))
         tf.add_to_collection('losses', ce_loss)
         self.loss = tf.add_n(tf.get_collection('losses'), name='loss')
-        tf.scalar_summary(self.loss.op.name, self.loss)
+        tf.summary.scalar(self.loss.op.name, self.loss)
         tf.add_to_collection('ema/scalar', self.loss)
 
     def _get_ema_op(self):
@@ -138,10 +138,10 @@ class Model(object):
         ema_op = ema.apply(tf.get_collection("ema/scalar") + tf.get_collection("ema/histogram"))
         for var in tf.get_collection("ema/scalar"):
             ema_var = ema.average(var)
-            tf.scalar_summary(ema_var.op.name, ema_var)
+            tf.summary.scalar(ema_var.op.name, ema_var)
         for var in tf.get_collection("ema/histogram"):
             ema_var = ema.average(var)
-            tf.histogram_summary(ema_var.op.name, ema_var)
+            tf.summary.histogram(ema_var.op.name, ema_var)
         return ema_op
 
     def get_loss(self):

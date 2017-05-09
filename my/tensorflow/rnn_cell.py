@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.python.ops.rnn_cell import DropoutWrapper, RNNCell, LSTMStateTuple
+from tensorflow.contrib.rnn import DropoutWrapper, RNNCell, LSTMStateTuple
 
 from my.tensorflow import exp_mask, flatten
 from my.tensorflow.nn import linear, softsel, double_linear_logits
@@ -19,7 +19,7 @@ class SwitchableDropoutWrapper(DropoutWrapper):
         outputs = tf.cond(self.is_train, lambda: outputs_do, lambda: outputs)
         if isinstance(state, tuple):
             new_state = state.__class__(*[tf.cond(self.is_train, lambda: new_state_do_i, lambda: new_state_i)
-                                       for new_state_do_i, new_state_i in zip(new_state_do, new_state)])
+                                          for new_state_do_i, new_state_i in zip(new_state_do, new_state)])
         else:
             new_state = tf.cond(self.is_train, lambda: new_state_do, lambda: new_state)
         return outputs, new_state
@@ -109,7 +109,7 @@ class MatchCell(RNNCell):
             f = tf.tanh(linear([qs, x_tiled, h_prev_tiled], self._input_size, True, scope='f'))  # [N, JQ, d]
             a = tf.nn.softmax(exp_mask(linear(f, 1, True, squeeze=True, scope='a'), q_mask))  # [N, JQ]
             q = tf.reduce_sum(qs * tf.expand_dims(a, -1), 1)
-            z = tf.concat(1, [x, q])  # [N, 2d]
+            z = tf.concat(axis=1, values=[x, q])  # [N, 2d]
             return self._cell(z, state)
 
 
@@ -172,7 +172,7 @@ class AttentionCell(RNNCell):
                 tiled_states = [tf.tile(tf.expand_dims(state, 1), [1, _memory_size, 1])]
 
             # [N, M, d]
-            in_ = tf.concat(2, [tiled_inputs] + tiled_states + [memory])
+            in_ = tf.concat([tiled_inputs] + tiled_states + [memory], axis=2)
             out = double_linear_logits(in_, size, bias, input_keep_prob=input_keep_prob,
                                        is_train=is_train)
             return out
@@ -191,7 +191,7 @@ class AttentionCell(RNNCell):
                 tiled_states = [tf.tile(tf.expand_dims(state, 1), [1, _memory_size, 1])]
 
             # [N, M, d]
-            in_ = tf.concat(2, [tiled_inputs] + tiled_states + [memory])
+            in_ = tf.concat([tiled_inputs] + tiled_states + [memory], axis=2)
             out = linear(in_, 1, bias, squeeze=True, input_keep_prob=input_keep_prob, is_train=is_train)
             return out
         return linear_controller
@@ -206,7 +206,7 @@ class AttentionCell(RNNCell):
             :param sel_mem: [N, m]
             :return: (new_inputs, new_state) tuple
             """
-            return tf.concat(1, [inputs, sel_mem]), state
+            return tf.concat(axis=1, values=[inputs, sel_mem]), state
         return concat_mapper
 
     @staticmethod
@@ -219,5 +219,5 @@ class AttentionCell(RNNCell):
             :param sel_mem: [N, i]
             :return: (new_inputs, new_state) tuple
             """
-            return tf.concat(1, [inputs, sel_mem, inputs * sel_mem, tf.abs(inputs - sel_mem)]), state
+            return tf.concat(axis=1, values=[inputs, sel_mem, inputs * sel_mem, tf.abs(inputs - sel_mem)]), state
         return sim_mapper
