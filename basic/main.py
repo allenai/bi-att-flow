@@ -191,6 +191,7 @@ def _forward(config):
     pprint(config.__flags, indent=2)
     models = get_multi_gpu_models(config)
     model = models[0]
+    print("num params: {}".format(get_num_params()))
     evaluator = ForwardEvaluator(config, model)
     graph_handler = GraphHandler(config, model)  # controls all tensors and variables in the graph, including loading /saving
 
