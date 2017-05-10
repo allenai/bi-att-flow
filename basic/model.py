@@ -136,71 +136,30 @@ class Model(object):
         self.tensor_dict['xx'] = xx
         self.tensor_dict['qq'] = qq
 
-        cell_fw = BasicLSTMCell(d, state_is_tuple=True)
-        cell_bw = BasicLSTMCell(d, state_is_tuple=True)
-        d_cell_fw = SwitchableDropoutWrapper(cell_fw, self.is_train, input_keep_prob=config.input_keep_prob)
-        d_cell_bw = SwitchableDropoutWrapper(cell_bw, self.is_train, input_keep_prob=config.input_keep_prob)
-        cell2_fw = BasicLSTMCell(d, state_is_tuple=True)
-        cell2_bw = BasicLSTMCell(d, state_is_tuple=True)
-        d_cell2_fw = SwitchableDropoutWrapper(cell2_fw, self.is_train, input_keep_prob=config.input_keep_prob)
-        d_cell2_bw = SwitchableDropoutWrapper(cell2_bw, self.is_train, input_keep_prob=config.input_keep_prob)
-        cell3_fw = BasicLSTMCell(d, state_is_tuple=True)
-        cell3_bw = BasicLSTMCell(d, state_is_tuple=True)
-        d_cell3_fw = SwitchableDropoutWrapper(cell3_fw, self.is_train, input_keep_prob=config.input_keep_prob)
-        d_cell3_bw = SwitchableDropoutWrapper(cell3_bw, self.is_train, input_keep_prob=config.input_keep_prob)
-        cell4_fw = BasicLSTMCell(d, state_is_tuple=True)
-        cell4_bw = BasicLSTMCell(d, state_is_tuple=True)
-        d_cell4_fw = SwitchableDropoutWrapper(cell4_fw, self.is_train, input_keep_prob=config.input_keep_prob)
-        d_cell4_bw = SwitchableDropoutWrapper(cell4_bw, self.is_train, input_keep_prob=config.input_keep_prob)
         x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
 
         with tf.variable_scope("prepro"):
-            (fw_u, bw_u), ((_, fw_u_f), (_, bw_u_f)) = bidirectional_dynamic_rnn(d_cell_fw, d_cell_bw, qq, q_len, dtype='float', scope='u1')  # [N, J, d], [N, d]
-            u = tf.concat(axis=2, values=[fw_u, bw_u])
             if config.share_lstm_weights:
-                tf.get_variable_scope().reuse_variables()
-                (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell_fw, cell_bw, xx, x_len, dtype='float', scope='u1')  # [N, M, JX, 2d]
-                h = tf.concat(axis=3, values=[fw_h, bw_h])  # [N, M, JX, 2d]
+                u, h = bi_rnn(d, self.is_train, 1.0, [qq, xx], [q_len, x_len], scope='common')
             else:
-                (fw_h, bw_h), _ = bidirectional_dynamic_rnn(cell_fw, cell_bw, xx, x_len, dtype='float', scope='h1')  # [N, M, JX, 2d]
-                h = tf.concat(axis=3, values=[fw_h, bw_h])  # [N, M, JX, 2d]
+                u = bi_rnn(d, self.is_train, 1.0, qq, q_len, scope='u1')
+                h = bi_rnn(d, self.is_train, 1.0, xx, x_len, scope='h1')
             self.tensor_dict['u'] = u
             self.tensor_dict['h'] = h
 
         with tf.variable_scope("main"):
-            if config.dynamic_att:
-                p0 = h
-                u = tf.reshape(tf.tile(tf.expand_dims(u, 1), [1, M, 1, 1]), [N * M, JQ, 2 * d])
-                q_mask = tf.reshape(tf.tile(tf.expand_dims(self.q_mask, 1), [1, M, 1]), [N * M, JQ])
-                first_cell_fw = AttentionCell(cell2_fw, u, mask=q_mask, mapper='sim',
-                                              input_keep_prob=self.config.input_keep_prob, is_train=self.is_train)
-                first_cell_bw = AttentionCell(cell2_bw, u, mask=q_mask, mapper='sim',
-                                              input_keep_prob=self.config.input_keep_prob, is_train=self.is_train)
-                second_cell_fw = AttentionCell(cell3_fw, u, mask=q_mask, mapper='sim',
-                                            input_keep_prob=self.config.input_keep_prob, is_train=self.is_train)
-                second_cell_bw = AttentionCell(cell3_bw, u, mask=q_mask, mapper='sim',
-                                               input_keep_prob=self.config.input_keep_prob, is_train=self.is_train)
-            else:
-                p0 = attention_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0", tensor_dict=self.tensor_dict)
-                first_cell_fw = d_cell2_fw
-                second_cell_fw = d_cell3_fw
-                first_cell_bw = d_cell2_bw
-                second_cell_bw = d_cell3_bw
+            p0 = attention_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0", tensor_dict=self.tensor_dict)
 
-            (fw_g0, bw_g0), _ = bidirectional_dynamic_rnn(first_cell_fw, first_cell_bw, p0, x_len, dtype='float', scope='g0')  # [N, M, JX, 2d]
-            g0 = tf.concat(axis=3, values=[fw_g0, bw_g0])
-            (fw_g1, bw_g1), _ = bidirectional_dynamic_rnn(second_cell_fw, second_cell_bw, g0, x_len, dtype='float', scope='g1')  # [N, M, JX, 2d]
-            g1 = tf.concat(axis=3, values=[fw_g1, bw_g1])
+            g0 = bi_rnn(d, self.is_train, config.input_keep_prob, p0, x_len, scope='g0')
+            g1 = bi_rnn(d, self.is_train, config.input_keep_prob, g0, x_len, scope='g1')
 
             logits = get_logits([g1, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
                                 mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
             a1i = softsel(tf.reshape(g1, [N, M * JX, 2 * d]), tf.reshape(logits, [N, M * JX]))
             a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
 
-            (fw_g2, bw_g2), _ = bidirectional_dynamic_rnn(d_cell4_fw, d_cell4_bw, tf.concat(axis=3, values=[p0, g1, a1i, g1 * a1i]),
-                                                          x_len, dtype='float', scope='g2')  # [N, M, JX, 2d]
-            g2 = tf.concat(axis=3, values=[fw_g2, bw_g2])
+            g2 = bi_rnn(d, self.is_train, config.input_keep_prob, tf.concat([p0, g1, a1i, g1 * a1i], 3), x_len, scope='g2')
             logits2 = get_logits([g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
                                  mask=self.x_mask,
                                  is_train=self.is_train, func=config.answer_func, scope='logits2')
@@ -518,3 +477,27 @@ def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None
         else:
             p0 = tf.concat(axis=3, values=[h, u_a, h * u_a])
         return p0
+
+
+def bi_rnn(num_units, is_train, input_keep_prob, xs, xs_len, scope=None):
+    with tf.variable_scope(scope or "bi_rnn") as vs:
+        cell_fw = BasicLSTMCell(num_units, state_is_tuple=True)
+        d_cell_fw = SwitchableDropoutWrapper(cell_fw, is_train, input_keep_prob=input_keep_prob)
+        cell_bw = BasicLSTMCell(num_units, state_is_tuple=True)
+        d_cell_bw = SwitchableDropoutWrapper(cell_bw, is_train, input_keep_prob=input_keep_prob)
+        if not isinstance(xs, list):
+            xs = [xs]
+        if not isinstance(xs_len, list):
+            xs_len = [xs_len]
+        hs = []
+        for i, (x, x_len) in enumerate(zip(xs, xs_len)):
+            if i > 0:
+                vs.reuse_variables()
+            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(d_cell_fw, d_cell_bw, x, x_len, dtype='float')
+            h = tf.concat([fw_h, bw_h], axis=len(x.get_shape())-1)
+            hs.append(h)
+        if len(hs) == 1:
+            return hs[0]
+        return hs
+
+
