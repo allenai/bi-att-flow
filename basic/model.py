@@ -120,8 +120,8 @@ class Model(object):
                 with tf.name_scope("word"):
                     Ax = tf.nn.embedding_lookup(word_emb_mat, self.x)  # [N, M, JX, d]
                     Aq = tf.nn.embedding_lookup(word_emb_mat, self.q)  # [N, JQ, d]
-                    self.tensor_dict['x'] = Ax
-                    self.tensor_dict['q'] = Aq
+                    # self.tensor_dict['x'] = Ax
+                    # self.tensor_dict['q'] = Aq
                 if config.use_char_emb:
                     xx = tf.concat(axis=3, values=[xx, Ax])  # [N, M, JX, di]
                     qq = tf.concat(axis=2, values=[qq, Aq])  # [N, JQ, di]
@@ -136,8 +136,8 @@ class Model(object):
                 tf.get_variable_scope().reuse_variables()
                 qq = highway_network(qq, config.highway_num_layers, True, wd=config.wd, is_train=is_train)
 
-        self.tensor_dict['xx'] = xx
-        self.tensor_dict['qq'] = qq
+        # self.tensor_dict['xx'] = xx
+        # self.tensor_dict['qq'] = qq
 
         x_len = tf.reduce_sum(tf.cast(self.x_mask, 'int32'), 2)  # [N, M]
         q_len = tf.reduce_sum(tf.cast(self.q_mask, 'int32'), 1)  # [N]
@@ -148,11 +148,11 @@ class Model(object):
             else:
                 u, u_p = bi_rnn(config, d, is_train, 1.0, qq, q_len, temp, scope='u1')
                 h, h_p = bi_rnn(config, d, is_train, 1.0, xx, x_len, temp, scope='h1')
-            self.tensor_dict['u'] = u
-            self.tensor_dict['h'] = h
+            # self.tensor_dict['u'] = u
+            # self.tensor_dict['h'] = h
 
         with tf.variable_scope("main"):
-            p0 = attention_layer(config, is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0", tensor_dict=self.tensor_dict)
+            p0 = attention_layer(config, is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0")
 
             g0, g0_p = bi_rnn(config, d, is_train, config.input_keep_prob, p0, x_len, temp, scope='g0')
             g1, g1_p = bi_rnn(config, d, is_train, config.input_keep_prob, g0, x_len, temp, scope='g1')
@@ -193,10 +193,18 @@ class Model(object):
             yp2 = tf.reshape(flat_yp2, [-1, M, JX])
             wyp = tf.nn.sigmoid(logits2)
 
-            self.tensor_dict['g1'] = g1
-            self.tensor_dict['g2'] = g2
+            # self.tensor_dict['g1'] = g1
+            # self.tensor_dict['g2'] = g2
+
+            self.tensor_dict['h_p'] = s2r(p2s(h_p, self.x_mask))
+            self.tensor_dict['g0_p'] = s2r(p2s(g0_p, self.x_mask))
+            self.tensor_dict['g1_p'] = s2r(p2s(g1_p, self.x_mask))
+            self.tensor_dict['g2_p'] = s2r(p2s(g2_p, self.x_mask))
+            q_avg = sum(self.tensor_dict[key] for key in ['h_p', 'g0_p', 'g1_p', 'g2_p'])/4.0
+            self.logq = tf.log(q_avg + 1e-12)
 
             self.logits = flat_logits
+            # self.logits = tf.Print(flat_logits, [q_avg])
             self.logits2 = flat_logits2
             self.yp = yp
             self.yp2 = yp2
@@ -231,6 +239,9 @@ class Model(object):
             ce_loss = tf.reduce_mean(loss_mask * losses)
             """
             tf.add_to_collection('losses', ce_loss)
+            q_loss = -config.q_decay * tf.slice(self.logq, [1], [1])
+            tf.add_to_collection('losses', q_loss)
+
 
         else:
             if config.na:
@@ -519,4 +530,12 @@ def bi_rnn(config, num_units, is_train, input_keep_prob, xs, xs_len, temp, scope
             return hs[0], ps[0]
         return hs, ps
 
+
+def p2s(p, mask):
+    # [N, M, J, 2] -> [N, 2]
+    return tf.reduce_sum(p * tf.cast(tf.expand_dims(mask, -1), 'float'), [1, 2])
+
+
+def s2r(s):
+    return tf.reduce_sum(s, 0)/tf.reduce_sum(s)
 

@@ -236,6 +236,11 @@ class F1Evaluation(AccuracyEvaluation):
             e.dict['wyp'] = new_wyp
         return e
 
+    @property
+    def ratios(self):
+        ratios = {}
+
+
     def __repr__(self):
         return "{} step {}: accuracy={:.4f}, f1={:.4f}, loss={:.4f}".format(self.data_type, self.global_step, self.acc, self.f1, self.loss)
 
