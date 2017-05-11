@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.rnn import BasicLSTMCell
 
+from basic.nested_rnn import NestedLSTMWrapper
 from basic.read_data import DataSet
 from my.tensorflow import get_initializer
 from my.tensorflow.nn import softsel, get_logits, highway_network, multi_conv1d
@@ -80,6 +81,7 @@ class Model(object):
         JQ = tf.shape(self.q)[1]
         M = tf.shape(self.x)[1]
         dc, dw, dco = config.char_emb_size, config.word_emb_size, config.char_out_size
+        temp = tf.maximum(0.5, tf.exp(-config.temp_decay*tf.cast(self.global_step, 'float')))
 
         with tf.variable_scope("emb"):
             if config.use_char_emb:
@@ -141,25 +143,25 @@ class Model(object):
 
         with tf.variable_scope("prepro"):
             if config.share_lstm_weights:
-                u, h = bi_rnn(d, self.is_train, 1.0, [qq, xx], [q_len, x_len], scope='common')
+                (u, h), (u_p, h_p) = bi_rnn(config, d, self.is_train, 1.0, [qq, xx], [q_len, x_len], temp, scope='common')
             else:
-                u = bi_rnn(d, self.is_train, 1.0, qq, q_len, scope='u1')
-                h = bi_rnn(d, self.is_train, 1.0, xx, x_len, scope='h1')
+                u, u_p = bi_rnn(config, d, self.is_train, 1.0, qq, q_len, temp, scope='u1')
+                h, h_p = bi_rnn(config, d, self.is_train, 1.0, xx, x_len, temp, scope='h1')
             self.tensor_dict['u'] = u
             self.tensor_dict['h'] = h
 
         with tf.variable_scope("main"):
             p0 = attention_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0", tensor_dict=self.tensor_dict)
 
-            g0 = bi_rnn(d, self.is_train, config.input_keep_prob, p0, x_len, scope='g0')
-            g1 = bi_rnn(d, self.is_train, config.input_keep_prob, g0, x_len, scope='g1')
+            g0, g0_p = bi_rnn(config, d, self.is_train, config.input_keep_prob, p0, x_len, temp, scope='g0')
+            g1, g1_p = bi_rnn(config, d, self.is_train, config.input_keep_prob, g0, x_len, temp, scope='g1')
 
             logits = get_logits([g1, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
                                 mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
             a1i = softsel(tf.reshape(g1, [N, M * JX, 2 * d]), tf.reshape(logits, [N, M * JX]))
             a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
 
-            g2 = bi_rnn(d, self.is_train, config.input_keep_prob, tf.concat([p0, g1, a1i, g1 * a1i], 3), x_len, scope='g2')
+            g2, g2_p = bi_rnn(config, d, self.is_train, config.input_keep_prob, tf.concat([p0, g1, a1i, g1 * a1i], 3), x_len, temp, scope='g2')
             logits2 = get_logits([g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
                                  mask=self.x_mask,
                                  is_train=self.is_train, func=config.answer_func, scope='logits2')
@@ -479,25 +481,41 @@ def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None
         return p0
 
 
-def bi_rnn(num_units, is_train, input_keep_prob, xs, xs_len, scope=None):
+def bi_rnn(config, num_units, is_train, input_keep_prob, xs, xs_len, temp, scope=None):
+    is_train = config.mode == 'train'
     with tf.variable_scope(scope or "bi_rnn") as vs:
         cell_fw = BasicLSTMCell(num_units, state_is_tuple=True)
+        small_cell_fw = BasicLSTMCell(num_units/10, state_is_tuple=True)
+        cell_fw = NestedLSTMWrapper(cell_fw, [cell_fw, small_cell_fw], temp, is_train)
         d_cell_fw = SwitchableDropoutWrapper(cell_fw, is_train, input_keep_prob=input_keep_prob)
+
         cell_bw = BasicLSTMCell(num_units, state_is_tuple=True)
+        small_cell_bw = BasicLSTMCell(num_units/10, state_is_tuple=True)
+        cell_bw = NestedLSTMWrapper(cell_bw, [cell_bw, small_cell_bw], temp, is_train)
         d_cell_bw = SwitchableDropoutWrapper(cell_bw, is_train, input_keep_prob=input_keep_prob)
+
         if not isinstance(xs, list):
             xs = [xs]
         if not isinstance(xs_len, list):
             xs_len = [xs_len]
         hs = []
+        ps = []
         for i, (x, x_len) in enumerate(zip(xs, xs_len)):
             if i > 0:
                 vs.reuse_variables()
-            (fw_h, bw_h), _ = bidirectional_dynamic_rnn(d_cell_fw, d_cell_bw, x, x_len, dtype='float')
-            h = tf.concat([fw_h, bw_h], axis=len(x.get_shape())-1)
+            (fw_hp, bw_hp), _ = bidirectional_dynamic_rnn(d_cell_fw, d_cell_bw, x, x_len, dtype='float')
+            l = len(x.get_shape())
+            fw_h = tf.slice(fw_hp, [0] * l, [-1] * (l-1) + [num_units])
+            fw_p = tf.slice(fw_hp, [0] * (l-1) + [num_units], [-1] * l)
+            bw_h = tf.slice(bw_hp, [0] * l, [-1] * (l-1) + [num_units])
+            bw_p = tf.slice(bw_hp, [0] * (l-1) + [num_units], [-1] * l)
+            h = tf.concat([fw_h, bw_h], l-1)
+            p = (fw_p + bw_p) / 2.0
+
             hs.append(h)
+            ps.append(p)
         if len(hs) == 1:
-            return hs[0]
-        return hs
+            return hs[0], ps[0]
+        return hs, ps
 
 

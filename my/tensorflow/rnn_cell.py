@@ -13,6 +13,8 @@ class SwitchableDropoutWrapper(DropoutWrapper):
         self.is_train = is_train
 
     def __call__(self, inputs, state, scope=None):
+        if isinstance(self.is_train, bool):
+            return super(SwitchableDropoutWrapper, self).__call__(inputs, state, scope=scope) if self.is_train else self._cell(inputs, state, scope=scope)
         outputs_do, new_state_do = super(SwitchableDropoutWrapper, self).__call__(inputs, state, scope=scope)
         tf.get_variable_scope().reuse_variables()
         outputs, new_state = self._cell(inputs, state, scope)
