@@ -15,8 +15,12 @@ def linear(args, output_size, bias, bias_start=0.0, scope=None, squeeze=False, w
     flat_args = [flatten(arg, 1) for arg in args]
     if input_keep_prob < 1.0:
         assert is_train is not None
-        flat_args = [tf.cond(is_train, lambda: tf.nn.dropout(arg, input_keep_prob), lambda: arg)
-                     for arg in flat_args]
+        if isinstance(is_train, bool):
+            if is_train:
+                flat_args = [tf.nn.dropout(arg, input_keep_prob) for arg in flat_args]
+        else:
+            flat_args = [tf.cond(is_train, lambda: tf.nn.dropout(arg, input_keep_prob), lambda: arg)
+                         for arg in flat_args]
     with tf.variable_scope(scope or 'Linear'):
         flat_out = _linear(flat_args, output_size, bias, bias_start=bias_start)
     out = reconstruct(flat_out, args[0], 1)
@@ -31,6 +35,10 @@ def linear(args, output_size, bias, bias_start=0.0, scope=None, squeeze=False, w
 def dropout(x, keep_prob, is_train, noise_shape=None, seed=None, name=None):
     with tf.name_scope(name or "dropout"):
         if keep_prob < 1.0:
+            if isinstance(is_train, bool):
+                if is_train:
+                    return tf.nn.dropout(x, keep_prob, noise_shape=noise_shape, seed=seed)
+                return x
             d = tf.nn.dropout(x, keep_prob, noise_shape=noise_shape, seed=seed)
             out = tf.cond(is_train, lambda: d, lambda: x)
             return out

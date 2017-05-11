@@ -73,6 +73,7 @@ class Model(object):
 
     def _build_forward(self):
         config = self.config
+        is_train = config.mode == 'train'
         N, M, JX, JQ, VW, VC, d, W = \
             config.batch_size, config.max_num_sents, config.max_sent_size, \
             config.max_ques_size, config.word_vocab_size, config.char_vocab_size, config.hidden_size, \
@@ -98,12 +99,12 @@ class Model(object):
                     heights = list(map(int, config.filter_heights.split(',')))
                     assert sum(filter_sizes) == dco, (filter_sizes, dco)
                     with tf.variable_scope("conv"):
-                        xx = multi_conv1d(Acx, filter_sizes, heights, "VALID",  self.is_train, config.keep_prob, scope="xx")
+                        xx = multi_conv1d(Acx, filter_sizes, heights, "VALID",  is_train, config.keep_prob, scope="xx")
                         if config.share_cnn_weights:
                             tf.get_variable_scope().reuse_variables()
-                            qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", self.is_train, config.keep_prob, scope="xx")
+                            qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", is_train, config.keep_prob, scope="xx")
                         else:
-                            qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", self.is_train, config.keep_prob, scope="qq")
+                            qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", is_train, config.keep_prob, scope="qq")
                         xx = tf.reshape(xx, [-1, M, JX, dco])
                         qq = tf.reshape(qq, [-1, JQ, dco])
 
@@ -131,9 +132,9 @@ class Model(object):
         # highway network
         if config.highway:
             with tf.variable_scope("highway"):
-                xx = highway_network(xx, config.highway_num_layers, True, wd=config.wd, is_train=self.is_train)
+                xx = highway_network(xx, config.highway_num_layers, True, wd=config.wd, is_train=is_train)
                 tf.get_variable_scope().reuse_variables()
-                qq = highway_network(qq, config.highway_num_layers, True, wd=config.wd, is_train=self.is_train)
+                qq = highway_network(qq, config.highway_num_layers, True, wd=config.wd, is_train=is_train)
 
         self.tensor_dict['xx'] = xx
         self.tensor_dict['qq'] = qq
@@ -143,28 +144,28 @@ class Model(object):
 
         with tf.variable_scope("prepro"):
             if config.share_lstm_weights:
-                (u, h), (u_p, h_p) = bi_rnn(config, d, self.is_train, 1.0, [qq, xx], [q_len, x_len], temp, scope='common')
+                (u, h), (u_p, h_p) = bi_rnn(config, d, is_train, 1.0, [qq, xx], [q_len, x_len], temp, scope='common')
             else:
-                u, u_p = bi_rnn(config, d, self.is_train, 1.0, qq, q_len, temp, scope='u1')
-                h, h_p = bi_rnn(config, d, self.is_train, 1.0, xx, x_len, temp, scope='h1')
+                u, u_p = bi_rnn(config, d, is_train, 1.0, qq, q_len, temp, scope='u1')
+                h, h_p = bi_rnn(config, d, is_train, 1.0, xx, x_len, temp, scope='h1')
             self.tensor_dict['u'] = u
             self.tensor_dict['h'] = h
 
         with tf.variable_scope("main"):
-            p0 = attention_layer(config, self.is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0", tensor_dict=self.tensor_dict)
+            p0 = attention_layer(config, is_train, h, u, h_mask=self.x_mask, u_mask=self.q_mask, scope="p0", tensor_dict=self.tensor_dict)
 
-            g0, g0_p = bi_rnn(config, d, self.is_train, config.input_keep_prob, p0, x_len, temp, scope='g0')
-            g1, g1_p = bi_rnn(config, d, self.is_train, config.input_keep_prob, g0, x_len, temp, scope='g1')
+            g0, g0_p = bi_rnn(config, d, is_train, config.input_keep_prob, p0, x_len, temp, scope='g0')
+            g1, g1_p = bi_rnn(config, d, is_train, config.input_keep_prob, g0, x_len, temp, scope='g1')
 
             logits = get_logits([g1, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
-                                mask=self.x_mask, is_train=self.is_train, func=config.answer_func, scope='logits1')
+                                mask=self.x_mask, is_train=is_train, func=config.answer_func, scope='logits1')
             a1i = softsel(tf.reshape(g1, [N, M * JX, 2 * d]), tf.reshape(logits, [N, M * JX]))
             a1i = tf.tile(tf.expand_dims(tf.expand_dims(a1i, 1), 1), [1, M, JX, 1])
 
-            g2, g2_p = bi_rnn(config, d, self.is_train, config.input_keep_prob, tf.concat([p0, g1, a1i, g1 * a1i], 3), x_len, temp, scope='g2')
+            g2, g2_p = bi_rnn(config, d, is_train, config.input_keep_prob, tf.concat([p0, g1, a1i, g1 * a1i], 3), x_len, temp, scope='g2')
             logits2 = get_logits([g2, p0], d, True, wd=config.wd, input_keep_prob=config.input_keep_prob,
                                  mask=self.x_mask,
-                                 is_train=self.is_train, func=config.answer_func, scope='logits2')
+                                 is_train=is_train, func=config.answer_func, scope='logits2')
 
             flat_logits = tf.reshape(logits, [-1, M * JX])
             flat_yp = tf.nn.softmax(flat_logits)  # [-1, M*JX]
