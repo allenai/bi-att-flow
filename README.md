@@ -52,6 +52,10 @@ python -m basic.cli --mode train --noload --len_opt --cluster
 ```
 You can still omit them, but training will be much slower.
 
+Note that during the training, the EM and F1 scores from the occasional evaluation are not the same with the score from official squad evaluation script. 
+The printed scores are not official (our scoring scheme is a bit harsher).
+To obtain the official number, use the official evaluator (copied in `squad` folder, `squad/evaluate-v1.1.py`). For more information See 3.Test.
+
 
 ## 3. Test
 To test, run:
@@ -98,6 +102,9 @@ If you are unfamiliar with CodaLab, follow these simple steps (given that you me
 ## Results
 
 ### Dev Data
+
+Note these scores are from the official evaluator (copied in `squad` folder, `squad/evaluate-v1.1.py`). For more information See 3.Test.
+The scores appeared during the training could be lower than the scores from the official evaluator. 
 
 |          | EM (%) | F1 (%) |
 | -------- |:------:|:------:|
