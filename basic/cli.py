@@ -103,6 +103,7 @@ flags.DEFINE_bool("dynamic_att", False, "Dynamic attention [False]")
 
 
 flags.DEFINE_float("q_decay", 0.01, "q decay [0.01]")
+flags.DEFINE_integer("small_hidden_size", 10, "small hidden size [10]")
 
 
 def main(_):

@@ -196,15 +196,17 @@ class Model(object):
             # self.tensor_dict['g1'] = g1
             # self.tensor_dict['g2'] = g2
 
-            self.tensor_dict['h_p'] = s2r(p2s(h_p, self.x_mask))
-            self.tensor_dict['g0_p'] = s2r(p2s(g0_p, self.x_mask))
-            self.tensor_dict['g1_p'] = s2r(p2s(g1_p, self.x_mask))
-            self.tensor_dict['g2_p'] = s2r(p2s(g2_p, self.x_mask))
-            q_avg = sum(self.tensor_dict[key] for key in ['h_p', 'g0_p', 'g1_p', 'g2_p'])/4.0
-            self.logq = tf.log(q_avg + 1e-12)
+            # self.tensor_dict['h_p'] = s2r(p2s(h_p, self.x_mask))
+            # self.tensor_dict['g0_p'] = s2r(p2s(g0_p, self.x_mask))
+            # self.tensor_dict['g1_p'] = s2r(p2s(g1_p, self.x_mask))
+            # self.tensor_dict['g2_p'] = s2r(p2s(g2_p, self.x_mask))
+            logq = (h_p + g0_p + g1_p + g2_p) / 4.0
+            logq2 = tf.stack([h_p, g0_p, g1_p, g2_p], axis=1)
+            q_avg = sum(s2r(p2s(each, self.x_mask)) for each in [h_p, g0_p, g1_p, g2_p])/4.0
+            self.logq = tf.reduce_sum(logq, [0, 1, 2]) / (tf.reduce_sum(tf.cast(self.x_mask, 'float')) + 1e-12)
 
-            self.logits = flat_logits
-            # self.logits = tf.Print(flat_logits, [q_avg])
+            # self.logits = flat_logits
+            self.logits = tf.Print(flat_logits, [q_avg])
             self.logits2 = flat_logits2
             self.yp = yp
             self.yp2 = yp2
@@ -239,8 +241,6 @@ class Model(object):
             ce_loss = tf.reduce_mean(loss_mask * losses)
             """
             tf.add_to_collection('losses', ce_loss)
-            q_loss = -config.q_decay * tf.slice(self.logq, [1], [1])
-            tf.add_to_collection('losses', q_loss)
 
 
         else:
@@ -260,6 +260,8 @@ class Model(object):
             tf.add_to_collection('losses', ce_loss)
             tf.add_to_collection("losses", ce_loss2)
 
+        q_loss = -config.q_decay * tf.squeeze(tf.slice(self.logq, [1], [1]))
+        tf.add_to_collection('losses', q_loss)
         self.loss = tf.add_n(tf.get_collection('losses', scope=self.scope), name='loss')
         tf.summary.scalar(self.loss.op.name, self.loss)
         tf.add_to_collection('ema/scalar', self.loss)
@@ -495,14 +497,15 @@ def attention_layer(config, is_train, h, u, h_mask=None, u_mask=None, scope=None
 
 def bi_rnn(config, num_units, is_train, input_keep_prob, xs, xs_len, temp, scope=None):
     is_train = config.mode == 'train'
+    small_hidden_size = config.small_hidden_size
     with tf.variable_scope(scope or "bi_rnn") as vs:
         cell_fw = BasicLSTMCell(num_units, state_is_tuple=True)
-        small_cell_fw = BasicLSTMCell(num_units/10, state_is_tuple=True)
+        small_cell_fw = BasicLSTMCell(small_hidden_size, state_is_tuple=True)
         cell_fw = NestedLSTMWrapper(cell_fw, [cell_fw, small_cell_fw], temp, is_train)
         d_cell_fw = SwitchableDropoutWrapper(cell_fw, is_train, input_keep_prob=input_keep_prob)
 
         cell_bw = BasicLSTMCell(num_units, state_is_tuple=True)
-        small_cell_bw = BasicLSTMCell(num_units/10, state_is_tuple=True)
+        small_cell_bw = BasicLSTMCell(small_hidden_size, state_is_tuple=True)
         cell_bw = NestedLSTMWrapper(cell_bw, [cell_bw, small_cell_bw], temp, is_train)
         d_cell_bw = SwitchableDropoutWrapper(cell_bw, is_train, input_keep_prob=input_keep_prob)
 
@@ -532,8 +535,10 @@ def bi_rnn(config, num_units, is_train, input_keep_prob, xs, xs_len, temp, scope
 
 
 def p2s(p, mask):
-    # [N, M, J, 2] -> [N, 2]
-    return tf.reduce_sum(p * tf.cast(tf.expand_dims(mask, -1), 'float'), [1, 2])
+    # [N, M, J, 2] -> [N, M, J] -> [N, M, J, 2] -> [N, 2]
+    # pp = tf.one_hot(tf.argmax(p, 3), 2)
+    pp = tf.exp(p)
+    return tf.reduce_sum(pp * tf.cast(tf.expand_dims(mask, -1), 'float'), [1, 2])
 
 
 def s2r(s):
