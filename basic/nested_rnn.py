@@ -61,7 +61,7 @@ class NestedLSTMWrapper(_RNNCell):
                     # new_state = state
             else:
                 test_att = lambda: tf.one_hot(choice, self._num_cells, dtype='float')  # [N, C]
-                train_att = lambda: tf.nn.softmax(logp + gumbel(tf.shape(logp)) / self._temp)  # [N, C]
+                train_att = lambda: tf.nn.softmax((logp + gumbel(tf.shape(logp))) / self._temp)  # [N, C]
                 if isinstance(self._is_train, bool):
                     att = train_att() if self._is_train else test_att()
                 else:

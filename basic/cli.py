@@ -102,8 +102,8 @@ flags.DEFINE_bool("c2q_att", True, "context-to-question attention? [True]")
 flags.DEFINE_bool("dynamic_att", False, "Dynamic attention [False]")
 
 
-flags.DEFINE_float("q_decay", 0.01, "q decay [0.01]")
-flags.DEFINE_integer("small_hidden_size", 10, "small hidden size [10]")
+flags.DEFINE_float("q_decay", 0.001, "q decay [0.001]")
+flags.DEFINE_integer("small_hidden_size", 50, "small hidden size [50]")
 
 
 def main(_):
