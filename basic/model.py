@@ -95,7 +95,7 @@ class Model(object):
                         xx = multi_conv1d(Acx, filter_sizes, heights, "VALID",  self.is_train, config.keep_prob, scope="xx")
                         if config.share_cnn_weights:
                             tf.get_variable_scope().reuse_variables()
-                            qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", self.is_train, config.keep_prob, scope="xx")
+                            qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", self.is_train, config.keep_prob, scope="qq")
                         else:
                             qq = multi_conv1d(Acq, filter_sizes, heights, "VALID", self.is_train, config.keep_prob, scope="qq")
                         xx = tf.reshape(xx, [-1, M, JX, dco])
