@@ -6,11 +6,11 @@ import json
 app = Flask(__name__)
 shared = json.load(open("data/squad/shared_test.json", "r"))
 contextss = [""]
-context_questions = [""]
+context_questions = [[]]
 for i in range(len(shared['contextss'])):
     j = 1 if i==0 else 0
     contextss.append(shared["contextss"][i][j])
-    context_questions.append(shared['context_questions'][i][j])
+    context_questions.append(shared['context_questions'][i][j:j+10])
 titles = ["Write own paragraph"]+shared["titles"]
 
 demo = Demo()
@@ -49,4 +49,4 @@ def submit():
     return jsonify(result=answer)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port="1995", threaded=True)
+    app.run(host="0.0.0.0", port=1995, threaded=True)
