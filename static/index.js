@@ -8,13 +8,14 @@
 
 	window.onload = function(){
 		displayQuestion();
-		load();
+		load()
 	}
 
 	function clearField(){
 		var qadiv = document.getElementById("qa");
 		qadiv.innerHTML = "";
 		displayQuestion();
+		_loadQuestion();
 	}
 
 	function load(){
@@ -58,12 +59,19 @@
 		span.classList.add("label");
 		span.classList.add("label-primary");
 		span.innerHTML="Question";
+		
+		// Question List
+		var q_select = document.createElement("select");
+		q_select.name="selectQuestion";
+		q_select.id="selectQuestion";
+		
 		// input for Qustion
 		var input = document.createElement("input");
 		input.type="text";
 		input.name="question"
 		input.classList.add("form-control");
 		input.id="question";
+		
 		// button to submit
 		var button = document.createElement("button");
 		button.type = "button";
@@ -91,7 +99,9 @@
 		loading.innerHTML = loading.innerHTML + "loading";
 		// appendChild
 		form.appendChild(label);
-		label.appendChild(span)
+		label.appendChild(span);
+		if (paragraph_id !== 0)
+			form.appendChild(q_select);
 		form.appendChild(input);
 		form.appendChild(button);
 		form.appendChild(clear);
@@ -127,8 +137,9 @@
 		document.getElementById("loading").style.display = "block";
 		var data = {
 			paragraph: $("#paragraph").val(),
-			question: $("#question").val()
+			question: $("#question").html()
 		};
+		console.log(data);
 		sendAjax("/submit", data, handleAnswer);
 	}
 
@@ -141,7 +152,7 @@
 		var q = document.getElementById("question");
 		q.id = "";
 		q.readOnly = true;
-
+		document.getElementById("selectQuestion").disabled = true;
 		var clear = document.createElement("button");
 		clear.type = "button";
 		clear.classList.add("btn");
@@ -153,6 +164,29 @@
 		curr.appendChild(clear);	
 	}
 
+	function loadQuestion(){
+		var prev_q = document.getElementById("question");
+		if (prev_q !== null){
+			if (prev_q.name === "question")
+				document.getElementById("current").removeChild(prev_q);
+			else
+				prev_q.id = "";
+		}
+		if (this.value === "0") {
+			// input for Qustion
+			var input = document.createElement("input");
+			input.type="text";
+			input.name="question"
+			input.classList.add("form-control");
+			input.id="question";
+			document.getElementById("current").insertBefore(input, document.getElementById("submit"));
+		}
+		else {
+			var text = this.options[this.selectedIndex].text;
+			this.options[this.selectedIndex].id = "question";
+		}
+	}
+
 	function loadParagraph(){
 		paragraph_id = this.value;
 		_loadParagraph();
@@ -160,9 +194,26 @@
 
 	function _loadParagraph(){
 		clearField();
-		if (paragraph_id==0) p_id=1;
 		document.getElementById("paragraph").value = contextss[paragraph_id];
-		document.getElementById("question").value = context_questions[paragraph_id];
+		_loadQuestion();
+	}
+	function _loadQuestion(){
+		var questions = context_questions[paragraph_id];
+		if (paragraph_id !== 0){
+			var q_select = document.getElementById("selectQuestion");
+			for (var i=0; i<questions.length+1; i++) {
+				var opt = document.createElement("option");
+				opt.value = parseInt(i);
+				opt.name = "option";
+				if (i === 0)
+					opt.innerHTML = "Write own question";
+				else
+					opt.innerHTML = questions[i-1];
+				q_select.appendChild(opt);
+			}
+			q_select.onchange = loadQuestion;
+		}
+		// document.getElementById("question").value = context_questions[paragraph_id];
 	}
 
 	function handleParagraph(data){
