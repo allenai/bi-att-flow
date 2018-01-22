@@ -1,15 +1,18 @@
 # Bi-directional Attention Flow for Machine Comprehension
  
 - This the original implementation of [Bi-directional Attention Flow for Machine Comprehension][paper] (Seo et al., 2016).
+- This is tensorflow v1.1.0 comaptible version. This is not compatible with previous trained models, 
+so if you want to use them, go to [v0.2.1][v0.2.1]. 
 - The CodaLab worksheet for the [SQuAD Leaderboard][squad] submission is available [here][worksheet].
+- Please contact [Minjoon Seo][minjoon] ([@seominjoon][minjoon-github]) for questions and suggestions.
 
 ## 0. Requirements
 #### General
-- Python (developed on 3.5.2)
+- Python (developed on 3.5.2. Issues have been reported with Python 2!)
 - unzip
 
 #### Python Packages
-- tensorflow (deep learning library, verified on r0.11)
+- tensorflow (deep learning library, verified on 1.1.0)
 - nltk (NLP tools, verified on 3.2.1)
 - tqdm (progress bar, verified on 4.7.4)
 - jinja2 (for visaulization; if you only train and test, not needed)
@@ -73,6 +76,9 @@ python squad/evaluate-v1.1.py $HOME/data/squad/dev-v1.1.json out/basic/00/answer
 ```
 
 ### 3.1 Loading from pre-trained weights
+NOTE: this version is not compatible with the following trained models. 
+For compatibility, use [v0.2.1][v0.2.1]. 
+
 Instead of training the model yourself, you can choose to use pre-trained weights that were used for [SQuAD Leaderboard][squad] submission.
 Refer to [this worksheet][worksheet] in CodaLab to reproduce the results.
 If you are unfamiliar with CodaLab, follow these simple steps (given that you met all prereqs above):
@@ -85,12 +91,13 @@ If you are unfamiliar with CodaLab, follow these simple steps (given that you me
   basic/run_single.sh $HOME/data/squad/dev-v1.1.json single.json
   ```
   
-  This writes the answers to `single.json` in the current directory. You can then use the official evaluator to obtain EM and F1 scores.
+  This writes the answers to `single.json` in the current directory. You can then use the official evaluator to obtain EM and F1 scores. If you want to run on GPU (~5 mins), change the value of batch_size flag in the shell file to a higher number (60 for 12GB GPU RAM). 
 4. Similarly, to reproduce ensemble method:
   
   ```
   basic/run_ensemble.sh $HOME/data/squad/dev-v1.1.json ensemble.json 
   ```
+  If you want to run on GPU, you should run the script sequentially by removing '&' in the forloop, or you will need to specify different GPUs for each run of the for loop.
 
 ## 4. Run demo
 For demo, run:
@@ -102,21 +109,31 @@ Then you can see demo webpage on localhost:1995
 
 ## Results
 
-###Dev Data
+### Dev Data
+
+|          | EM (%) | F1 (%) |
+| -------- |:------:|:------:|
+| single   | 67.8   | 77.4   |
+
+###Dev Data (old)
+NOTE: These numbers are from [v0.2.1][v0.2.1]. 
 
 |          | EM (%) | F1 (%) |
 | -------- |:------:|:------:|
 | single   | 67.7   | 77.3   |
 | ensemble | 72.6   | 80.7   |
 
-###Test Data
+
+###Test Data (old)
+NOTE: These numbers are from [v0.2.1][v0.2.1]. 
 
 |          | EM (%) | F1 (%) |
 | -------- |:------:|:------:|
 | single   | 68.0   | 77.3   |
 | ensemble | 73.3   | 81.1   |
 
-Also see [SQuAD Leaderboard][squad].
+Refer to [our paper][paper] for more details.
+See [SQuAD Leaderboard][squad] to compare with other models.
 
 
 <!--
@@ -153,3 +170,6 @@ python -m basic.cli --num_gpus 3 --batch_size 20
 [paper]: https://arxiv.org/abs/1611.01603
 [worksheet]: https://worksheets.codalab.org/worksheets/0x37a9b8c44f6845c28866267ef941c89d/
 [demo]: https://allenai.github.io/bi-att-flow/demo
+[minjoon]: https://seominjoon.github.io
+[minjoon-github]: https://github.com/seominjoon
+[v0.2.1]: https://github.com/allenai/bi-att-flow/tree/v0.2.1

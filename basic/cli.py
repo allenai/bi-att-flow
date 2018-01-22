@@ -29,6 +29,9 @@ flags.DEFINE_bool("single", False, "supervise only the answer sentence? [False]"
 flags.DEFINE_boolean("debug", False, "Debugging mode? [False]")
 flags.DEFINE_bool('load_ema', True, "load exponential average of variables when testing?  [True]")
 flags.DEFINE_bool("eval", True, "eval? [True]")
+flags.DEFINE_bool("wy", False, "Use wy for loss / eval? [False]")
+flags.DEFINE_bool("na", False, "Enable no answer strategy and learn bias? [False]")
+flags.DEFINE_float("th", 0.5, "Threshold [0.5]")
 
 # Training / test parameters
 flags.DEFINE_integer("batch_size", 60, "Batch size [60]")
@@ -37,7 +40,7 @@ flags.DEFINE_integer("test_num_batches", 0, "test num batches [0]")
 flags.DEFINE_integer("num_epochs", 12, "Total number of epochs for training [12]")
 flags.DEFINE_integer("num_steps", 20000, "Number of steps [20000]")
 flags.DEFINE_integer("load_step", 0, "load step [0]")
-flags.DEFINE_float("init_lr", 0.5, "Initial learning rate [0.5]")
+flags.DEFINE_float("init_lr", 0.001, "Initial learning rate [0.001]")
 flags.DEFINE_float("input_keep_prob", 0.8, "Input keep prob for the dropout of LSTM weights [0.8]")
 flags.DEFINE_float("keep_prob", 0.8, "Keep prob for the dropout of Char-CNN weights [0.8]")
 flags.DEFINE_float("wd", 0.0, "L2 weight decay for regularization [0.0]")

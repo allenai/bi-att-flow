@@ -25,7 +25,7 @@ class SHCell(RNNCell):
     def __call__(self, inputs, state, scope=None):
         with tf.variable_scope(scope or "SHCell"):
             a_size = 1 if self._scalar else self._state_size
-            h, u = tf.split(1, 2, inputs)
+            h, u = tf.split(axis=1, num_or_size_splits=2, value=inputs)
             if self._logit_func == 'mul_linear':
                 args = [h * u, state * u]
                 a = tf.nn.sigmoid(linear(args, a_size, True))

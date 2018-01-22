@@ -25,6 +25,7 @@ def get_args():
     glove_dir = os.path.join(home, "data", "glove")
     parser.add_argument('-s', "--source_dir", default=source_dir)
     parser.add_argument('-t', "--target_dir", default=target_dir)
+    parser.add_argument("--train_name", default='train-v1.1.json')
     parser.add_argument('-d', "--debug", action='store_true')
     parser.add_argument("--train_ratio", default=0.9, type=int)
     parser.add_argument("--glove_corpus", default="6B")
@@ -36,6 +37,7 @@ def get_args():
     parser.add_argument("--url", default="vision-server2.corp.ai2", type=str)
     parser.add_argument("--port", default=8000, type=int)
     parser.add_argument("--split", action='store_true')
+    parser.add_argument("--suffix", default="")
     # TODO : put more args here
     return parser.parse_args()
 
@@ -44,9 +46,9 @@ def create_all(args):
     out_path = os.path.join(args.source_dir, "all-v1.1.json")
     if os.path.exists(out_path):
         return
-    train_path = os.path.join(args.source_dir, "train-v1.1.json")
+    train_path = os.path.join(args.source_dir, args.train_name)
     train_data = json.load(open(train_path, 'r'))
-    dev_path = os.path.join(args.source_dir, "dev-v1.1.json")
+    dev_path = os.path.join(args.source_dir, args.dev_name)
     dev_data = json.load(open(dev_path, 'r'))
     train_data['data'].extend(dev_data['data'])
     print("dumping all data ...")
@@ -122,13 +124,14 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
     if not args.split:
         sent_tokenize = lambda para: [para]
 
-    source_path = in_path or os.path.join(args.source_dir, "{}-v1.1.json".format(data_type))
+    source_path = in_path or os.path.join(args.source_dir, "{}-{}v1.1.json".format(data_type, args.suffix))
     source_data = json.load(open(source_path, 'r'))
 
     q, cq, y, rx, rcx, ids, idxs = [], [], [], [], [], [], []
     contextss = []
     context_questions = []
     titles = []
+    na = []
     cy = []
     x, cx = [], []
     answerss = []
@@ -172,59 +175,6 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
             assert len(x[ai]) - 1 == pi
             if ai==0: c_questions.append(para['qas'][3]['question'])
             else: c_questions.append(para['qas'][0]['question'])
-            """
-            for qa in para['qas']:
-                # get words
-                c_questions.append(qa['question'])
-                break
-                qi = word_tokenize(qa['question']) # qa['question'] : original question
-                cqi = [list(qij) for qij in qi]
-                yi = []
-                cyi = []
-                answers = []
-                
-                for answer in qa['answers']:
-                    answer_text = answer['text']
-                    answers.append(answer_text)
-                    answer_start = answer['answer_start']
-                    answer_stop = answer_start + len(answer_text)
-                    # TODO : put some function that gives word_start, word_stop here
-                    yi0, yi1 = get_word_span(context, xi, answer_start, answer_stop)
-                    # yi0 = answer['answer_word_start'] or [0, 0]
-                    # yi1 = answer['answer_word_stop'] or [0, 1]
-                    assert len(xi[yi0[0]]) > yi0[1]
-                    assert len(xi[yi1[0]]) >= yi1[1]
-                    w0 = xi[yi0[0]][yi0[1]]
-                    w1 = xi[yi1[0]][yi1[1]-1]
-                    i0 = get_word_idx(context, xi, yi0)
-                    i1 = get_word_idx(context, xi, (yi1[0], yi1[1]-1))
-                    cyi0 = answer_start - i0
-                    cyi1 = answer_stop - i1 - 1
-                    # print(answer_text, w0[cyi0:], w1[:cyi1+1])
-                    assert answer_text[0] == w0[cyi0], (answer_text, w0, cyi0)
-                    assert answer_text[-1] == w1[cyi1]
-                    assert cyi0 < 32, (answer_text, w0)
-                    assert cyi1 < 32, (answer_text, w1)
-
-                    yi.append([yi0, yi1])
-                    cyi.append([cyi0, cyi1])
-
-                for qij in qi:
-                    word_counter[qij] += 1
-                    lower_word_counter[qij.lower()] += 1
-                    for qijk in qij:
-                        char_counter[qijk] += 1
-
-                q.append(qi)
-                cq.append(cqi)
-                y.append(yi)
-                cy.append(cyi)
-                rx.append(rxi)
-                rcx.append(rxi)
-                ids.append(qa['id'])
-                idxs.append(len(idxs))
-                answerss.append(answers)
-            """
             if args.debug:
                 break
     word2vec_dict = get_word2vec(args, word_counter)
@@ -240,8 +190,6 @@ def prepro_each(args, data_type, start_ratio=0.0, stop_ratio=1.0, out_name="defa
               'word2vec': word2vec_dict, 'lower_word2vec': lower_word2vec_dict}
     print("saving ...")
     save(args, data, shared, out_name)
-
-
 
 if __name__ == "__main__":
     main()

@@ -1,5 +1,6 @@
 from itertools import zip_longest
 
+import itertools
 import tensorflow as tf
 from functools import reduce
 from operator import mul
@@ -51,7 +52,7 @@ def variable_with_weight_decay(name, shape, stddev, wd):
     var = variable_on_cpu(name, shape,
                            tf.truncated_normal_initializer(stddev=stddev))
     if wd:
-        weight_decay = tf.mul(tf.nn.l2_loss(var), wd, name='weight_loss')
+        weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
         tf.add_to_collection('losses', weight_decay)
     return var
 
@@ -83,7 +84,7 @@ def average_gradients(tower_grads):
             grads.append(expanded_g)
 
         # Average over the 'tower' dimension.
-        grad = tf.concat(0, grads)
+        grad = tf.concat(axis=0, values=grads)
         grad = tf.reduce_mean(grad, 0)
 
         # Keep in mind that the Variables are redundant because they are shared
@@ -98,7 +99,7 @@ def average_gradients(tower_grads):
 def mask(val, mask, name=None):
     if name is None:
         name = 'mask'
-    return tf.mul(val, tf.cast(mask, 'float'), name=name)
+    return tf.multiply(val, tf.cast(mask, 'float'), name=name)
 
 
 def exp_mask(val, mask, name=None):
@@ -146,7 +147,7 @@ def add_wd(wd, scope=None):
     variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope)
     with tf.name_scope("weight_decay"):
         for var in variables:
-            weight_decay = tf.mul(tf.nn.l2_loss(var), wd, name="{}/wd".format(var.op.name))
+            weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name="{}/wd".format(var.op.name))
             tf.add_to_collection('losses', weight_decay)
 
 
@@ -166,3 +167,11 @@ def grouper(iterable, n, fillvalue=None, shorten=False, num_groups=None):
 def padded_reshape(tensor, shape, mode='CONSTANT', name=None):
     paddings = [[0, shape[i] - tf.shape(tensor)[i]] for i in range(len(shape))]
     return tf.pad(tensor, paddings, mode=mode, name=name)
+
+
+def get_num_params():
+    num_params = 0
+    for variable in tf.trainable_variables():
+        shape = variable.get_shape()
+        num_params += reduce(mul, [dim.value for dim in shape], 1)
+    return num_params
