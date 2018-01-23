@@ -195,7 +195,6 @@
 	function _loadParagraph(){
 		clearField();
 		document.getElementById("paragraph").value = contextss[paragraph_id];
-		_loadQuestion();
 	}
 	function _loadQuestion(){
 		var questions = context_questions[paragraph_id];
