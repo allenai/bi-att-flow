@@ -1,8 +1,7 @@
 # Bi-directional Attention Flow for Machine Comprehension
  
 - This the original implementation of [Bi-directional Attention Flow for Machine Comprehension][paper] (Seo et al., 2016).
-- This is tensorflow v1.1.0 comaptible version. This is not compatible with previous trained models, 
-so if you want to use them, go to [v0.2.1][v0.2.1]. 
+- This is tensorflow v1.2 comaptible version. Compatible save files are at [v0.3.0][v0.3.0].
 - The CodaLab worksheet for the [SQuAD Leaderboard][squad] submission is available [here][worksheet].
 - Please contact [Minjoon Seo][minjoon] ([@seominjoon][minjoon-github]) for questions and suggestions.
 
@@ -163,3 +162,4 @@ python -m basic.cli --num_gpus 3 --batch_size 20
 [minjoon]: https://seominjoon.github.io
 [minjoon-github]: https://github.com/seominjoon
 [v0.2.1]: https://github.com/allenai/bi-att-flow/tree/v0.2.1
+[v0.3.0]: https://github.com/allenai/bi-att-flow/releases/tag/v0.3.0
