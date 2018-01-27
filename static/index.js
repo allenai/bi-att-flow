@@ -176,7 +176,6 @@
 			else
 				prev_q.id = "";
 		}
-		console.log(this.selectedIndex);
 		if (this.selectedIndex === 0) {
 			// input for Qustion
 			var input = document.createElement("input");
