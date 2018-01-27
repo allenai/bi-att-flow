@@ -7,7 +7,7 @@
         var context_questions;
 
 	window.onload = function(){
-		displayQuestion();
+		//displayQuestion();
 		load()
 	}
 
@@ -72,6 +72,8 @@
 		input.classList.add("form-control");
 		input.id="question";
 		
+		var breakdown = document.createElement("br");
+
 		// button to submit
 		var button = document.createElement("button");
 		button.type = "button";
@@ -103,12 +105,13 @@
 		if (paragraph_id !== 0)
 			form.appendChild(q_select);
 		form.appendChild(input);
+		form.appendChild(breakdown);
 		form.appendChild(button);
 		form.appendChild(clear);
 		form.appendChild(loading);
 		var qadiv = document.getElementById("qa");
 		qadiv.append(form);
-
+		q_select.onchange = loadQuestion;
 		button.onclick = loadAnswer;
 		clear.onclick = clearField;
 	}
@@ -137,9 +140,8 @@
 		document.getElementById("loading").style.display = "block";
 		var data = {
 			paragraph: $("#paragraph").val(),
-			question: $("#question").html()
+			question: $("#question").val()
 		};
-		console.log(data);
 		sendAjax("/submit", data, handleAnswer);
 	}
 
@@ -152,7 +154,9 @@
 		var q = document.getElementById("question");
 		q.id = "";
 		q.readOnly = true;
-		document.getElementById("selectQuestion").disabled = true;
+		var q_select = document.getElementById("selectQuestion");
+		if (q_select !== null)
+			q_select.disabled = true;
 		var clear = document.createElement("button");
 		clear.type = "button";
 		clear.classList.add("btn");
@@ -172,7 +176,8 @@
 			else
 				prev_q.id = "";
 		}
-		if (this.value === "0") {
+		console.log(this.selectedIndex);
+		if (this.selectedIndex === 0) {
 			// input for Qustion
 			var input = document.createElement("input");
 			input.type="text";
@@ -202,12 +207,12 @@
 			var q_select = document.getElementById("selectQuestion");
 			for (var i=0; i<questions.length+1; i++) {
 				var opt = document.createElement("option");
-				opt.value = parseInt(i);
-				opt.name = "option";
+				opt.name = parseInt(i);
 				if (i === 0)
 					opt.innerHTML = "Write own question";
 				else
 					opt.innerHTML = questions[i-1];
+				opt.value = opt.innerHTML
 				q_select.appendChild(opt);
 			}
 			q_select.onchange = loadQuestion;
