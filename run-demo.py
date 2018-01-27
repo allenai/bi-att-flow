@@ -2,6 +2,7 @@ from flask import Flask, render_template, redirect, request, jsonify
 from squad.demo_prepro import prepro
 from basic.demo_cli import Demo
 from IPython import embed
+from my_question import my_question
 import json
 
 app = Flask(__name__)
@@ -22,7 +23,7 @@ context_questions = [[]]
 for i in range(len(data)):
     j = 24 if i==0 else 0
     contextss.append(data[i][j][0])
-    context_questions.append(data[i][j][1])
+    context_questions.append(my_question.get(i, []) + data[i][j][1])
 
 titles = ["Write own paragraph"] + ["[%s] %s" % (str(i).zfill(2), title) for i, title in enumerate(titles)]
 
