@@ -1,17 +1,30 @@
 from flask import Flask, render_template, redirect, request, jsonify
 from squad.demo_prepro import prepro
 from basic.demo_cli import Demo
+from IPython import embed
 import json
 
 app = Flask(__name__)
-shared = json.load(open("data/squad/shared_test.json", "r"))
+#shared = json.load(open("data/squad/shared_test.json", "r"))
+_data = json.load(open("data/squad/dev-v1.1.json", "r"))['data']
+data = []
+titles = []
+for d in _data:
+    titles.append(d['title'])
+    data.append([])
+    for par in d['paragraphs']:
+        context = par["context"]
+        questions = [q['question'] for q in par['qas']]
+        data[-1].append((context, questions))
+
 contextss = [""]
 context_questions = [[]]
-for i in range(len(shared['contextss'])):
-    j = 1 if i==0 else 0
-    contextss.append(shared["contextss"][i][j])
-    context_questions.append(shared['context_questions'][i][j:j+10])
-titles = ["Write own paragraph"]+shared["titles"]
+for i in range(len(data)):
+    j = 24 if i==0 else 0
+    contextss.append(data[i][j][0])
+    context_questions.append(data[i][j][1])
+
+titles = ["Write own paragraph"] + ["[%s] %s" % (str(i).zfill(2), title) for i, title in enumerate(titles)]
 
 demo = Demo()
 
@@ -35,10 +48,6 @@ def main():
 
 @app.route('/select', methods=['GET', 'POST'])
 def select():
-    #paragraph_id = request.args.get('paragraph_id', type=int)
-    #rxi = [paragraph_id, 0]
-    #paragraph = getPara(rxi)
-    #return jsonify(result=paragraph)
     return jsonify(result={"titles" : titles, "contextss" : contextss, "context_questions" : context_questions})
 
 @app.route('/submit', methods=['GET', 'POST'])
@@ -46,6 +55,7 @@ def submit():
     paragraph = request.args.get('paragraph')
     question = request.args.get('question')
     answer = getAnswer(paragraph, question)
+    print (question, answer)
     return jsonify(result=answer)
 
 if __name__ == "__main__":
