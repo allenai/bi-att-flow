@@ -109,12 +109,7 @@
 		var qadiv = document.getElementById("qa");
 		qadiv.append(form);
 
-		button.onclick = loadAnswer;
-		clear.onclick = clearField;
-	}
-
-	function displayAnswer(answer){
-	        var div = document.createElement("div");
+		var div = document.createElement("div");
 		var label = document.createElement("h4");
 		var span = document.createElement("span");
 		span.classList.add("label");
@@ -124,13 +119,23 @@
 		input.style = "resize:none";
 		input.readOnly = true;
 		input.classList.add("form-control");
-		input.innerHTML = answer;
+		input.id = 'answer';
 		div.appendChild(label);
 		label.appendChild(span);
 		div.appendChild(input);
-
-		var qadiv = document.getElementById("qa");
 		qadiv.append(div);
+
+
+		button.onclick = loadAnswer;
+		clear.onclick = clearField;
+	}
+
+	function displayAnswer(answer){
+	    
+
+		// var qadiv = document.getElementById("qa");
+		answerEle = document.getElementById('answer');
+		answerEle.innerHTML = answer;
     }
 
      function loadAnswer(){
@@ -151,23 +156,23 @@
 
     function handleAnswer(answer){
 		var curr = document.getElementById("current");
-		curr.removeChild(document.getElementById("submit"));
-		curr.removeChild(document.getElementById("clear"));
-		curr.removeChild(document.getElementById("loading"));
+		// curr.removeChild(document.getElementById("submit"));
+		// curr.removeChild(document.getElementById("clear"));
+		document.getElementById("loading").style.display = 'none';
 		displayAnswer(answer);
-		var q = document.getElementById("question");
-		q.id = "";
-		q.readOnly = true;
-		document.getElementById("selectQuestion").disabled = true;
-		var clear = document.createElement("button");
-		clear.type = "button";
-		clear.classList.add("btn");
-		clear.classList.add("btn-sm");
-		clear.classList.add("btn-default");
-		clear.innerHTML="new question!";
-		clear.id = "clear";
-		clear.onclick = clearField;
-		curr.appendChild(clear);	
+		// var q = document.getElementById("question");
+		// q.id = "";
+		// q.readOnly = true;
+		// document.getElementById("selectQuestion").disabled = true;
+		// var clear = document.createElement("button");
+		// clear.type = "button";
+		// clear.classList.add("btn");
+		// clear.classList.add("btn-sm");
+		// clear.classList.add("btn-default");
+		// clear.innerHTML="new question!";
+		// clear.id = "clear";
+		// clear.onclick = clearField;
+		// curr.appendChild(clear);	
 	}
 
 	function loadQuestion(){
