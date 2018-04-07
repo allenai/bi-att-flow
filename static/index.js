@@ -135,9 +135,15 @@
 
      function loadAnswer(){
 		document.getElementById("loading").style.display = "block";
+		if($('#question').html().length > 0){
+			q = $('#question').html();
+		}
+		else{
+			q = $('#question').val();
+		}
 		var data = {
 			paragraph: $("#paragraph").val(),
-			question: $("#question").html()
+			question: q
 		};
 		console.log(data);
 		sendAjax("/submit", data, handleAnswer);
