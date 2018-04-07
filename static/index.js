@@ -21,12 +21,22 @@
 	function load(){
 		sendAjax("/select", {}, handleParagraph);
 	}
+	function getSnippet(i){
+		if(i == 0){
+			return titles[0];
+		}
+		else if(i < contextss.length){
+			return contextss[i].substr(0, 30);
+		}
+	}
+
 	function loadDropdown(){
 		var dropdown = document.getElementById("selectArticle");
-		for(var i=0; i<PNUM; i++){
+		for(var i=0; i<contextss.length; i++){
 			var opt = document.createElement("option");
 			opt.value = parseInt(i);
-			opt.innerHTML = titles[i];
+			// opt.innerHTML = titles[i];
+			opt.innerHTML = getSnippet(i)
 			dropdown.appendChild(opt);
 		}
 		paragraph_id = 0;
@@ -103,6 +113,7 @@
 		if (paragraph_id !== 0)
 			form.appendChild(q_select);
 		form.appendChild(input);
+		form.appendChild(document.createElement("br"));
 		form.appendChild(button);
 		form.appendChild(clear);
 		form.appendChild(loading);
@@ -212,17 +223,22 @@
 		var questions = context_questions[paragraph_id];
 		if (paragraph_id !== 0){
 			var q_select = document.getElementById("selectQuestion");
-			for (var i=0; i<questions.length+1; i++) {
+			if(q_select.childNodes.length == 0){
 				var opt = document.createElement("option");
-				opt.value = parseInt(i);
-				opt.name = "option";
-				if (i === 0)
-					opt.innerHTML = "Write own question";
-				else
-					opt.innerHTML = questions[i-1];
+				opt.value = 0;
+				opt.innerHTML = "Write own question";
 				q_select.appendChild(opt);
+				for (var i=1; i <= questions.length; i++) {
+					var opt = document.createElement("option");
+					opt.value = parseInt(i);
+					opt.innerHTML = questions[i-1];
+					q_select.appendChild(opt);
+				}
+				q_select.onchange = loadQuestion;
 			}
-			q_select.onchange = loadQuestion;
+			else{
+				console.log('not loading')
+			}
 		}
 		// document.getElementById("question").value = context_questions[paragraph_id];
 	}
@@ -230,11 +246,11 @@
 	function handleParagraph(data){
 		titles = data.titles;
 		contextss = data.contextss;
-                context_questions = data.context_questions;
+        context_questions = data.context_questions;
 		loadDropdown();
 	}
 
-        function sendAjax(url, data, handle){
+    function sendAjax(url, data, handle){
 		$.getJSON(url, data, function(response){
 			handle(response.result);
 		});
