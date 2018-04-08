@@ -21,12 +21,22 @@
 	function load(){
 		sendAjax("/select", {}, handleParagraph);
 	}
+	function getSnippet(i){
+		if(i == 0){
+			return titles[0];
+		}
+		else if(i < contextss.length){
+			return contextss[i].substr(0, 30);
+		}
+	}
+
 	function loadDropdown(){
 		var dropdown = document.getElementById("selectArticle");
-		for(var i=0; i<PNUM; i++){
+		for(var i=0; i<contextss.length; i++){
 			var opt = document.createElement("option");
 			opt.value = parseInt(i);
-			opt.innerHTML = titles[i];
+			// opt.innerHTML = titles[i];
+			opt.innerHTML = getSnippet(i)
 			dropdown.appendChild(opt);
 		}
 		paragraph_id = 0;
@@ -103,18 +113,14 @@
 		if (paragraph_id !== 0)
 			form.appendChild(q_select);
 		form.appendChild(input);
+		form.appendChild(document.createElement("br"));
 		form.appendChild(button);
 		form.appendChild(clear);
 		form.appendChild(loading);
 		var qadiv = document.getElementById("qa");
 		qadiv.append(form);
 
-		button.onclick = loadAnswer;
-		clear.onclick = clearField;
-	}
-
-	function displayAnswer(answer){
-	        var div = document.createElement("div");
+		var div = document.createElement("div");
 		var label = document.createElement("h4");
 		var span = document.createElement("span");
 		span.classList.add("label");
@@ -124,20 +130,36 @@
 		input.style = "resize:none";
 		input.readOnly = true;
 		input.classList.add("form-control");
-		input.innerHTML = answer;
+		input.id = 'answer';
 		div.appendChild(label);
 		label.appendChild(span);
 		div.appendChild(input);
-
-		var qadiv = document.getElementById("qa");
 		qadiv.append(div);
+
+
+		button.onclick = loadAnswer;
+		clear.onclick = clearField;
+	}
+
+	function displayAnswer(answer){
+	    
+
+		// var qadiv = document.getElementById("qa");
+		answerEle = document.getElementById('answer');
+		answerEle.innerHTML = answer;
     }
 
      function loadAnswer(){
 		document.getElementById("loading").style.display = "block";
+		if($('#question').html().length > 0){
+			q = $('#question').html();
+		}
+		else{
+			q = $('#question').val();
+		}
 		var data = {
 			paragraph: $("#paragraph").val(),
-			question: $("#question").html()
+			question: q
 		};
 		console.log(data);
 		sendAjax("/submit", data, handleAnswer);
@@ -145,23 +167,23 @@
 
     function handleAnswer(answer){
 		var curr = document.getElementById("current");
-		curr.removeChild(document.getElementById("submit"));
-		curr.removeChild(document.getElementById("clear"));
-		curr.removeChild(document.getElementById("loading"));
+		// curr.removeChild(document.getElementById("submit"));
+		// curr.removeChild(document.getElementById("clear"));
+		document.getElementById("loading").style.display = 'none';
 		displayAnswer(answer);
-		var q = document.getElementById("question");
-		q.id = "";
-		q.readOnly = true;
-		document.getElementById("selectQuestion").disabled = true;
-		var clear = document.createElement("button");
-		clear.type = "button";
-		clear.classList.add("btn");
-		clear.classList.add("btn-sm");
-		clear.classList.add("btn-default");
-		clear.innerHTML="new question!";
-		clear.id = "clear";
-		clear.onclick = clearField;
-		curr.appendChild(clear);	
+		// var q = document.getElementById("question");
+		// q.id = "";
+		// q.readOnly = true;
+		// document.getElementById("selectQuestion").disabled = true;
+		// var clear = document.createElement("button");
+		// clear.type = "button";
+		// clear.classList.add("btn");
+		// clear.classList.add("btn-sm");
+		// clear.classList.add("btn-default");
+		// clear.innerHTML="new question!";
+		// clear.id = "clear";
+		// clear.onclick = clearField;
+		// curr.appendChild(clear);	
 	}
 
 	function loadQuestion(){
@@ -201,17 +223,22 @@
 		var questions = context_questions[paragraph_id];
 		if (paragraph_id !== 0){
 			var q_select = document.getElementById("selectQuestion");
-			for (var i=0; i<questions.length+1; i++) {
+			if(q_select.childNodes.length == 0){
 				var opt = document.createElement("option");
-				opt.value = parseInt(i);
-				opt.name = "option";
-				if (i === 0)
-					opt.innerHTML = "Write own question";
-				else
-					opt.innerHTML = questions[i-1];
+				opt.value = 0;
+				opt.innerHTML = "Write own question";
 				q_select.appendChild(opt);
+				for (var i=1; i <= questions.length; i++) {
+					var opt = document.createElement("option");
+					opt.value = parseInt(i);
+					opt.innerHTML = questions[i-1];
+					q_select.appendChild(opt);
+				}
+				q_select.onchange = loadQuestion;
 			}
-			q_select.onchange = loadQuestion;
+			else{
+				console.log('not loading')
+			}
 		}
 		// document.getElementById("question").value = context_questions[paragraph_id];
 	}
@@ -219,11 +246,11 @@
 	function handleParagraph(data){
 		titles = data.titles;
 		contextss = data.contextss;
-                context_questions = data.context_questions;
+        context_questions = data.context_questions;
 		loadDropdown();
 	}
 
-        function sendAjax(url, data, handle){
+    function sendAjax(url, data, handle){
 		$.getJSON(url, data, function(response){
 			handle(response.result);
 		});
