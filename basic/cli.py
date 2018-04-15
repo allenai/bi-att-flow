@@ -16,6 +16,11 @@ flags.DEFINE_string("answer_path", "", "Answer path []")
 flags.DEFINE_string("eval_path", "", "Eval path []")
 flags.DEFINE_string("load_path", "", "Load path []")
 flags.DEFINE_string("shared_path", "", "Shared path []")
+flags.DEFINE_string("out_dir", "out", "out dir [out]")
+flags.DEFINE_string("save_dir", "save", "save dir [save]")
+flags.DEFINE_string("log_dir", "log", "log dir [log]")
+flags.DEFINE_string("eval_dir", "eval", "eval dir [eval]")
+flags.DEFINE_string("answer_dir", "answer", "answer dir [answer]")
 
 # Device placement
 flags.DEFINE_string("device", "/cpu:0", "default device for summing gradients. [/cpu:0]")
@@ -81,6 +86,14 @@ flags.DEFINE_integer("num_sents_th", 8, "num sents th [8]")
 flags.DEFINE_integer("ques_size_th", 30, "ques size th [32]")
 flags.DEFINE_integer("word_size_th", 16, "word size th [16]")
 flags.DEFINE_integer("para_size_th", 256, "para size th [256]")
+flags.DEFINE_integer("max_num_sents", 0, "max_num_sents")
+flags.DEFINE_integer("max_sent_size", 0, "max_sent_size")
+flags.DEFINE_integer("max_ques_size", 0, "max_ques_size")
+flags.DEFINE_integer("max_word_size", 0, "max_word_size")
+flags.DEFINE_integer("max_para_size", 0, "max_para_size")
+flags.DEFINE_integer("char_vocab_size", 0, "char_vocab_size")
+flags.DEFINE_integer("word_emb_size", 0, "word_emb_size")
+flags.DEFINE_integer("word_vocab_size", 0, "word_vocab_size")
 
 # Advanced training options
 flags.DEFINE_bool("lower_word", True, "lower word [True]")
@@ -99,6 +112,9 @@ flags.DEFINE_bool("use_word_emb", True, "use word embedding? [True]")
 flags.DEFINE_bool("q2c_att", True, "question-to-context attention? [True]")
 flags.DEFINE_bool("c2q_att", True, "context-to-question attention? [True]")
 flags.DEFINE_bool("dynamic_att", False, "Dynamic attention [False]")
+
+# Custom flags
+flags.DEFINE_integer("emb_mat", 0, "embedding matrix")
 
 
 def main(_):
