@@ -14,7 +14,7 @@
 - tensorflow (deep learning library, only works on r0.11)
 - nltk (NLP tools, verified on 3.2.1)
 - tqdm (progress bar, verified on 4.7.4)
-- jinja2 (for visaulization; if you only train and test, not needed)
+- jinja2 (for visualization; if you only train and test, not needed)
 
 ## 1. Pre-processing
 First, prepare data. Donwload SQuAD data and GloVe and nltk corpus
