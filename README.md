@@ -17,7 +17,7 @@
 - jinja2 (for visaulization; if you only train and test, not needed)
 
 ## 1. Pre-processing
-First, prepare data. Donwload SQuAD data and GloVe and nltk corpus
+First, prepare data. Download SQuAD data and GloVe and nltk corpus
 (~850 MB, this will download files to `$HOME/data`):
 ```
 chmod +x download.sh; ./download.sh
