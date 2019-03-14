@@ -51,8 +51,10 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
     return max(scores_for_ground_truths)
 
 
-def evaluate(dataset, predictions):
+def evaluate(dataset, predictions,save_incorrect = False,threshold = 0.90):
     f1 = exact_match = total = 0
+    incorrect_answers = []
+
     for article in dataset:
         for paragraph in article['paragraphs']:
             for qa in paragraph['qas']:
@@ -64,15 +66,44 @@ def evaluate(dataset, predictions):
                     continue
                 ground_truths = list(map(lambda x: x['text'], qa['answers']))
                 prediction = predictions[qa['id']]
-                exact_match += metric_max_over_ground_truths(
+
+                new_matcher = metric_max_over_ground_truths(
                     exact_match_score, prediction, ground_truths)
+                exact_match += new_matcher
+
+                new_f1 = metric_max_over_ground_truths(
+                    f1_score, prediction, ground_truths)
+
+                if not new_matcher and new_f1<threshold:
+
+                    inccorrect_ans_dict = {\
+                    'id':qa['id'],'context':paragraph['context'],\
+                    'question':qa['question'], 'answer':prediction,\
+                    'ground_truth':ground_truths,'title':article['title']}
+
+                    incorrect_answers.append(inccorrect_ans_dict)
+
+
                 f1 += metric_max_over_ground_truths(
                     f1_score, prediction, ground_truths)
+
+
+    with open('incorrect.json', 'w') as fout:
+        json.dump(incorrect_answers, fout)
 
     exact_match = 100.0 * exact_match / total
     f1 = 100.0 * f1 / total
 
     return {'exact_match': exact_match, 'f1': f1}
+
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
 if __name__ == '__main__':
@@ -81,6 +112,15 @@ if __name__ == '__main__':
         description='Evaluation for SQuAD ' + expected_version)
     parser.add_argument('dataset_file', help='Dataset file')
     parser.add_argument('prediction_file', help='Prediction File')
+
+    parser.add_argument("--save_incorrect", type=str2bool, nargs='?',default=False,
+                        help="Option To save incorrect answers ")
+
+    parser.add_argument("--threshold", type=int,default=0.9,
+                        help="F1 threshold to filter incorrect answers ")
+
+
+
     args = parser.parse_args()
     with open(args.dataset_file) as dataset_file:
         dataset_json = json.load(dataset_file)
@@ -91,4 +131,6 @@ if __name__ == '__main__':
         dataset = dataset_json['data']
     with open(args.prediction_file) as prediction_file:
         predictions = json.load(prediction_file)
-    print(json.dumps(evaluate(dataset, predictions)))
+
+
+    print(json.dumps(evaluate(dataset, predictions,args.save_incorrect,args.threshold)))
