@@ -16,6 +16,8 @@ class SwitchableDropoutWrapper(DropoutWrapper):
         outputs_do, new_state_do = super(SwitchableDropoutWrapper, self).__call__(inputs, state, scope=scope)
         tf.get_variable_scope().reuse_variables()
         outputs, new_state = self._cell(inputs, state, scope)
+        # 这一行代码使用了 TensorFlow 中的 tf.cond() 方法，它的作用是根据某个条件选择性地执行某个操作。在这里，判断是否处于训练状态（即self.is_train为True），
+        # 如果是，则使用经过dropout处理的输出outputs_do，否则直接使用原始的输出outputs。这样可以在训练过程中使用dropout，防止过拟合，而在测试过程中不使用dropout，使得结果更加稳定。
         outputs = tf.cond(self.is_train, lambda: outputs_do, lambda: outputs)
         if isinstance(state, tuple):
             new_state = state.__class__(*[tf.cond(self.is_train, lambda: new_state_do_i, lambda: new_state_i)
@@ -123,6 +125,7 @@ class AttentionCell(RNNCell):
         :param mask:
         :param controller: (inputs, prev_state, memory) -> memory_logits
         """
+        # LSTMCell
         self._cell = cell
         self._memory = memory
         self._mask = mask
